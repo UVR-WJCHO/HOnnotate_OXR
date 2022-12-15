@@ -4,7 +4,7 @@
 
 ## Structure
 
-'''
+```
             - HOnnotate_refine
                 - inference_seg.py
                 - ...
@@ -28,7 +28,7 @@
                     - hand_result
                         - bowl_18_00
                         - ...
-'''
+```
 
 
 ## Installation
