@@ -134,3 +134,5 @@ models/deeplab
 checkpoints
 objCorners
 optimization/mano
+YCB_Models
+sequence
