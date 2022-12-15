@@ -16,4 +16,9 @@
 
 '''
 
-2. 
+2. run preprocess script
+
+```
+        cd modules
+        python preprocess_db.py --db '221215_sample' --seq 'bowl_18_00' --cam 'mas'
+```

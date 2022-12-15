@@ -1,19 +1,27 @@
 import os
 import os.path
+
 import cv2
 import mediapipe as mp
+import numpy as np
 import copy, time
 from absl import flags
+from absl import app
+import json
+import pickle
+import copy
+import tqdm
 from utils.processing import augmentation_real
 
+
 mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
 
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '221215_sample', 'target db Name') # name ,default, help
 flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
+flags.DEFINE_string('cam', 'mas', 'target camera')
 
 
 baseDir = '/home/uvr-1080ti/projects/HOnnotate_OXR/dataset/'
@@ -22,23 +30,24 @@ baseDir = '/home/uvr-1080ti/projects/HOnnotate_OXR/dataset/'
 class datasetRecord():
     def __init__(self):
 
-        self.dbDir = join(baseDir, FLAGS.db, FLAGS.seq)
+        self.dbDir = os.path.join(baseDir, FLAGS.db, FLAGS.seq)
+
+        self.rgbDir = os.path.join(self.dbDir, 'rgb')
+        self.depthDir = os.path.join(self.dbDir, 'depth')
         
-        self.rgbDir = join(self.dbDir, 'rgb')
-        self.depthDir = join(self.dbDir, 'depth')
-        
-        self.handDir = join(baseDir, FLAGS.db, '_hand')
+        self.handDir = os.path.join(baseDir, FLAGS.db) + '_hand'
         
         if not os.path.exists(os.path.join(self.dbDir, 'rgb_crop')):
             os.mkdir(os.path.join(self.dbDir, 'rgb_crop'))
         if not os.path.exists(os.path.join(self.dbDir, 'depth_crop')):
             os.mkdir(os.path.join(self.dbDir, 'depth_crop'))
-        if not os.path.exists(os.path.join(self.dbDir, 'bbox')):
-            os.mkdir(os.path.join(self.dbDir, 'bbox'))
+        if not os.path.exists(os.path.join(self.dbDir, 'meta')):
+            os.mkdir(os.path.join(self.dbDir, 'meta'))
             
-        self.rgbCropDir = join(self.dbDir, 'rgb_crop')
-        self.depthCropDir = join(self.dbDir, 'depth_crop')
-        self.bboxDir = join(self.dbDir, 'bbox')
+            
+        self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop')
+        self.depthCropDir = os.path.join(self.dbDir, 'depth_crop')
+        self.metaDir = os.path.join(self.dbDir, 'meta')
 
         
         self.bbox_width = 640
@@ -51,11 +60,12 @@ class datasetRecord():
         return len(os.listdir(self.rgbDir))
 
     def loadKps(self):
-        kpsPath = os.path.join(self.handDir, 'hand_results', FLAGS.seq + 'handDetection_uvd.json')
+        kpsPath = os.path.join(self.handDir, 'hand_result', FLAGS.seq, 'handDetection_uvd.json')
         
         assert os.path.exists(kpsPath), 'handDetection_uvd.json does not exist'
         
-        self.kps_all = json.load(f)
+        with open(kpsPath, 'rb') as f:
+            self.kps_all = json.load(f)
 
 
     def getItem(self, idx, cam='mas'):
@@ -71,11 +81,12 @@ class datasetRecord():
         rgb = cv2.imread(rgbPath)
         depth = cv2.imread(depthPath, cv2.IMREAD_ANYDEPTH)
 
-        return zip(rgb, depth)
+        return (rgb, depth)
+    
     
     def getKps(self, idx, cam='mas'):
-        dict_key = str(cam) + '_' + str(cam))
-        return self.kps_all[dict_key][idx]     # (frames) * 21 * 3
+        dict_key = str(cam) + '_' + str(cam)
+        return np.asarray(self.kps_all[dict_key])[idx]     # (frames) * 21 * 3
     
     
     def procImg(self, images):
@@ -84,13 +95,11 @@ class datasetRecord():
         image_rows, image_cols, _ = rgb.shape
 
         #### extract image bounding box ####
-        with mp_hands.Hands(static_image_mode=True, max_num_hands=2, min_detection_confidence=0.3) as hands:
+        with mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.3) as hands:
             image = cv2.flip(rgb, 1)
             # image = np.copy(img)
             # Convert the BGR image to RGB before processing.
-            t1 = time.time()
             results = hands.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-            print("t : ", time.time() - t1)
 
             idx_to_coord_0 = None
             idx_to_coord_1 = None
@@ -122,11 +131,15 @@ class datasetRecord():
         rgbCrop, img2bb_trans, bb2img_trans, _, _,  = augmentation_real(rgb, bbox, flip=False)
         
         # need to update if bbox is not fixed size
-        depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])
+        depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
         
-        procImgSet = zip(rgbCrop, depthCrop)
+        procImgSet = [rgbCrop, depthCrop]
         
-        return bb, img2bb, bb2img, procImgSet
+        # cv2.imshow("cropped rgb", rgbCrop / 255.)
+        # cv2.waitKey(1)
+        self.prev_bbox = copy.deepcopy(bbox)
+        
+        return bbox, img2bb_trans, bb2img_trans, procImgSet
     
 
     def extractBbox(self, idx_to_coord, image_rows, image_cols):
@@ -157,32 +170,42 @@ class datasetRecord():
         
         return kps
     
-    def postProcess(self, processed_images, bb, img2bb, bb2img, processed_kpts):
+    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, processed_kpts, cam='mas'):
         
-        # img_name = "./samples/221115_bowl_18_00/crop/mas_{}.png".format(idx)
-        # cv2.imwrite(img_name, img_crop)
-
-        # img_name = "./samples/221115_bowl_18_00/crop_depth/mas_{}.png".format(idx)
-        # cv2.imwrite(img_name, depth_crop)
-        assert NotImplementedError
-
-if __name__ == '__main__':
+        imgName = str(cam) + '_' + format(idx, '04') + '.png'
+        cv2.imwrite(os.path.join(self.rgbCropDir, imgName), procImgSet[0])
+        cv2.imwrite(os.path.join(self.depthCropDir, imgName), procImgSet[1])
+        
+        meta_info = {'bb': bb, 'img2bb': np.float32(img2bb), 
+                'bb2img': np.float32(bb2img), 'kpts': np.float32(processed_kpts)}
+        
+        metaName = str(cam) + '_' + format(idx, '04') + '.pkl'
+        jsonPath = os.path.join(self.metaDir, metaName)
+        with open(jsonPath, 'wb') as f:
+            pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)       
+        
+        
+def main(argv):
     db = datasetRecord()
     db.loadKps()
-    
-    for idx in range(len(db)):
-        # choose which camera to use [mas, sub1, sub2, sub3]
-        images = db.getItem(idx, cam='mas')
-        kps = db.getKps(idx, cam='mas')
+
+    # choose which camera to use [mas, sub1, sub2, sub3]
+    cam = FLAGS.cam
+
+    # db includes data for [mas, sub1, sub2, sub3]
+    pbar = tqdm.tqdm(range(int(len(db) / 4)))
+    for idx in pbar:
+        images = db.getItem(idx, cam=cam)
+        kps = db.getKps(idx, cam=cam)
 
         bb, img2bb, bb2img, procImgSet = db.procImg(images)
         procKps = db.translateKpts(kps, img2bb)
 
-        db.postProcess(procImgSet, bb, img2bb, bb2img, procKps)
+        db.postProcess(idx, procImgSet, bb, img2bb, bb2img, procKps, cam=cam)
+        pbar.set_description("Processing idx %s" % (idx))
 
-
-
-
-
-
-
+    print("end")
+    
+    
+if __name__ == '__main__':
+    app.run(main)
