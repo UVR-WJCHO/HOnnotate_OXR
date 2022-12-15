@@ -14,8 +14,8 @@
             - dataset
                 - 221215_sample
                     - calibration
-                        - cam_0_intrinsics.txt
-                        - cam_0_depth_scale.txt
+                        - cam_mas_intrinsics.txt
+                        - cam_mas_depth_scale.txt
                         - ...
                     - rgb_orig
                         - mas
