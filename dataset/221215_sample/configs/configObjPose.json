@@ -1,0 +1,10 @@
+{
+  "obj": "006_mustard_bottle/textured_simple.obj",
+  "startAt": "00002",
+  "endAt": 2000,
+  "skip": 3,
+  "camID": "0",
+  "objLabel": 1,
+  "translationInit": [0.0, 0.0, -0.4],
+  "rotationInit": [-0.28, -1.86, -2.19],
+}

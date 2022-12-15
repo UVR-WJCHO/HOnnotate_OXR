@@ -129,11 +129,11 @@ dmypy.json
 .pyre/
 
 .idea
-models/slim
-models/deeplab
-checkpoints
-objCorners
-optimization/mano
-YCB_Models
-sequence
-dirt
+HOnnotate_refine/models/slim
+HOnnotate_refine/models/deeplab
+HOnnotate_refine/checkpoints
+HOnnotate_refine/objCorners
+HOnnotate_refine/optimization/mano
+HOnnotate_refine/YCB_Models
+HOnnotate_refine/sequence
+HOnnotate_refine/dirt

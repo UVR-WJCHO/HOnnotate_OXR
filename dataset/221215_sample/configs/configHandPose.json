@@ -1,0 +1,11 @@
+{
+  "obj": "006_mustard_bottle/textured_simple.obj",
+  "objLabel": 1,
+  "camID": "0",
+
+  "startAt": "00001",
+  "endAt": 2000,
+  "skip": 1,
+
+  "betaFileName": "/home/uvr-1080ti/projects/HOnnotate/sequence/betaFiles/gun/beta.pkl",
+}
