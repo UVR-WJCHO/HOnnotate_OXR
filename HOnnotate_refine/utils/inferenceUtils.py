@@ -4,7 +4,7 @@ import numpy as np
 from multiprocessing import Process, Queue
 
 
-from HOdatasets.ho3d_multicamera.dataset import datasetHo3dMultiCamera
+from HOdatasets.ho3d_multicamera.dataset import datasetHo3dMultiCamera, datasetOXRMultiCamera
 
 from HOdatasets.mypaths import MANO_MODEL_PATH
 # import commonAug
@@ -41,13 +41,17 @@ class datasetMix(IntEnum):
     FREIHANDS = 9
 
     SHALINI_DATASET = 10
+    
+    OXR_MULTICAMERA = 11
 
 
 
-def shardProc(dummy, shard_id, dataset_split, dataset_mix, numShards, dsQueue, itemType, isRemoveBG=False, fileListIn=None):
+def shardProc(dummy, shard_id, dataset_split, dataset_mix, db, seq, camID, numShards, dsQueue, itemType, isRemoveBG=False, fileListIn=None):
 
     if dataset_mix == datasetMix.HO3D_MULTICAMERA:
         dsCurr = datasetHo3dMultiCamera('', 0,  isRemoveBG=isRemoveBG, fileListIn=fileListIn)
+    elif dataset_mix == datasetMix.OXR_MULTICAMERA:
+        dsCurr = datasetOXRMultiCamera(db, seq, camID, isRemoveBG=isRemoveBG, fileListIn=fileListIn)
     else:
         raise NotImplementedError
 
@@ -68,12 +72,12 @@ def shardProc(dummy, shard_id, dataset_split, dataset_mix, numShards, dsQueue, i
 
 
 
-def startInputQueueRunners(dataset_mix, dataset_split, numThreads=10, queueSize=200, itemType='hand', isRemoveBG=False, fileListIn=None):
+def startInputQueueRunners(dataset_mix, dataset_split, db, seq, camID, numThreads=10, queueSize=200, itemType='hand', isRemoveBG=False, fileListIn=None):
     dsQueue = Queue(maxsize=queueSize)
     procs = []
     for proc_index in range(numThreads):
         args = (
-            [], proc_index, dataset_split, dataset_mix, numThreads, dsQueue, itemType, isRemoveBG, fileListIn)
+            [], proc_index, dataset_split, dataset_mix, db, seq, camID, numThreads, dsQueue, itemType, isRemoveBG, fileListIn)
         proc = Process(target=shardProc, args=args)
         # proc.daemon = True
 

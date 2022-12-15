@@ -21,9 +21,11 @@ flags.DEFINE_string('seq', 'releaseTest', 'Sequence Name') # name ,default, help
 flags.DEFINE_string('camID', '0', 'Cam ID') # name ,default, help
 FLAGS = flags.FLAGS
 
-dataset_mix = infUti.datasetMix.HO3D_MULTICAMERA
+dataset_mix = infUti.datasetMix.OXR_MULTICAMERA 
+
 w = 256
 h = 256
+
 numConsThreads = 1
 configDir = 'CPMHand'
 itemType='hand'

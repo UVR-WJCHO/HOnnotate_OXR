@@ -16,20 +16,27 @@ import time
 import multiprocessing as mlp
 import warnings
 warnings.simplefilter("ignore", category=PendingDeprecationWarning)
+warnings.simplefilter("ignore", category=FutureWarning)
 from absl import flags
 from absl import app
 
 FLAGS = flags.FLAGS
-flags.DEFINE_string('seq', 'test', 'Sequence Name') # name ,default, help
-flags.DEFINE_string('camID', '0', 'Cam ID') # name ,default, help
-flags.DEFINE_integer('start', 0, 'Cam ID') # name ,default, help
-flags.DEFINE_integer('end', 2300, 'Cam ID') # name ,default, help
+# flags.DEFINE_string('seq', 'test', 'Sequence Name') # name ,default, help
+# flags.DEFINE_string('camID', '0', 'Cam ID') # name ,default, help
+# flags.DEFINE_integer('start', 0, 'Cam ID') # name ,default, help
+# flags.DEFINE_integer('end', 2300, 'Cam ID') # name ,default, help
+flags.DEFINE_string('db', '221215_sample', 'target db Name') # name ,default, help
+flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
+flags.DEFINE_string('camID', 'mas', 'target camera')
 
-dataset_mix = infUti.datasetMix.HO3D_MULTICAMERA
+
+dataset_mix = infUti.datasetMix.OXR_MULTICAMERA
 w = 640
 h = 480
 numConsThreads = 1
-baseDir = HO3D_MULTI_CAMERA_DIR
+
+# baseDir = HO3D_MULTI_CAMERA_DIR
+baseDir = OXR_MULTI_CAMERA_DIR
 
 
 def postProcess(dummy, consQueue, numImgs, numConsThreads):
@@ -39,7 +46,6 @@ def postProcess(dummy, consQueue, numImgs, numConsThreads):
         predsDict = queueElem[0]
         ds = queueElem[1]
         jobID = queueElem[2]
-
 
         croppedImg = predsDict[common.IMAGE]
         if common.SEMANTIC in predsDict.keys():
@@ -52,18 +58,8 @@ def postProcess(dummy, consQueue, numImgs, numConsThreads):
             camInd = ds.fileName.split('/')[1]
             id = ds.fileName.split('/')[2]
 
-            if not os.path.exists(os.path.join(baseDir, seq, 'segmentation')):
-                os.mkdir(os.path.join(baseDir, seq, 'segmentation'))
-            if not os.path.exists(os.path.join(baseDir, seq, 'segmentation', str(camInd))):
-                os.mkdir(os.path.join(baseDir, seq, 'segmentation', str(camInd)))
-
-            if not os.path.exists(os.path.join(baseDir, seq, 'segmentation', str(camInd), 'visualization')):
-                os.mkdir(os.path.join(baseDir, seq, 'segmentation', str(camInd), 'visualization'))
-            if not os.path.exists(os.path.join(baseDir, seq, 'segmentation', str(camInd), 'raw_seg_results')):
-                os.mkdir(os.path.join(baseDir, seq, 'segmentation', str(camInd), 'raw_seg_results'))
-
-            finalSaveDir =  os.path.join(baseDir, seq, 'segmentation', str(camInd), 'visualization')
-            finalRawSaveDir = os.path.join(baseDir, seq, 'segmentation', str(camInd), 'raw_seg_results')
+            finalSaveDir =  os.path.join(baseDir, FLAGS.db, seq, 'segmentation', str(camInd), 'visualization')
+            finalRawSaveDir = os.path.join(baseDir, FLAGS.db, seq, 'segmentation', str(camInd), 'raw_seg_results')
 
 
             labelFullImg = np.zeros_like(ds.imgRaw)[:,:,0]
@@ -104,7 +100,7 @@ def runNetInLoop(fileListIn, numImgs):
 
     sess, g, predictions, dataPreProcDict = getNetSess(data, h, w, myG)
 
-    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_mix, splitType.TEST, numThreads=1, isRemoveBG=False, fileListIn=fileListIn)
+    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_mix, splitType.TEST, FLAGS.db, FLAGS.seq, FLAGS.camID, numThreads=1, isRemoveBG=False, fileListIn=fileListIn)
 
     # start consumer threads
     consQueue = mlp.Queue(maxsize=100)
@@ -158,12 +154,16 @@ def main(argv):
     # fileListIn = [join(FLAGS.seq, '0', f[:-4]) for f in fileListIn if 'png' in f]
     # fileListIn = sorted(fileListIn)
 
+    if not os.path.exists(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation')):
+        os.mkdir(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation'))
+        os.mkdir(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation', FLAGS.camID))
+        os.mkdir(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation', FLAGS.camID, 'visualization'))
+        os.mkdir(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation', FLAGS.camID, 'raw_seg_results'))
     
-    fileListIn = os.listdir(join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq, 'rgb', '0'))
-    fileListIn = [int(f[4:-4]) for f in fileListIn if 'mas' in f]
+    
+    fileListIn = os.listdir(join(baseDir, FLAGS.db, FLAGS.seq, 'rgb', FLAGS.camID))
+    fileListIn = [join(FLAGS.seq, FLAGS.camID, f[:-4]) for f in fileListIn if 'png' in f]
     fileListIn = sorted(fileListIn)
-    fileListIn = [join(FLAGS.seq, '0', str('mas_' + str(f))) for f in fileListIn]
-
 
     numImgs = len(fileListIn)
 

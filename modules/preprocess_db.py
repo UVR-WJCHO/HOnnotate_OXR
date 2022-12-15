@@ -19,9 +19,10 @@ mp_hands = mp.solutions.hands
 
 
 FLAGS = flags.FLAGS
+
 flags.DEFINE_string('db', '221215_sample', 'target db Name') # name ,default, help
 flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
-flags.DEFINE_string('cam', 'mas', 'target camera')
+flags.DEFINE_string('camID', 'mas', 'target camIDera')
 
 
 baseDir = '/home/uvr-1080ti/projects/HOnnotate_OXR/dataset/'
@@ -32,22 +33,25 @@ class datasetRecord():
 
         self.dbDir = os.path.join(baseDir, FLAGS.db, FLAGS.seq)
 
-        self.rgbDir = os.path.join(self.dbDir, 'rgb')
-        self.depthDir = os.path.join(self.dbDir, 'depth')
+        self.rgbDir = os.path.join(self.dbDir, 'rgb_orig')
+        self.depthDir = os.path.join(self.dbDir, 'depth_orig')
         
         self.handDir = os.path.join(baseDir, FLAGS.db) + '_hand'
         
-        if not os.path.exists(os.path.join(self.dbDir, 'rgb_crop')):
-            os.mkdir(os.path.join(self.dbDir, 'rgb_crop'))
-        if not os.path.exists(os.path.join(self.dbDir, 'depth_crop')):
-            os.mkdir(os.path.join(self.dbDir, 'depth_crop'))
+        if not os.path.exists(os.path.join(self.dbDir, 'rgb')):
+            os.mkdir(os.path.join(self.dbDir, 'rgb'))
+            os.mkdir(os.path.join(self.dbDir, 'rgb', FLAGS.camID))
+        if not os.path.exists(os.path.join(self.dbDir, 'depth')):
+            os.mkdir(os.path.join(self.dbDir, 'depth'))
+            os.mkdir(os.path.join(self.dbDir, 'depth', FLAGS.camID))
         if not os.path.exists(os.path.join(self.dbDir, 'meta')):
             os.mkdir(os.path.join(self.dbDir, 'meta'))
+            os.mkdir(os.path.join(self.dbDir, 'meta', FLAGS.camID))
             
             
-        self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop')
-        self.depthCropDir = os.path.join(self.dbDir, 'depth_crop')
-        self.metaDir = os.path.join(self.dbDir, 'meta')
+        self.rgbCropDir = os.path.join(self.dbDir, 'rgb', FLAGS.camID)
+        self.depthCropDir = os.path.join(self.dbDir, 'depth', FLAGS.camID)
+        self.metaDir = os.path.join(self.dbDir, 'meta', FLAGS.camID)
 
         
         self.bbox_width = 640
@@ -68,9 +72,9 @@ class datasetRecord():
             self.kps_all = json.load(f)
 
 
-    def getItem(self, idx, cam='mas'):
-        # cam : mas, sub1, sub2, sub3
-        imgName = str(cam) + '_' + str(idx) + '.png'
+    def getItem(self, idx, camID='mas'):
+        # camID : mas, sub1, sub2, sub3
+        imgName = str(camID) + '_' + str(idx) + '.png'
         
         rgbPath = os.path.join(self.rgbDir, imgName)
         depthPath = os.path.join(self.depthDir, imgName)
@@ -84,8 +88,8 @@ class datasetRecord():
         return (rgb, depth)
     
     
-    def getKps(self, idx, cam='mas'):
-        dict_key = str(cam) + '_' + str(cam)
+    def getKps(self, idx, camID='mas'):
+        dict_key = str(camID) + '_' + str(camID)
         return np.asarray(self.kps_all[dict_key])[idx]     # (frames) * 21 * 3
     
     
@@ -170,16 +174,16 @@ class datasetRecord():
         
         return kps
     
-    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, processed_kpts, cam='mas'):
+    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, processed_kpts, camID='mas'):
         
-        imgName = str(cam) + '_' + format(idx, '04') + '.png'
+        imgName = str(camID) + '_' + format(idx, '04') + '.png'
         cv2.imwrite(os.path.join(self.rgbCropDir, imgName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, imgName), procImgSet[1])
         
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb), 
                 'bb2img': np.float32(bb2img), 'kpts': np.float32(processed_kpts)}
         
-        metaName = str(cam) + '_' + format(idx, '04') + '.pkl'
+        metaName = str(camID) + '_' + format(idx, '04') + '.pkl'
         jsonPath = os.path.join(self.metaDir, metaName)
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)       
@@ -189,19 +193,19 @@ def main(argv):
     db = datasetRecord()
     db.loadKps()
 
-    # choose which camera to use [mas, sub1, sub2, sub3]
-    cam = FLAGS.cam
+    # choose which camIDera to use [mas, sub1, sub2, sub3]
+    camID = FLAGS.camID
 
     # db includes data for [mas, sub1, sub2, sub3]
     pbar = tqdm.tqdm(range(int(len(db) / 4)))
     for idx in pbar:
-        images = db.getItem(idx, cam=cam)
-        kps = db.getKps(idx, cam=cam)
+        images = db.getItem(idx, camID=camID)
+        kps = db.getKps(idx, camID=camID)
 
         bb, img2bb, bb2img, procImgSet = db.procImg(images)
         procKps = db.translateKpts(kps, img2bb)
 
-        db.postProcess(idx, procImgSet, bb, img2bb, bb2img, procKps, cam=cam)
+        db.postProcess(idx, procImgSet, bb, img2bb, bb2img, procKps, camID=camID)
         pbar.set_description("Processing idx %s" % (idx))
 
     print("end")
