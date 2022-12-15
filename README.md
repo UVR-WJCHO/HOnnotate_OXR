@@ -24,7 +24,6 @@
                         - sub3
                     - depth_orig
                         - ...
-                    
                 - 221215_sample_hand
                     - hand_result
                         - bowl_18_00
