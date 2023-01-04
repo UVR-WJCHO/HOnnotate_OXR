@@ -20,10 +20,10 @@ mp_hands = mp.solutions.hands
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string('db', '221215_sample', 'target db Name') # name ,default, help
+flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
 flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
-flags.DEFINE_string('camID', 'mas', 'target camIDera')
-
+# flags.DEFINE_string('camID', 'mas', 'target camIDera')
+camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
 baseDir = '/home/uvr-1080ti/projects/HOnnotate_OXR/dataset/'
 
@@ -40,19 +40,21 @@ class datasetRecord():
         
         if not os.path.exists(os.path.join(self.dbDir, 'rgb')):
             os.mkdir(os.path.join(self.dbDir, 'rgb'))
-            os.mkdir(os.path.join(self.dbDir, 'rgb', FLAGS.camID))
+            for camID in camIDset:
+                os.mkdir(os.path.join(self.dbDir, 'rgb', camID))
         if not os.path.exists(os.path.join(self.dbDir, 'depth')):
             os.mkdir(os.path.join(self.dbDir, 'depth'))
-            os.mkdir(os.path.join(self.dbDir, 'depth', FLAGS.camID))
+            for camID in camIDset:
+                os.mkdir(os.path.join(self.dbDir, 'depth', camID))
         if not os.path.exists(os.path.join(self.dbDir, 'meta')):
             os.mkdir(os.path.join(self.dbDir, 'meta'))
-            os.mkdir(os.path.join(self.dbDir, 'meta', FLAGS.camID))
+            for camID in camIDset:
+                os.mkdir(os.path.join(self.dbDir, 'meta', camID))
             
-            
-        self.rgbCropDir = os.path.join(self.dbDir, 'rgb', FLAGS.camID)
-        self.depthCropDir = os.path.join(self.dbDir, 'depth', FLAGS.camID)
-        self.metaDir = os.path.join(self.dbDir, 'meta', FLAGS.camID)
-
+           
+        self.rgbCropDir = None
+        self.depthCropDir = None
+        self.metaDir = None
         
         self.bbox_width = 640
         self.bbox_height = 480
@@ -63,6 +65,11 @@ class datasetRecord():
     def __len__(self):
         return len(os.listdir(self.rgbDir))
 
+    def setSavePath(self, camID):           
+        self.rgbCropDir = os.path.join(self.dbDir, 'rgb', camID)
+        self.depthCropDir = os.path.join(self.dbDir, 'depth', camID)
+        self.metaDir = os.path.join(self.dbDir, 'meta', camID)
+    
     def loadKps(self):
         kpsPath = os.path.join(self.handDir, 'hand_result', FLAGS.seq, 'handDetection_uvd.json')
         
@@ -192,21 +199,22 @@ class datasetRecord():
 def main(argv):
     db = datasetRecord()
     db.loadKps()
-
-    # choose which camIDera to use [mas, sub1, sub2, sub3]
-    camID = FLAGS.camID
-
+    
+    
     # db includes data for [mas, sub1, sub2, sub3]
-    pbar = tqdm.tqdm(range(int(len(db) / 4)))
-    for idx in pbar:
-        images = db.getItem(idx, camID=camID)
-        kps = db.getKps(idx, camID=camID)
+    for camID in camIDset:
+        pbar = tqdm.tqdm(range(int(len(db) / 4)))
+        for idx in pbar:
+            db.setSavePath(camID)
+            
+            images = db.getItem(idx, camID=camID)
+            kps = db.getKps(idx, camID=camID)
 
-        bb, img2bb, bb2img, procImgSet = db.procImg(images)
-        procKps = db.translateKpts(kps, img2bb)
+            bb, img2bb, bb2img, procImgSet = db.procImg(images)
+            procKps = db.translateKpts(kps, img2bb)
 
-        db.postProcess(idx, procImgSet, bb, img2bb, bb2img, procKps, camID=camID)
-        pbar.set_description("Processing idx %s" % (idx))
+            db.postProcess(idx, procImgSet, bb, img2bb, bb2img, procKps, camID=camID)
+            pbar.set_description("Processing idx %s" % (idx))
 
     print("end")
     

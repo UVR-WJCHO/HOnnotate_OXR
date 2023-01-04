@@ -62,9 +62,9 @@ def dump(label,
         colored_label = label
 
     pil_image = img.fromarray(colored_label.astype(dtype=np.uint8))
-    # with tf.gfile.Open('%s/%s.png' % (save_dir, filename), mode='w') as f:
-    #     pil_image.save(f, 'PNG')
-    pil_image.save('%s/%s.png' % (save_dir, filename), 'PNG')
+    with tf.gfile.Open('%s/%s.png' % (save_dir, filename), mode='w') as f:
+        pil_image.save(f, 'PNG')
+    # pil_image.save('%s/%s.png' % (save_dir, filename), 'PNG')
     
 
 def saveAnnotations(predictions, originalImg, save_dir, imgID, raw_save_dir=None, also_save_raw_predictions=False, fullRawImg=None):

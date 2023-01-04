@@ -12,20 +12,20 @@
                 - calib.py
                 - preprocess_db.py
                 - utils
+```
+
+need to prepare dataset as below
+```
             - dataset
-                - 221215_sample
+                - 230104
                     - calibration
                         - cam_mas_intrinsics.txt
                         - cam_mas_depth_scale.txt
                         - ...
                     - rgb_orig
-                        - mas
-                        - sub1
-                        - sub2
-                        - sub3
                     - depth_orig
-                        - ...
-                - 221215_sample_hand
+
+                - 230104_hand
                     - hand_result
                         - bowl_18_00
                         - ...
@@ -61,6 +61,16 @@ Follow procedures in [HOnnotate](https://github.com/shreyashampali/HOnnotate?)
 
 
 ## Usage
+
+
+```
+    modules/preprocess_db.py
+    HOnnotate_refine/inference_seg.py
+    HOnnotate_refine/optimization/handPoseMultiviewInit.py
+
+
+    ...
+```
 
 
 
