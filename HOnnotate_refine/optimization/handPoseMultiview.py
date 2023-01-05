@@ -4,13 +4,13 @@ sys.path.insert(0,os.path.join(os.path.dirname(os.path.realpath(__file__))))
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
 
 import pickle
-from handUtils.lift2DJoints import lift2Dto3D, lift2Dto3DMultiFrame
+from handUtils.lift2DJoints import lift2Dto3D, lift2Dto3DMultiFrame, lift2Dto3DMultiview
 import utils.inferenceUtils as infUti
 import multiprocessing as mlp
 import handUtils.manoHandVis as manoVis
 from HOdatasets.mypaths import *
 
-from HOdatasets.ho3d_multicamera.dataset import datasetHo3dMultiCamera
+from HOdatasets.ho3d_multicamera.dataset import datasetHo3dMultiCamera, datasetOXRMultiCamera
 from HOdatasets.commonDS import *
 from eval import utilsEval
 import copy
@@ -19,18 +19,19 @@ from absl import flags
 from absl import app
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string('seq', '0010', 'Sequence Name')
-flags.DEFINE_string('camID', '0', 'Cam ID')
+flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
+flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
+# flags.DEFINE_string('camID', '0', 'Cam ID')
+camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
-
-dataset_mix = infUti.datasetMix.HO3D_MULTICAMERA
+dataset_mix = infUti.datasetMix.OXR_MULTICAMERA
 
 configDir = 'CPMHand'
-baseDir = HO3D_MULTI_CAMERA_DIR
-
+baseDir = OXR_MULTI_CAMERA_DIR
 
 beta = np.zeros((10,), dtype=np.float32)
 
+"""
 def incrementalFarthestSearch(objPklDataList, k):
     def distance(p, s):
         return np.linalg.norm(p-s)
@@ -189,6 +190,21 @@ def selectCandidateFrames(files, numFrames, dataSet, frameSpacing=10, startFrame
     print('Found %d/%d candidates with %d spacing...\n'%(len(finalIndList), numFrames, frameSpacing))
 
     return finalIndList, finalPklDataList
+"""
+
+def getMeta(files):
+    finalPklDataList = []
+    ind = 0
+    
+    while(ind < len(files)):
+        file = files[ind]
+        resultsDir = join(baseDir, FLAGS.db)
+
+        with open(join(resultsDir, file +'.pickle'), 'rb') as f:
+            pklData = pickle.load(f)
+            finalPklDataList.append(pklData)
+
+    return finalPklDataList
 
 
 def getFramewisePose(dummy, kpsDictList, camMat, beta, dataSet, saveCandImgDir):
@@ -221,6 +237,41 @@ def getFramewisePose(dummy, kpsDictList, camMat, beta, dataSet, saveCandImgDir):
             pickle.dump(newDict, f)
 
 
+def getFramewisePoseMultiview(dummy, mainImgIDList, MetaDictperCam, camMat, beta, dataSet, saveCandImgDir):
+    # iterate in [startIdx:endIdx]
+    for idx in range(len(mainImgIDList)):
+        metaperFrame = []
+        for camID in range(len(camIDset)):
+            metaperFrame.append(MetaDictperCam[camID][idx])
+
+        mainImgID = mainImgIDList[idx]
+        
+        _, ds = dataSet.createTFExample(itemType='hand', fileIn=mainImgID)
+        imgRaw = ds.imgRaw
+                
+        
+        # metaperFrame : list of meta_info dict with order [mas, cam1, cam2, cam3]
+        kps3D, poseCoeff, beta, trans, err, _ = lift2Dto3DMultiview(metaperFrame, transformList, camMat,
+                                                        mainImgID, imgRaw,
+                                                        weights=np.ones((21, 1), dtype=np.float32),
+                                                        beta=beta,
+                                                        rel3DCoordNormGT=None,#fcOut,
+                                                        img2DGT=None,
+                                                        outDir=saveCandImgDir
+                                                        )
+
+        newDict = {'imgID': mainImgID,
+                   'KPS3D': kps3D,
+                   'poseCoeff': poseCoeff,
+                   'beta': beta,
+                   'trans': trans, 'err': err}
+
+        with open(join(saveCandImgDir, mainImgID.split('/')[-1] +'.pickle'), 'wb') as f:
+            pickle.dump(newDict, f)
+        
+        return newDict
+
+
 def main(argv):
     saveInitDir = join(baseDir, FLAGS.seq, 'handInit')
     if not os.path.exists(saveInitDir):
@@ -229,7 +280,7 @@ def main(argv):
     if not os.path.exists(saveInitDir):
         os.mkdir(saveInitDir)
 
-    saveCandImgDir = join(saveInitDir, 'singleFrameFit')
+    saveCandImgDir = join(saveInitDir, 'singleFrameMultiViewFit')
     if not os.path.exists(saveCandImgDir):
         os.mkdir(saveCandImgDir)
 
@@ -238,30 +289,40 @@ def main(argv):
     if not os.path.exists(saveCandAfterFitDir):
         os.mkdir(saveCandAfterFitDir)
 
-    fileListIn = os.listdir(join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq, 'rgb', '0'))
-    fileListIn = [join(FLAGS.seq, '0', f[:-4]) for f in fileListIn if 'png' in f]
+    mainCamID = 'mas'
+    
+    fileListIn = os.listdir(join(OXR_MULTI_CAMERA_DIR, FLAGS.db, FLAGS.seq, 'rgb', mainCamID))
+    fileListIn = [join(FLAGS.db, FLAGS.seq, mainCamID, f[:-4]) for f in fileListIn if 'png' in f]
     fileListIn = sorted(fileListIn)
-    dataSet = datasetHo3dMultiCamera(FLAGS.seq, 0, fileListIn=fileListIn)
+    dataSet = datasetOXRMultiCamera(FLAGS.db, FLAGS.seq, mainCamID, fileListIn=fileListIn)
 
-    # select candidate frames
-    pklFilesList = os.listdir(os.path.join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq, 'dirt_obj_pose', FLAGS.camID))
-    pklFilesList = [FLAGS.seq+'/'+FLAGS.camID+'/'+ff[:-4] for ff in pklFilesList if 'pkl' in ff]
-    pklFilesList = sorted(pklFilesList)
-    finalIndList, pklDataList = selectCandidateFramesFarthest(pklFilesList, 25, dataSet, frameSpacing=2, startFrame=0)
-
+    # load meta data
+    pklDataperCam = []
+    mainImgIDList = None
+    for camID in camIDset:
+        pklFilesList = os.listdir(os.path.join(OXR_MULTI_CAMERA_DIR, FLAGS.db, FLAGS.seq, 'meta', camID))
+        pklFilesList = [FLAGS.seq+'/'+ camID +'/'+ff[:-4] for ff in pklFilesList if 'pkl' in ff]
+        pklFilesList = sorted(pklFilesList)
+        
+        pklDataList = getMeta(pklFilesList)
+        pklDataperCam.append(pklDataList)
+        
+        if camID == 'mas':
+            mainImgIDList = np.copy(pklFilesList)
+        
     # get camera matrix
-    camMat = dataSet.getCamMat(FLAGS.seq)
+    camMat = dataSet.getCamMat(mainCamID)
 
     # run independent pose estimation on the candidate frames first. This provides good init for multi frame optimization later
     numThreads = 10
-    numCandidateFrames = len(pklDataList)
+    numCandidateFrames = len(pklDataperCam[0])
     numFramesPerThread = np.ceil(numCandidateFrames/numThreads).astype(np.uint32)
     procs = []
     for proc_index in range(numThreads):
         startIdx = proc_index*numFramesPerThread
         endIdx = min(startIdx+numFramesPerThread,numCandidateFrames)
-        args = ([], pklDataList[startIdx:endIdx], camMat, beta, dataSet, saveCandImgDir)
-        proc = mlp.Process(target=getFramewisePose, args=args)
+        args = ([], mainImgIDList[startIdx:endIdx], pklDataperCam[:][startIdx:endIdx], camMat, beta, dataSet, saveCandImgDir)
+        proc = mlp.Process(target=getFramewisePoseMultiview, args=args)
 
         proc.start()
         procs.append(proc)
@@ -269,61 +330,22 @@ def main(argv):
     for i in range(len(procs)):
         procs[i].join()
 
-    # read the new pickle files created after single frame fitting
-    perFrameFittingDataList = []
-    for p in pklDataList:
-        file = p['imgID']
-        assert os.path.exists(join(saveCandImgDir, file.split('/')[-1]+'.pickle')), 'Single Frame MANO fitting failed!'
-        with open(join(saveCandImgDir, file.split('/')[-1]+'.pickle'), 'rb') as f:
-            pklData = pickle.load(f)
-        perFrameFittingDataList.append(pklData)
 
+    ## visualize
+    # for i in range(len(fullposeList)):
+    #     _, ds = dataSet.createTFExample(itemType='hand', fileIn=perFrameFittingDataList[i]['imgID'])
 
-    # prepare data for multi frame optimization
-    kps2DNp = np.stack([pklData['KPS2D'] for pklData in perFrameFittingDataList], axis = 0)
-    confList = [np.expand_dims(pklData['conf'],1) for pklData in perFrameFittingDataList]
-    transInitList = [pklData['trans'] for pklData in perFrameFittingDataList]
-    rotInitList = [pklData['poseCoeff'][:3] for pklData in perFrameFittingDataList]
-    globalPoseCoeffInit = perFrameFittingDataList[0]['poseCoeff'][3:]
+    #     img = ds.imgRaw
 
-    # do the multiframe optimization
+    #     # save the segmentation
+    #     # save_annotation.save_annotation(
+    #     #     ds.segRaw, saveCandSegDir,
+    #     #     perFrameFittingDataList[i]['imgID'].split('/')[-1], add_colormap=True,
+    #     #     colormap_type='pascal')
 
-    joint3DPred, fullposeList, betaList, transList, globalPoseCoeff, mList = lift2Dto3DMultiFrame(kps2DNp, camMat, None,
-                                                                          weights=confList,
-                                                                          beta=beta,
-                                                                          isOpenGLCoord=False,
-                                                                          transInit=transInitList,
-                                                                          rotInit=rotInitList,
-                                                                          globalPoseCoeffInit=globalPoseCoeffInit)
-
-
-    # save the results of fitting
-    globalFittingDataList = []
-    for i in range(len(fullposeList)):
-        globalFittingDataList.append(copy.deepcopy(perFrameFittingDataList[i]))
-        globalFittingDataList[i]['KPS3D'] = joint3DPred[i]
-        globalFittingDataList[i]['KPS2D'] = utilsEval.cv2ProjectPoints(camMat, joint3DPred[i],isOpenGLCoords=False)
-        globalFittingDataList[i]['poseCoeff'] = np.concatenate([fullposeList[i][:3], globalPoseCoeff], axis=0)
-        globalFittingDataList[i]['beta'] = betaList[i]
-        globalFittingDataList[i]['trans'] = transList[i]
-        with open(join(saveCandAfterFitDir, globalFittingDataList[i]['imgID'].split('/')[-1]+'.pickle'), 'wb') as f:
-            pickle.dump(globalFittingDataList[i], f)
-
-    # visualize
-    for i in range(len(fullposeList)):
-        _, ds = dataSet.createTFExample(itemType='hand', fileIn=perFrameFittingDataList[i]['imgID'])
-
-        img = ds.imgRaw
-
-        # save the segmentation
-        # save_annotation.save_annotation(
-        #     ds.segRaw, saveCandSegDir,
-        #     perFrameFittingDataList[i]['imgID'].split('/')[-1], add_colormap=True,
-        #     colormap_type='pascal')
-
-        # save the images with kps
-        manoVis.dump3DModel2DKpsHand(img, mList[i], perFrameFittingDataList[i]['imgID'].split('/')[-1],
-                                     camMat, est2DJoints=perFrameFittingDataList[i]['KPS2D'], gt2DJoints=None, outDir=saveCandAfterFitDir)
+    #     # save the images with kps
+    #     manoVis.dump3DModel2DKpsHand(img, mList[i], perFrameFittingDataList[i]['imgID'].split('/')[-1],
+    #                                  camMat, est2DJoints=perFrameFittingDataList[i]['KPS2D'], gt2DJoints=None, outDir=saveCandAfterFitDir)
 
 if __name__ == '__main__':
     app.run(main)

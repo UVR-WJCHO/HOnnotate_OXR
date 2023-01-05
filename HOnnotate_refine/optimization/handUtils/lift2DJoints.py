@@ -284,6 +284,187 @@ def lift2Dto3D(projPtsGT, camMat, filename, img, JVis=np.ones((21,), dtype=np.fl
 
     return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), loss['joints2D'].r.copy(), m.r.copy()
 
+
+def lift2Dto3DMultiview(metaperFrame, camTransList, camMat, filename, img, JVis=np.ones((21,), dtype=np.float32), trans=None, beta=None, wrist3D = None, withPoseCoeff=True,
+               weights=1.0, relDepGT=None, rel3DCoordGT = None, rel3DCoordNormGT = None, img2DGT = None, outDir = None,
+               poseCoeffInit=None,
+               transInit=None, betaInit=None):
+
+    # metaperFrame = [meta_mas, meta_sub1, meta_sub2, meta_sub3]
+    # meta = {'bb': bb, 'img2bb': np.float32(img2bb), 'bb2img': np.float32(bb2img), 'kpts': np.float32(processed_kpts)}  
+    
+    loss = {}
+
+    if withPoseCoeff:
+        numComp = 30
+        m, poseCoeffCh, betaCh, transCh, fullposeCh = getHandModelPoseCoeffs(numComp)
+
+        if poseCoeffInit is not None:
+            poseCoeffCh[:] = poseCoeffInit
+
+        if transInit is not None:
+            transCh[:] = transInit
+
+        if betaInit is not None:
+            betaCh[:] = betaInit
+
+        freeVars = [poseCoeffCh]
+        if beta is None:
+            freeVars = freeVars + [betaCh]
+            loss['shape'] = 1e2 * betaCh
+        else:
+            betaCh[:] = beta
+
+        if trans is None:
+            freeVars = freeVars + [transCh]
+        else:
+            transCh[:] = trans
+
+        # loss['pose'] = 0.5e2 * poseCoeffCh[3:]/stdPCACoeff[:numComp]
+
+        thetaConstMin, thetaConstMax = Constraints().getHandJointConstraints(fullposeCh[3:])
+        loss['constMin'] = 5e2 * thetaConstMin
+        loss['constMax'] = 5e2 * thetaConstMax
+        loss['invalidTheta'] = 1e3 * fullposeCh[Constraints().invalidThetaIDs]
+
+    else:
+        m, rotCh, jointsCh, transCh, betaCh = getHandModel()
+
+        thetaConstMin, thetaConstMax = Constraints().getHandJointConstraints(jointsCh)
+        loss['constMin'] = 5e3 * thetaConstMin
+        loss['constMax'] = 5e3 * thetaConstMax
+        validTheta = jointsCh[Constraints().validThetaIDs[3:] - 3]
+
+        freeVars = [validTheta, rotCh]
+
+        if beta is None:
+            freeVars = freeVars + [betaCh]
+            loss['shape'] = 0.5e2 * betaCh
+        else:
+            betaCh[:] = beta
+
+        if trans is None:
+            freeVars = freeVars + [transCh]
+        else:
+            transCh[:] = trans
+
+    if relDepGT is not None:
+        relDepPred = m.J_transformed[:,2] - m.J_transformed[0,2]
+        loss['relDep'] = (relDepPred - relDepGT) * weights[:,0] * 5e1
+
+    if rel3DCoordGT is not None:
+        rel3DCoordPred = m.J_transformed - m.J_transformed[0:1,:]
+        loss['rel3DCoord'] = (rel3DCoordPred - rel3DCoordGT) * np.tile(weights[:,0:1], [1,3]) * 5e1
+
+    if rel3DCoordNormGT is not None:
+        rel3DCoordPred = m.J_transformed[jointsMap][1:,:] - m.J_transformed[jointsMap][0:1, :]
+
+        rel3DCoordPred = rel3DCoordPred/ch.expand_dims(ch.sqrt(ch.sum(ch.square(rel3DCoordPred), axis=1)), axis=1)
+        loss['rel3DCoordNorm'] = (1. - ch.sum(rel3DCoordPred*rel3DCoordNormGT, axis=1))*1e4
+
+        # loss['rel3DCoordNorm'] = \
+        #     (rel3DCoordNormGT*ch.expand_dims(ch.sum(rel3DCoordPred*rel3DCoordNormGT, axis=1), axis=1) - rel3DCoordPred) * 1e2#5e2
+
+
+    # mano model keyPts projected on 'mas' cam
+    projPts = utilsEval.chProjectPoints(m.J_transformed, camMat, False)[jointsMap]
+    
+    loss['joints2D'] = 0
+    loss['joints2DClip'] = 0
+    for camIdx in range(len(metaperFrame)):
+        # camIdx : 0 - mas, 1 - sub1, 2 - sub2, 3 - sub3
+        
+        # estimated 2D keyPts on each cam
+        projPtsGT = metaperFrame[camIdx]['kpts'][jointsMap][0:2]
+        
+        # project mano model pts to each cam
+        camTrans = camTransList[camIdx]
+        projPts *= camTrans
+        assert NotImplementedError
+        
+        # transform pts with each cropped bb
+        img2bb = metaperFrame[camIdx]['img2bb']
+        
+        projPts *= img2bb
+        assert NotImplementedError
+        
+        JVis = np.tile(np.expand_dims(JVis, 1), [1, 2])
+        loss['joints2D'] += (projPts - projPtsGT) * JVis * weights * 1e0
+        loss['joints2DClip'] += clipIden(projPts - projPtsGT) * JVis * weights * 1e1
+        
+
+    if wrist3D is not None:
+        dep = wrist3D[2]
+        if dep<0:
+            dep = -dep
+        loss['wristDep'] = (m.J_transformed[0,2] - dep)*1e2
+
+
+    # vis_mesh(m)
+
+
+    render = False
+
+    def cbPass(_):
+
+        pass
+        # print(loss['joints'].r)
+
+
+    print(filename)
+    warnings.simplefilter('ignore')
+
+
+    loss['joints2D'] = loss['joints2D'] * 1e1/ weights # dont want to use confidence now
+
+    if True:
+        ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
+                    callback=cbPass if render else cbPass, method='dogleg', options={'maxiter': 50})
+    else:
+        manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=projPtsGT, gt2DJoints=img2DGT,
+                                     outDir=outDir)
+
+        freeVars = [poseCoeffCh[:3], transCh]
+        ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
+                    callback=cbPass, method='dogleg', options={'maxiter': 20})
+
+        manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=projPtsGT, gt2DJoints=img2DGT,
+                                     outDir=outDir)
+        freeVars = [poseCoeffCh[3:]]
+        ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
+                    callback=cb if render else cbPass, method='dogleg', options={'maxiter': 20})
+
+        manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=projPtsGT, gt2DJoints=img2DGT,
+                                     outDir=outDir)
+        freeVars = [poseCoeffCh, transCh]
+        if beta is None:
+            freeVars = freeVars + [betaCh]
+        ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
+                    callback=cb if render else cbPass, method='dogleg', options={'maxiter': 20})
+
+
+    if False:
+        open3dVisualize(m)
+    else:
+        mainprojPtsGT = metaperFrame[0]['kpts'][jointsMap][0:2]
+        manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=mainprojPtsGT, gt2DJoints=img2DGT, outDir=outDir)
+
+
+
+
+
+
+    # vis_mesh(m)
+
+    joints3D = m.J_transformed.r[jointsMap]
+
+    # print(betaCh.r)
+    # print((relDepPred.r - relDepGT))
+
+    return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), loss['joints2D'].r.copy(), m.r.copy()
+
+
+
 def ready_arguments(fname_or_dict, posekey4vposed='pose', shared_args=None, chTrans=None, chBetas=None):
     import numpy as np
     import pickle
