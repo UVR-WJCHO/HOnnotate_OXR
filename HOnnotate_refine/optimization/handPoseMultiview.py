@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.realpath(__file__))))
 sys.path.insert(0,os.path.join(os.path.dirname(os.path.realpath(__file__)), '../'))
-
+import json
 import pickle
 from handUtils.lift2DJoints import lift2Dto3D, lift2Dto3DMultiFrame, lift2Dto3DMultiview
 import utils.inferenceUtils as infUti
@@ -17,6 +17,10 @@ import copy
 
 from absl import flags
 from absl import app
+
+sys.path.insert(0,os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../modules/utils'))
+from loadParameters import LoadCameraMatrix, LoadDistortionParam
+
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
@@ -30,6 +34,8 @@ configDir = 'CPMHand'
 baseDir = OXR_MULTI_CAMERA_DIR
 
 beta = np.zeros((10,), dtype=np.float32)
+
+
 
 """
 def incrementalFarthestSearch(objPklDataList, k):
@@ -200,10 +206,11 @@ def getMeta(files):
         file = files[ind]
         resultsDir = join(baseDir, FLAGS.db)
 
-        with open(join(resultsDir, file +'.pickle'), 'rb') as f:
+        with open(join(resultsDir, FLAGS.seq, 'meta', file +'.pkl'), 'rb') as f:
             pklData = pickle.load(f)
             finalPklDataList.append(pklData)
-
+        ind = ind + 1
+        
     return finalPklDataList
 
 
@@ -237,22 +244,25 @@ def getFramewisePose(dummy, kpsDictList, camMat, beta, dataSet, saveCandImgDir):
             pickle.dump(newDict, f)
 
 
-def getFramewisePoseMultiview(dummy, mainImgIDList, MetaDictperCam, camMat, beta, dataSet, saveCandImgDir):
+def getFramewisePoseSingleview(dummy, camParamList, mainImgIDList, MetaDictperCam, camMat, beta, dataSet, saveCandImgDir):
     # iterate in [startIdx:endIdx]
-    for idx in range(len(mainImgIDList)):
-        metaperFrame = []
-        for camID in range(len(camIDset)):
-            metaperFrame.append(MetaDictperCam[camID][idx])
-
-        mainImgID = mainImgIDList[idx]
+    
+    for idx, mainImgID in enumerate(mainImgIDList):
+        projPtsGT = MetaDictperCam[0][idx]['kpts'][:, 0:2]
+        if np.isnan(projPtsGT[0, 0]):
+            continue
+             
+        ImgID = FLAGS.seq + '/' + mainImgID
         
-        _, ds = dataSet.createTFExample(itemType='hand', fileIn=mainImgID)
+        _, ds = dataSet.createTFExample(itemType='hand', fileIn=ImgID)
         imgRaw = ds.imgRaw
                 
         
         # metaperFrame : list of meta_info dict with order [mas, cam1, cam2, cam3]
-        kps3D, poseCoeff, beta, trans, err, _ = lift2Dto3DMultiview(metaperFrame, transformList, camMat,
-                                                        mainImgID, imgRaw,
+        
+        
+        kps3D, poseCoeff, beta, trans, err, _ = lift2Dto3D(projPtsGT, camMat,
+                                                        ImgID.split('/')[-1], imgRaw,
                                                         weights=np.ones((21, 1), dtype=np.float32),
                                                         beta=beta,
                                                         rel3DCoordNormGT=None,#fcOut,
@@ -260,7 +270,45 @@ def getFramewisePoseMultiview(dummy, mainImgIDList, MetaDictperCam, camMat, beta
                                                         outDir=saveCandImgDir
                                                         )
 
-        newDict = {'imgID': mainImgID,
+        newDict = {'imgID': ImgID,
+                   'KPS3D': kps3D,
+                   'poseCoeff': poseCoeff,
+                   'beta': beta,
+                   'trans': trans, 'err': err}
+
+        with open(join(saveCandImgDir, mainImgID.split('/')[-1] +'.pickle'), 'wb') as f:
+            pickle.dump(newDict, f)
+        
+        return newDict
+
+
+
+
+def getFramewisePoseMultiview(dummy, camParamList, mainImgIDList, MetaDictperCam, camMat, beta, dataSet, saveCandImgDir):
+    # iterate in [startIdx:endIdx]
+    
+    for idx, mainImgID in enumerate(mainImgIDList):
+        metaperFrame = []
+        for camID in range(len(camIDset)):
+            metaperFrame.append(MetaDictperCam[camID][idx])
+
+        ImgID = FLAGS.seq + '/' + mainImgID
+        
+        _, ds = dataSet.createTFExample(itemType='hand', fileIn=ImgID)
+        imgRaw = ds.imgRaw
+                
+        
+        # metaperFrame : list of meta_info dict with order [mas, cam1, cam2, cam3]
+        kps3D, poseCoeff, beta, trans, err, _ = lift2Dto3DMultiview(metaperFrame, camParamList, camMat,
+                                                        ImgID, imgRaw,
+                                                        weights=np.ones((21, 1), dtype=np.float32),
+                                                        beta=beta,
+                                                        rel3DCoordNormGT=None,#fcOut,
+                                                        img2DGT=None,
+                                                        outDir=saveCandImgDir
+                                                        )
+
+        newDict = {'imgID': ImgID,
                    'KPS3D': kps3D,
                    'poseCoeff': poseCoeff,
                    'beta': beta,
@@ -273,21 +321,33 @@ def getFramewisePoseMultiview(dummy, mainImgIDList, MetaDictperCam, camMat, beta
 
 
 def main(argv):
-    saveInitDir = join(baseDir, FLAGS.seq, 'handInit')
+    
+    resultDir = os.path.join(baseDir, FLAGS.db + '_hand')
+    with open(os.path.join(resultDir, "cameraParamsBA.json")) as json_file:
+        cameraParams = json.load(json_file)
+        cameraParams = {camera: np.array(cameraParams[camera]) for camera in cameraParams}
+
+
+    intrinsicMatrices = LoadCameraMatrix(os.path.join(resultDir, "220809_cameraInfo.txt"))
+    distCoeffs = {}
+    distCoeffs["mas"] = LoadDistortionParam(os.path.join(resultDir, "mas_intrinsic.json"))
+    distCoeffs["sub1"] = LoadDistortionParam(os.path.join(resultDir, "sub1_intrinsic.json"))
+    distCoeffs["sub2"] = LoadDistortionParam(os.path.join(resultDir, "sub2_intrinsic.json"))
+    distCoeffs["sub3"] = LoadDistortionParam(os.path.join(resultDir, "sub3_intrinsic.json"))
+
+    camParamList = intrinsicMatrices, cameraParams, distCoeffs
+    
+    
+    saveInitDir = join(baseDir, FLAGS.db, FLAGS.seq, 'handInit')
     if not os.path.exists(saveInitDir):
         os.mkdir(saveInitDir)
-    saveInitDir = join(saveInitDir, FLAGS.camID)
-    if not os.path.exists(saveInitDir):
-        os.mkdir(saveInitDir)
+    # saveInitDir = join(saveInitDir, FLAGS.camID)
+    # if not os.path.exists(saveInitDir):
+    #     os.mkdir(saveInitDir)
 
     saveCandImgDir = join(saveInitDir, 'singleFrameMultiViewFit')
     if not os.path.exists(saveCandImgDir):
         os.mkdir(saveCandImgDir)
-
-
-    saveCandAfterFitDir = join(saveInitDir, 'globalFit')
-    if not os.path.exists(saveCandAfterFitDir):
-        os.mkdir(saveCandAfterFitDir)
 
     mainCamID = 'mas'
     
@@ -301,7 +361,7 @@ def main(argv):
     mainImgIDList = None
     for camID in camIDset:
         pklFilesList = os.listdir(os.path.join(OXR_MULTI_CAMERA_DIR, FLAGS.db, FLAGS.seq, 'meta', camID))
-        pklFilesList = [FLAGS.seq+'/'+ camID +'/'+ff[:-4] for ff in pklFilesList if 'pkl' in ff]
+        pklFilesList = [camID +'/'+ff[:-4] for ff in pklFilesList if 'pkl' in ff]
         pklFilesList = sorted(pklFilesList)
         
         pklDataList = getMeta(pklFilesList)
@@ -318,10 +378,17 @@ def main(argv):
     numCandidateFrames = len(pklDataperCam[0])
     numFramesPerThread = np.ceil(numCandidateFrames/numThreads).astype(np.uint32)
     procs = []
+    
     for proc_index in range(numThreads):
         startIdx = proc_index*numFramesPerThread
         endIdx = min(startIdx+numFramesPerThread,numCandidateFrames)
-        args = ([], mainImgIDList[startIdx:endIdx], pklDataperCam[:][startIdx:endIdx], camMat, beta, dataSet, saveCandImgDir)
+        
+        proc_pklDataperCam = []
+        for pklDataList in pklDataperCam:
+            proc_pklDataperCam.append(pklDataList[startIdx:endIdx])
+                
+        args = ([], camParamList, mainImgIDList[startIdx:endIdx], proc_pklDataperCam, camMat, beta, dataSet, saveCandImgDir)
+        # proc = mlp.Process(target=getFramewisePoseSingleview, args=args)
         proc = mlp.Process(target=getFramewisePoseMultiview, args=args)
 
         proc.start()

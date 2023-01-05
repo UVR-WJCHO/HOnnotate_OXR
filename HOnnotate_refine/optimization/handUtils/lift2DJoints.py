@@ -33,6 +33,10 @@ jointsMap = [0,
              10, 11, 12, 19,
              7, 8, 9, 20]
 
+h = np.array([[0,0,0,1]])
+
+camIDset = ['mas', 'sub1', 'sub2', 'sub3']
+
 
 def undo_chumpy(x):
     return x if isinstance(x, np.ndarray) else x.r
@@ -206,7 +210,7 @@ def lift2Dto3D(projPtsGT, camMat, filename, img, JVis=np.ones((21,), dtype=np.fl
 
 
 
-
+    pts3D = np.copy(m.J_transformed)
     projPts = utilsEval.chProjectPoints(m.J_transformed, camMat, False)[jointsMap]
     JVis = np.tile(np.expand_dims(JVis, 1), [1, 2])
     loss['joints2D'] = (projPts - projPtsGT) * JVis * weights * 1e0
@@ -241,7 +245,7 @@ def lift2Dto3D(projPtsGT, camMat, filename, img, JVis=np.ones((21,), dtype=np.fl
 
     if True:
         ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
-                    callback=cbPass if render else cbPass, method='dogleg', options={'maxiter': 50})
+                    callback=cbPass if render else cbPass, method='dogleg', options={'maxiter': 20})
     else:
         manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=projPtsGT, gt2DJoints=img2DGT,
                                      outDir=outDir)
@@ -285,13 +289,15 @@ def lift2Dto3D(projPtsGT, camMat, filename, img, JVis=np.ones((21,), dtype=np.fl
     return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), loss['joints2D'].r.copy(), m.r.copy()
 
 
-def lift2Dto3DMultiview(metaperFrame, camTransList, camMat, filename, img, JVis=np.ones((21,), dtype=np.float32), trans=None, beta=None, wrist3D = None, withPoseCoeff=True,
+def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=np.ones((21,), dtype=np.float32), trans=None, beta=None, wrist3D = None, withPoseCoeff=True,
                weights=1.0, relDepGT=None, rel3DCoordGT = None, rel3DCoordNormGT = None, img2DGT = None, outDir = None,
                poseCoeffInit=None,
                transInit=None, betaInit=None):
 
     # metaperFrame = [meta_mas, meta_sub1, meta_sub2, meta_sub3]
     # meta = {'bb': bb, 'img2bb': np.float32(img2bb), 'bb2img': np.float32(bb2img), 'kpts': np.float32(processed_kpts)}  
+    
+    intrinsicMatrices, cameraParams, distCoeffs = camParamList
     
     loss = {}
 
@@ -367,31 +373,53 @@ def lift2Dto3DMultiview(metaperFrame, camTransList, camMat, filename, img, JVis=
 
 
     # mano model keyPts projected on 'mas' cam
-    projPts = utilsEval.chProjectPoints(m.J_transformed, camMat, False)[jointsMap]
+    # projPts_ch = utilsEval.chProjectPoints(m.J_transformed, camMat, False)[jointsMap]
     
-    loss['joints2D'] = 0
-    loss['joints2DClip'] = 0
-    for camIdx in range(len(metaperFrame)):
+    pts3D = m.J_transformed    # need positive depth value if not, 
+        
+    detection4Dcamera = ch.vstack([pts3D[:,0], pts3D[:,1], pts3D[:,2], pts3D[:,2]/pts3D[:,2]]).T
+    
+    # (3d homogeneous point in camera coordinate) = (intrinsic) * (extrinsic) * (3d homogeneous point in world coordinate)
+    # mas cam    
+    projection = ch.concatenate((intrinsicMatrices['mas'].dot(cameraParams['mas'].reshape(3,4)), h), 0)
+    detection4Dworld = (ch.linalg.inv(projection).dot(detection4Dcamera.T)).T
+    
+    loss_joint2D = 0
+    loss_joint2DClip = 0
+    for camIdx, cam in enumerate(camIDset):
         # camIdx : 0 - mas, 1 - sub1, 2 - sub2, 3 - sub3
         
-        # estimated 2D keyPts on each cam
-        projPtsGT = metaperFrame[camIdx]['kpts'][jointsMap][0:2]
+        ### estimated 2D keyPts on each cam
+        projPtsGT = metaperFrame[camIdx]['kpts'][:, 0:2]
         
-        # project mano model pts to each cam
-        camTrans = camTransList[camIdx]
-        projPts *= camTrans
-        assert NotImplementedError
+        if np.isnan(projPtsGT[0, 0]):
+            joints3D = np.zeros((21, 3))
+            return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), 0, None
         
-        # transform pts with each cropped bb
+        ### project mano model pts to each cam        
+        # it is 3d homogeneous point in camera2 coordinate
+        detection4Dcamera2 = (ch.asarray(cameraParams[cam].reshape(3,4)).dot(detection4Dworld.T)).T
+
+        # # reprojected points (it is in image plane and distorted)
+        # rvec, _ = cv2.Rodrigues(np.eye(3))
+        # tvec = np.array([[0.,0.,0.]])
+        # projectedPoints, _ = cv2.projectPoints(detection4Dcamera2[:,:3], rvec, tvec, intrinsicMatrices[cam], distCoeffs[cam])
+        # projectedPoints = projectedPoints.squeeze()
+        
+        ## need jointMap if it from mano model
+        projPts = utilsEval.chProjectPoints(detection4Dcamera2, intrinsicMatrices[cam], False)[jointsMap]
+            
+        ### transform pts with each cropped bb
         img2bb = metaperFrame[camIdx]['img2bb']
         
-        projPts *= img2bb
-        assert NotImplementedError
+        uv1 = ch.concatenate((projPts, ch.ones_like(projPts[:, :1])), 1)
+        projPts = ch.transpose(ch.dot(img2bb, ch.transpose(uv1)))
         
-        JVis = np.tile(np.expand_dims(JVis, 1), [1, 2])
-        loss['joints2D'] += (projPts - projPtsGT) * JVis * weights * 1e0
-        loss['joints2DClip'] += clipIden(projPts - projPtsGT) * JVis * weights * 1e1
-        
+        loss_joint2D += (projPts - projPtsGT) * weights * 1e0
+        loss_joint2DClip += clipIden(projPts - projPtsGT) * weights * 1e1
+
+    loss['joints2D'] = loss_joint2D
+    loss['joints2DClip'] = loss_joint2DClip
 
     if wrist3D is not None:
         dep = wrist3D[2]
@@ -412,6 +440,8 @@ def lift2Dto3DMultiview(metaperFrame, camTransList, camMat, filename, img, JVis=
 
 
     print(filename)
+    filename = filename.split('/')[-1]
+    
     warnings.simplefilter('ignore')
 
 
@@ -419,7 +449,7 @@ def lift2Dto3DMultiview(metaperFrame, camTransList, camMat, filename, img, JVis=
 
     if True:
         ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
-                    callback=cbPass if render else cbPass, method='dogleg', options={'maxiter': 50})
+                    callback=cbPass if render else cbPass, method='dogleg', options={'maxiter': 20})
     else:
         manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=projPtsGT, gt2DJoints=img2DGT,
                                      outDir=outDir)
@@ -446,7 +476,7 @@ def lift2Dto3DMultiview(metaperFrame, camTransList, camMat, filename, img, JVis=
     if False:
         open3dVisualize(m)
     else:
-        mainprojPtsGT = metaperFrame[0]['kpts'][jointsMap][0:2]
+        mainprojPtsGT = metaperFrame[0]['kpts'][:, 0:2]
         manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=mainprojPtsGT, gt2DJoints=img2DGT, outDir=outDir)
 
 

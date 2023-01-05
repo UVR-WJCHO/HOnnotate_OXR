@@ -38,7 +38,7 @@ class datasetOXRMultiCamera(datasetBase):
         else:
             fileList = fileListIn
 
-        self.seqDir = join(OXR_MULTI_CAMERA_DIR, db)
+        self.dbDir = join(OXR_MULTI_CAMERA_DIR, db)
         imgDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'rgb_crop')
         segDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'segmentation', str(camInd), 'raw_seg_results')
         # metaDataDir = join(HO3D_CAMERA_DIR, split, 'meta')
@@ -103,9 +103,9 @@ class datasetOXRMultiCamera(datasetBase):
             im = np.vstack(itertools.imap(np.uint16, r.asDirect()[2])).astype(np.float32)
         return im
 
-    def getCamMat(self, seq, camInd):
-        camMatFile = os.path.join(self.seqDir, 'calibration', 'cam_%s_intrinsics.txt' % (camInd))
-        depthScaleFile = os.path.join(self.seqDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
+    def getCamMat(self, camInd):
+        camMatFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_intrinsics.txt' % (camInd))
+        depthScaleFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
 
         if not os.path.exists(camMatFile):
             raise Exception('Where is the camera intrinsics file???')
@@ -140,12 +140,12 @@ class datasetOXRMultiCamera(datasetBase):
         seq = fId.split('/')[0]
         camInd = fId.split('/')[1]
         id = fId.split('/')[2]
-        img = self.readImg(join(self.seqDir, seq, 'rgb', camInd, id), True)
+        img = self.readImg(join(self.dbDir, seq, 'rgb', camInd, id), True)
 
         if self.removeBG:
-            r = png.Reader(filename=join(self.seqDir, seq, 'depth', camInd, id+'.png'))
+            r = png.Reader(filename=join(self.dbDir, seq, 'depth', camInd, id+'.png'))
             dep = np.vstack(map(np.uint16, r.asDirect()[2])).astype(np.float32)
-            depScaleFile = os.path.join(self.seqDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
+            depScaleFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
             with open(depScaleFile, 'r') as f:
                 line = f.readline()
             line = line.strip()
@@ -160,12 +160,12 @@ class datasetOXRMultiCamera(datasetBase):
         objInd = 1
         handInd = 2
 
-        seg = self.readSeg(join(self.seqDir, seq, 'segmentation', camInd, 'raw_seg_results', id), True)
+        seg = self.readSeg(join(self.dbDir, seq, 'segmentation', camInd, 'raw_seg_results', id), True)
         if seg is None:
             seg = np.zeros((img.shape[1], img.shape[0], 3), dtype=np.uint8)
         seg = cv2.resize(seg, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
 
-        meta = self.readMeta(join(self.seqDir, seq, 'meta', id), seq)
+        meta = self.readMeta(join(self.dbDir, seq, 'meta', id), seq)
 
 
         if self.isCropImg:
@@ -175,51 +175,27 @@ class datasetOXRMultiCamera(datasetBase):
         else:
             imgPatch = img
             maskPatch = seg
-            kpsAug = np.concatenate([meta['pts2DHand'], meta['pts2DObj']], axis=0)
 
         # Convert seg into single channel image
         newSeg = np.zeros((imgPatch.shape[0], imgPatch.shape[1]), dtype=np.uint8)
         newSeg[maskPatch[:, :, 0] == handInd] = handInd
         newSeg[maskPatch[:, :, 0] == objInd] = objInd
 
-
-        # add the valid column for 2D keypoints
-        kpsAug = np.concatenate([kpsAug, np.ones((kpsAug.shape[0], 1), dtype=np.float32)], axis=1)
-
-        camMat = self.getCamMat(seq, camInd)
-        depthScaleFile = os.path.join(self.seqDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
+        camMat = self.getCamMat(camInd)
+        depthScaleFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
         with open(depthScaleFile, 'r') as f:
             line = f.readline()
         depthScale = float(line.strip())
 
         # read the depth file
-        depth = self.load_depth(join(self.seqDir, seq, 'depth', camInd, id+'.png'))*depthScale
+        depth = self.load_depth(join(self.dbDir, seq, 'depth', camInd, id+'.png'))*depthScale
 
         depthEnc = encodeDepthImg(depth)
-
-        kps2DHomoHand = np.concatenate([kpsAug[:21, :2], np.ones((21, 1), dtype=np.float32)], axis=1)
-        kps3DAugHand = np.matmul(kps2DHomoHand * np.abs(meta['pts3DHand'][:, 2:3]), np.linalg.inv(camMat).T)
-
-        kps2DHomoObj = np.concatenate([kpsAug[21:, :2], np.ones((8, 1), dtype=np.float32)], axis=1)
-        kps3DAugobj = np.matmul(kps2DHomoObj * np.abs(meta['pts3DObj'][:, 2:3]), np.linalg.inv(camMat).T)
-
-        if itemType == 'hand':
-            # only hands for now
-            kps2DAug = kpsAug[:21, :][jointsMap]
-            kps3DAug = kps3DAugHand[jointsMap]
-        elif itemType == 'object':
-            kps2DAug = kpsAug[21:, :]
-            kps3DAug = kps3DAugobj
-        elif itemType == 'hand_object':
-            kps2DAug = kpsAug
-            kps3DAug = np.concatenate([kps3DAugHand, kps3DAugobj], axis=0)
-        else:
-            raise NotImplementedError
 
         coordChangeMat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
         ds = dataSample(img=imgPatch, seg=newSeg, fName=fId, dataset=datasetType.HO3D,
                         outType=outputType.SEG | outputType.KEYPOINT_3D | outputType.KEYPOINTS_2D,
-                        pts2D=kps2DAug, pts3D=kps3DAug.dot(coordChangeMat), camMat=camMat, depth=depthEnc)
+                        camMat=camMat, depth=depthEnc)
 
 
         return None, ds
