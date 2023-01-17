@@ -242,7 +242,10 @@ def dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints = None, gt2DJoint
 
     if gt2DJoints is not None:
         ax1 = fig.add_subplot(2, 2, 1)
-        ax1.imshow(gt2DJoints[:, :, [2, 1, 0]])
+        imgOutGt = utilsEval.showHandJoints(img.copy(), gt2DJoints.astype(np.float32), estIn=None,
+                                            filename=None,
+                                            upscale=1, lineThickness=3)
+        ax1.imshow(imgOutGt[:, :, [2, 1, 0]])
         ax1.title.set_text("Ground Truth")
 
     if outDir is not None:
@@ -264,6 +267,87 @@ def dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints = None, gt2DJoint
         plt.close(fig)
     else:
         plt.show()
+
+
+def dump3DModel2DKpsHand_forCrop(img, m, filename, camMat, img2bb=None, est2DJoints = None, gt2DJoints = None, outDir=None, camPose=np.eye(4, dtype=np.float32)):
+    '''
+    Saves the following in this order depending on availibility
+    1. GT 2D joint locations
+    2. 2D joint locations as estimated by the CPM
+    3. 2D joint locations after fitting the MANO model to the estimation 2D joints
+    4. 3D model of the hand in the estimated pose
+    :param img:
+    :param m:
+    :param filename:
+    :param camMat:
+    :param est2DJoints:
+    :param gt2DJoints:
+    :param outDir:
+    :return:
+    '''
+    if outDir is not None:
+        plt.ioff()
+    fig = plt.figure(figsize=(2, 2))
+    figManager = plt.get_current_fig_manager()
+    # figManager.window.showMaximized()
+
+    ax = fig.add_subplot(2, 2, 4, projection="3d")
+    plot3dVisualize(ax, m, flip_x=False, camPose=camPose)
+    ax.title.set_text("3D mesh")
+
+    
+    J3DHomo = ch.concatenate([m.J_transformed, np.ones((21, 1))], axis=1)
+    J3DTrans = J3DHomo.dot(camPose.T)[:, :3]
+    projPts = utilsEval.chProjectPoints(J3DTrans, camMat, False)[jointsMap]
+    
+    uv1 = ch.concatenate((projPts, ch.ones_like(projPts[:, :1])), 1)
+    projPts = ch.dot(img2bb, ch.transpose(uv1)).T
+        
+    axEst = fig.add_subplot(2, 2, 3)
+    imgOutEst = utilsEval.showHandJoints(img.copy(), np.copy(projPts.r).astype(np.float32), estIn=None,
+                                         filename=None,
+                                         upscale=1, lineThickness=3)
+    axEst.imshow(imgOutEst[:, :, [2, 1, 0]])
+    axEst.title.set_text("After fitting")
+
+    if est2DJoints is not None:
+        axGT = fig.add_subplot(2, 2, 2)
+        imgOutGt = utilsEval.showHandJoints(img.copy(), est2DJoints.astype(np.float32), estIn=None,
+                                            filename=None,
+                                            upscale=1, lineThickness=3)
+        axGT.imshow(imgOutGt[:, :, [2, 1, 0]])
+        axGT.title.set_text("Before fitting")
+
+    if gt2DJoints is not None:
+        ax1 = fig.add_subplot(2, 2, 1)
+        imgOutGt = utilsEval.showHandJoints(img.copy(), gt2DJoints.astype(np.float32), estIn=None,
+                                            filename=None,
+                                            upscale=1, lineThickness=3)
+        ax1.imshow(imgOutGt[:, :, [2, 1, 0]])
+        ax1.title.set_text("Ground Truth")
+
+    if outDir is not None:
+        if len(filename.split('/')) > 1:
+            if len(filename.split('/')) == 2:
+                if not os.path.exists(os.path.join(outDir, filename.split('/')[0])):
+                    os.mkdir(os.path.join(outDir, filename.split('/')[0]))
+            elif len(filename.split('/')) == 3:
+                if not os.path.exists(os.path.join(outDir, filename.split('/')[0])):
+                    os.mkdir(os.path.join(outDir, filename.split('/')[0]))
+                if not os.path.exists(os.path.join(outDir, filename.split('/')[0], filename.split('/')[1])):
+                    os.mkdir(os.path.join(outDir, filename.split('/')[0], filename.split('/')[1]))
+            else:
+                raise NotImplementedError
+
+        fig.set_size_inches((11, 8.5), forward=False)
+        # plt.show()
+        plt.savefig(os.path.join(outDir, filename + '.jpg'), dpi=300)
+        plt.close(fig)
+    else:
+        plt.show()
+        
+
+
         
 def showHandJoints(imgInOrg, gtIn, estIn=None, filename=None, upscale=1, lineThickness=3):
     '''

@@ -289,8 +289,8 @@ def getFramewisePoseMultiview(dummy, camParamList, mainImgIDList, MetaDictperCam
     
     for idx, mainImgID in enumerate(mainImgIDList):
         metaperFrame = []
-        for camID in range(len(camIDset)):
-            metaperFrame.append(MetaDictperCam[camID][idx])
+        for camIdx in range(len(camIDset)):
+            metaperFrame.append(MetaDictperCam[camIdx][idx])
 
         ImgID = FLAGS.seq + '/' + mainImgID
         
@@ -317,7 +317,6 @@ def getFramewisePoseMultiview(dummy, camParamList, mainImgIDList, MetaDictperCam
         with open(join(saveCandImgDir, mainImgID.split('/')[-1] +'.pickle'), 'wb') as f:
             pickle.dump(newDict, f)
         
-        return newDict
 
 
 def main(argv):
@@ -367,15 +366,15 @@ def main(argv):
         pklDataList = getMeta(pklFilesList)
         pklDataperCam.append(pklDataList)
         
-        if camID == 'mas':
+        if camID == mainCamID:
             mainImgIDList = np.copy(pklFilesList)
         
     # get camera matrix
     camMat = dataSet.getCamMat(mainCamID)
 
     # run independent pose estimation on the candidate frames first. This provides good init for multi frame optimization later
-    numThreads = 10
-    numCandidateFrames = len(pklDataperCam[0])
+    numThreads = 4 #10
+    numCandidateFrames = 8 # len(pklDataperCam[0])
     numFramesPerThread = np.ceil(numCandidateFrames/numThreads).astype(np.uint32)
     procs = []
     

@@ -18,6 +18,10 @@ warnings.filterwarnings("ignore")
 warnings.simplefilter("ignore", category=PendingDeprecationWarning)
 
 from chumpy.ch_ops import UnaryElemwise as UE
+
+
+
+
 delta = 50
 class clipIden(UE):
     _r = lambda self, x: (np.abs(x) < delta) * x + 0.0#(np.abs(x) >= delta)*(0.01*(x))#-delta) + delta)
@@ -210,8 +214,10 @@ def lift2Dto3D(projPtsGT, camMat, filename, img, JVis=np.ones((21,), dtype=np.fl
 
 
 
-    pts3D = np.copy(m.J_transformed)
+    # pts3D = np.copy(m.J_transformed)
     projPts = utilsEval.chProjectPoints(m.J_transformed, camMat, False)[jointsMap]
+    projPts_debug = np.copy(projPts)
+    
     JVis = np.tile(np.expand_dims(JVis, 1), [1, 2])
     loss['joints2D'] = (projPts - projPtsGT) * JVis * weights * 1e0
     loss['joints2DClip'] = clipIden(projPts - projPtsGT) * JVis * weights * 1e1
@@ -294,10 +300,13 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
                poseCoeffInit=None,
                transInit=None, betaInit=None):
 
+
+    
     # metaperFrame = [meta_mas, meta_sub1, meta_sub2, meta_sub3]
     # meta = {'bb': bb, 'img2bb': np.float32(img2bb), 'bb2img': np.float32(bb2img), 'kpts': np.float32(processed_kpts)}  
     
-    intrinsicMatrices, cameraParams, distCoeffs = camParamList
+    intrinsicMatrices, extrinsicMatrices, distCoeffs = camParamList
+    mainCamID = 1
     
     loss = {}
 
@@ -371,55 +380,91 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
         # loss['rel3DCoordNorm'] = \
         #     (rel3DCoordNormGT*ch.expand_dims(ch.sum(rel3DCoordPred*rel3DCoordNormGT, axis=1), axis=1) - rel3DCoordPred) * 1e2#5e2
 
+   
+    ### check if GT exists, for debugging, return 0 if any of GT is missing
+    for camIdx in range(len(camIDset)):
+        projPtsGT = metaperFrame[camIdx]['kpts'][:, 0:2]
+        if np.isnan(projPtsGT[0, 0]):
+            joints3D = np.zeros((21, 3))
+            return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), 0, None
+    
+   
+    ### mano output is on world coordinate?
+    # mano4Dworld = ch.concatenate([m.J_transformed, np.ones((21, 1))], axis=1)
+    
+    ### mano output is on camera coordinate? correct results only for single cam
+    mano4Dcamera = ch.concatenate([m.J_transformed, np.ones((21, 1))], axis=1)
+    projection = ch.concatenate((extrinsicMatrices[camIDset[mainCamID]].reshape(3,4), h), 0)
+    mano4Dworld = ch.linalg.inv(projection).dot(mano4Dcamera.T).T   
+    
 
-    # mano model keyPts projected on 'mas' cam
-    # projPts_ch = utilsEval.chProjectPoints(m.J_transformed, camMat, False)[jointsMap]
+    # (3d homogeneous point in image coordinate) = (intrinsic) * (extrinsic) * (3d homogeneous point in world coordinate)
+    # (3d homogeneous point in camera coordinate) = (extrinsic) * (3d homogeneous point in world coordinate)
+ 
+    ######### debug log #########
+    """
+    projPtsGT_mas = metaperFrame[0]['kpts'][:, 0:2]
+    projPtsGT_sub1 = metaperFrame[1]['kpts'][:, 0:2]
     
-    pts3D = m.J_transformed    # need positive depth value if not, 
+    ex_mas = extrinsicMatrices['mas'].reshape(3,4)      
+    ex_sub1 = extrinsicMatrices['sub1'].reshape(3,4)
+    
+    ## [ex_mas]
+    ## array([ 0.99651512, -0.00185681,  0.00172505,  1.06138909])
+    ## array([-3.77008816e-04,  9.94952911e-01,  1.74648926e-04,  2.17816869e-01])
+    ## array([-0.00515595, -0.00294564,  1.00277799,  1.61680288])
         
-    detection4Dcamera = ch.vstack([pts3D[:,0], pts3D[:,1], pts3D[:,2], pts3D[:,2]/pts3D[:,2]]).T
+    ## [ex_sub1]    
+    ## array([ 5.56268556e-01, -1.83593177e-01,  8.07564738e-01, -3.57132190e+02])
+    ## array([  -0.27903086,    0.8662851 ,    0.39915127, -179.61030311])
+    ## array([ -0.78594016,  -0.44296072,   0.43649803, 320.80500681])
+
+    mano4Dcamera2_mas = mano4Dworld.dot(extrinsicMatrices['mas'].reshape(3,4).T)[:, :3]
+    mano4Dcamera2_sub1 = mano4Dworld.dot(extrinsicMatrices['sub1'].reshape(3,4).T)[:, :3]
+        
+    ## mano4Dcamera2_mas : array([[0.09566993, 0.00638343, 0.50618631], ...])
+    ## mano4Dcamera2_sub1 : array([-358.53030295, -179.96887255,  321.17378001], ... 1 이하 range 유사한 value 반복)
     
-    # (3d homogeneous point in camera coordinate) = (intrinsic) * (extrinsic) * (3d homogeneous point in world coordinate)
-    # mas cam    
-    projection = ch.concatenate((intrinsicMatrices['mas'].dot(cameraParams['mas'].reshape(3,4)), h), 0)
-    detection4Dworld = (ch.linalg.inv(projection).dot(detection4Dcamera.T)).T
+    ## 다른 cam인것 감안해도 sub1에서의 coord가 거의 점 사이즈의 손으로 보임.
+        
+    projPts_mas = utilsEval.chProjectPoints(mano4Dcamera2_mas, intrinsicMatrices['mas'], False)[jointsMap]
+    projPts_sub1 = utilsEval.chProjectPoints(mano4Dcamera2_sub1, intrinsicMatrices['sub1'], False)[jointsMap]
     
+    
+    #2Dproj value도 sub1은 1 이하 value 차이로 변화 joint u value : (-43.71582987, -43.61781355, -43.55728923, ...))
+    """
+    #############################
+        
     loss_joint2D = 0
     loss_joint2DClip = 0
+    JVis = np.tile(np.expand_dims(JVis, 1), [1, 2])
+            
     for camIdx, cam in enumerate(camIDset):
-        # camIdx : 0 - mas, 1 - sub1, 2 - sub2, 3 - sub3
+        if camIdx is not mainCamID:
+            continue
+        # if camIdx > mainCamID:
+        #     continue
         
         ### estimated 2D keyPts on each cam
         projPtsGT = metaperFrame[camIdx]['kpts'][:, 0:2]
         
         if np.isnan(projPtsGT[0, 0]):
-            joints3D = np.zeros((21, 3))
-            return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), 0, None
+            continue
         
-        ### project mano model pts to each cam        
-        # it is 3d homogeneous point in camera2 coordinate
-        detection4Dcamera2 = (ch.asarray(cameraParams[cam].reshape(3,4)).dot(detection4Dworld.T)).T
-
-        # # reprojected points (it is in image plane and distorted)
-        # rvec, _ = cv2.Rodrigues(np.eye(3))
-        # tvec = np.array([[0.,0.,0.]])
-        # projectedPoints, _ = cv2.projectPoints(detection4Dcamera2[:,:3], rvec, tvec, intrinsicMatrices[cam], distCoeffs[cam])
-        # projectedPoints = projectedPoints.squeeze()
+        ### project mano model pts to each cam     
+        mano4Dcamera2 = mano4Dworld.dot(extrinsicMatrices[cam].reshape(3,4).T)#[:, :3]
         
         ## need jointMap if it from mano model
-        projPts = utilsEval.chProjectPoints(detection4Dcamera2, intrinsicMatrices[cam], False)[jointsMap]
-            
+        projPts = utilsEval.chProjectPoints(mano4Dcamera2, intrinsicMatrices[cam], False)[jointsMap]
+
         ### transform pts with each cropped bb
         img2bb = metaperFrame[camIdx]['img2bb']
-        
         uv1 = ch.concatenate((projPts, ch.ones_like(projPts[:, :1])), 1)
         projPts = ch.transpose(ch.dot(img2bb, ch.transpose(uv1)))
-        
-        loss_joint2D += (projPts - projPtsGT) * weights * 1e0
-        loss_joint2DClip += clipIden(projPts - projPtsGT) * weights * 1e1
-
-    loss['joints2D'] = loss_joint2D
-    loss['joints2DClip'] = loss_joint2DClip
+                
+        loss_key = 'joints2D_' + str(camIdx)
+        loss[loss_key] = (projPts - projPtsGT) * JVis * weights * 1e0
+       
 
     if wrist3D is not None:
         dep = wrist3D[2]
@@ -445,8 +490,11 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
     warnings.simplefilter('ignore')
 
 
-    loss['joints2D'] = loss['joints2D'] * 1e1/ weights # dont want to use confidence now
-
+    # loss['joints2D_0'] = loss['joints2D_0'] * 1e1/ weights # dont want to use confidence now
+    # loss['joints2D_1'] = loss['joints2D_1'] * 1e1/ weights # dont want to use confidence now
+    # loss['joints2D_2'] = loss['joints2D_2'] * 1e1/ weights # dont want to use confidence now
+    # loss['joints2D_3'] = loss['joints2D_3'] * 1e1/ weights # dont want to use confidence now
+    
     if True:
         ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
                     callback=cbPass if render else cbPass, method='dogleg', options={'maxiter': 20})
@@ -472,15 +520,14 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
         ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
                     callback=cb if render else cbPass, method='dogleg', options={'maxiter': 20})
 
-
+    
     if False:
         open3dVisualize(m)
     else:
-        mainprojPtsGT = metaperFrame[0]['kpts'][:, 0:2]
-        manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=mainprojPtsGT, gt2DJoints=img2DGT, outDir=outDir)
-
-
-
+        mainprojPtsGT = metaperFrame[mainCamID]['kpts'][:, 0:2]
+        mainimg2bb = metaperFrame[mainCamID]['img2bb']
+        manoVis.dump3DModel2DKpsHand_forCrop(img, m, filename, camMat, img2bb=mainimg2bb, gt2DJoints=mainprojPtsGT, outDir=outDir)
+        # manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, gt2DJoints=mainprojPtsGT, outDir=outDir)
 
 
 
@@ -491,7 +538,9 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
     # print(betaCh.r)
     # print((relDepPred.r - relDepGT))
 
-    return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), loss['joints2D'].r.copy(), m.r.copy()
+    err = 0 #loss['joints2D_0'].r + loss['joints2D_1'].r + loss['joints2D_2'].r + loss['joints2D_3'].r
+    
+    return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), err, m.r.copy()
 
 
 

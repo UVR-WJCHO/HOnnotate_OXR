@@ -123,7 +123,7 @@ class datasetOXRMultiCamera(datasetBase):
             elif 'ppy' in item:
                 ppy = float(item.split(':')[1].strip())
 
-        camMat = np.array([[fx, 0, ppx], [0, fy, ppy], [0, 0, 1]])
+        camMat = np.array([[ppx, 0, fx], [0, ppy, fy], [0, 0, 1]])
 
         with open(depthScaleFile, 'r') as f:
             line = f.readline()

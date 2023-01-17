@@ -1,6 +1,6 @@
 import os
 import os.path
-
+import math
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -69,6 +69,7 @@ class datasetRecord():
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb', camID)
         self.depthCropDir = os.path.join(self.dbDir, 'depth', camID)
         self.metaDir = os.path.join(self.dbDir, 'meta', camID)
+        self.debugDir = os.path.join(self.dbDir, 'debug')
     
     def loadKps(self):
         kpsPath = os.path.join(self.handDir, 'hand_result', FLAGS.seq, 'handDetection_uvd.json')
@@ -145,9 +146,8 @@ class datasetRecord():
         depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
         
         procImgSet = [rgbCrop, depthCrop]
+                
         
-        # cv2.imshow("cropped rgb", rgbCrop / 255.)
-        # cv2.waitKey(1)
         self.prev_bbox = copy.deepcopy(bbox)
         
         return bbox, img2bb_trans, bb2img_trans, procImgSet
@@ -212,7 +212,16 @@ def main(argv):
 
             bb, img2bb, bb2img, procImgSet = db.procImg(images)
             procKps = db.translateKpts(kps, img2bb)
+            
+            rgbCrop = procImgSet[0]
+            # if not math.isnan(procKps[0, 0]):                
+            #     for joint_num in range(21):
+            #         cv2.circle(rgbCrop, center=(int(procKps[joint_num][0]), int(procKps[joint_num][1])), radius=3, color=[139, 53, 255], thickness=-1)
 
+            #     imgName = 'debug_' + format(idx, '04') + '.png'
+            #     cv2.imwrite(os.path.join(db.debugDir, imgName), rgbCrop)
+            #     cv2.waitKey(0)
+            
             db.postProcess(idx, procImgSet, bb, img2bb, bb2img, procKps, camID=camID)
             pbar.set_description("Processing idx %s" % (idx))
 
