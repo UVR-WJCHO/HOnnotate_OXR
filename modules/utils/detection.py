@@ -174,6 +174,7 @@ for idx in tqdm(range(numImages)):
                 
                 # homogeneous
                 detection4Dcamera[:,3] = 1
+                
 
                 # (3d homogeneous point in camera coordinate) = (intrinsic) * (extrinsic) * (3d homogeneous point in world coordinate)
                 projection = np.concatenate((intrinsicMatrices[camera] @ cameraParams[camera].reshape(3,4), h), 0)

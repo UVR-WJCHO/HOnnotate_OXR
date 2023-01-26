@@ -131,6 +131,7 @@ def getHandModel():
 def getHandModelPoseCoeffs(numComp):
     m = load_model_1(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../mano/models/MANO_RIGHT.pkl'), ncomps=numComp)
     m.trans[:] = np.array([0., 0., 0.5])
+    
 
     return m, m.pose, m.betas, m.trans, m.fullpose
 
@@ -297,8 +298,7 @@ def lift2Dto3D(projPtsGT, camMat, filename, img, JVis=np.ones((21,), dtype=np.fl
 
 def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=np.ones((21,), dtype=np.float32), trans=None, beta=None, wrist3D = None, withPoseCoeff=True,
                weights=1.0, relDepGT=None, rel3DCoordGT = None, rel3DCoordNormGT = None, img2DGT = None, outDir = None,
-               poseCoeffInit=None,
-               transInit=None, betaInit=None):
+               poseCoeffInit=None, transInit=None, betaInit=None, otherImgSet=None, mainCamID=None):
 
 
     
@@ -306,7 +306,6 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
     # meta = {'bb': bb, 'img2bb': np.float32(img2bb), 'bb2img': np.float32(bb2img), 'kpts': np.float32(processed_kpts)}  
     
     intrinsicMatrices, extrinsicMatrices, distCoeffs = camParamList
-    mainCamID = 1
     
     loss = {}
 
@@ -334,6 +333,7 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
             freeVars = freeVars + [transCh]
         else:
             transCh[:] = trans
+            
 
         # loss['pose'] = 0.5e2 * poseCoeffCh[3:]/stdPCACoeff[:numComp]
 
@@ -377,9 +377,11 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
         rel3DCoordPred = rel3DCoordPred/ch.expand_dims(ch.sqrt(ch.sum(ch.square(rel3DCoordPred), axis=1)), axis=1)
         loss['rel3DCoordNorm'] = (1. - ch.sum(rel3DCoordPred*rel3DCoordNormGT, axis=1))*1e4
 
-        # loss['rel3DCoordNorm'] = \
-        #     (rel3DCoordNormGT*ch.expand_dims(ch.sum(rel3DCoordPred*rel3DCoordNormGT, axis=1), axis=1) - rel3DCoordPred) * 1e2#5e2
-
+    scale = ch.array(np.array([1.]))
+    freeVars = freeVars + [scale]
+    
+    # initPose = ch.array(np.ones((21, 3)))
+    # freeVars = [initPose]
    
     ### check if GT exists, for debugging, return 0 if any of GT is missing
     for camIdx in range(len(camIDset)):
@@ -389,11 +391,14 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
             return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), 0, None
     
    
-    ### mano output is on world coordinate?
+    ### mano output is on world coordinate? wrong results...why?
     # mano4Dworld = ch.concatenate([m.J_transformed, np.ones((21, 1))], axis=1)
     
+    input_xyz = m.J_transformed * scale
+    # input_xyz = initPose
+    
     ### mano output is on camera coordinate? correct results only for single cam
-    mano4Dcamera = ch.concatenate([m.J_transformed, np.ones((21, 1))], axis=1)
+    mano4Dcamera = ch.concatenate([input_xyz, np.ones((21, 1))], axis=1)
     projection = ch.concatenate((extrinsicMatrices[camIDset[mainCamID]].reshape(3,4), h), 0)
     mano4Dworld = ch.linalg.inv(projection).dot(mano4Dcamera.T).T   
     
@@ -439,24 +444,29 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
     loss_joint2DClip = 0
     JVis = np.tile(np.expand_dims(JVis, 1), [1, 2])
             
-    for camIdx, cam in enumerate(camIDset):
-        if camIdx is not mainCamID:
-            continue
-        # if camIdx > mainCamID:
+    for camIdx, cam in enumerate(camIDset):  
+        # if camIdx > 1:
         #     continue
-        
         ### estimated 2D keyPts on each cam
-        projPtsGT = metaperFrame[camIdx]['kpts'][:, 0:2]
+        projPtsGT = metaperFrame[camIdx]['kpts_crop'][:, 0:2]
         
         if np.isnan(projPtsGT[0, 0]):
             continue
         
-        ### project mano model pts to each cam     
+        # ### project mano model pts to each cam     
         mano4Dcamera2 = mano4Dworld.dot(extrinsicMatrices[cam].reshape(3,4).T)#[:, :3]
-        
-        ## need jointMap if it from mano model
+        # ## need jointMap if it from mano model
         projPts = utilsEval.chProjectPoints(mano4Dcamera2, intrinsicMatrices[cam], False)[jointsMap]
+        
+        
+        # xyz_cam = ch.matmul(mano4Dworld, extrinsicMatrices[cam].T)
+        # xyz_cam = xyz_cam[:, :3] / xyz_cam[:, -1:]  # xyz_cam : (-0.38 0.16, 1)
 
+        # uv = ch.matmul(xyz_cam, intrinsicMatrices[cam].T)
+        # projPts = uv[:, :2] / uv[:, -1:]
+        
+        
+    
         ### transform pts with each cropped bb
         img2bb = metaperFrame[camIdx]['img2bb']
         uv1 = ch.concatenate((projPts, ch.ones_like(projPts[:, :1])), 1)
@@ -497,7 +507,7 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
     
     if True:
         ch.minimize({k: loss[k] for k in loss.keys() if k != 'joints2DClip'}, x0=freeVars,
-                    callback=cbPass if render else cbPass, method='dogleg', options={'maxiter': 20})
+                    callback=cbPass if render else cbPass, method='dogleg', options={'maxiter': 50})
     else:
         manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints=projPtsGT, gt2DJoints=img2DGT,
                                      outDir=outDir)
@@ -524,10 +534,39 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
     if False:
         open3dVisualize(m)
     else:
-        mainprojPtsGT = metaperFrame[mainCamID]['kpts'][:, 0:2]
-        mainimg2bb = metaperFrame[mainCamID]['img2bb']
-        manoVis.dump3DModel2DKpsHand_forCrop(img, m, filename, camMat, img2bb=mainimg2bb, gt2DJoints=mainprojPtsGT, outDir=outDir)
-        # manoVis.dump3DModel2DKpsHand(img, m, filename, camMat, gt2DJoints=mainprojPtsGT, outDir=outDir)
+        # mainprojPtsGT = metaperFrame[mainCamID]['kpts'][:, 0:2]
+        # mainimg2bb = metaperFrame[mainCamID]['img2bb']
+        # manoVis.dump3DModel2DKpsHand_forCrop(img, m, filename, camMat, img2bb=mainimg2bb, gt2DJoints=mainprojPtsGT, outDir=outDir)
+        
+        # debugPose = initPose 
+        debugPose = None
+        
+        for idx, cam in enumerate(camIDset):
+            if idx == mainCamID:
+                mainprojPtsGT = metaperFrame[mainCamID]['kpts_crop'][:, 0:2]
+                mainimg2bb = metaperFrame[mainCamID]['img2bb']
+                maincamPose = extrinsicMatrices[camIDset[mainCamID]].reshape(3,4)
+                
+                manoVis.dump3DModel2DKpsHand_forCrop(img, m, filename, camMat, 
+                                                     img2bb=mainimg2bb, gt2DJoints=mainprojPtsGT, outDir=outDir, 
+                                                     camPose=maincamPose, mainCamPose=maincamPose, debug=debugPose, scale=scale)
+            else:
+                otherimg = otherImgSet[cam]
+                othercamMat = intrinsicMatrices[cam]
+                
+                maincamPose = extrinsicMatrices[camIDset[mainCamID]].reshape(3,4)
+                othercamPose = extrinsicMatrices[cam].reshape(3,4)
+                
+                otherprojPtsGT = metaperFrame[idx]['kpts_crop'][:, 0:2]
+                otherimg2bb = metaperFrame[idx]['img2bb']
+                
+                otherFilename = str(cam) + '_' + filename.split('_')[-1]
+                manoVis.dump3DModel2DKpsHand_forCrop(otherimg, m, otherFilename, othercamMat, 
+                                                     img2bb=otherimg2bb, gt2DJoints=otherprojPtsGT, 
+                                                     outDir=outDir, camPose=othercamPose, mainCamPose=maincamPose, debug=debugPose, scale=scale)
+     
+                
+                
 
 
 

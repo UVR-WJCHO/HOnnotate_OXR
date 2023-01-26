@@ -27,7 +27,7 @@ jointsMapManoToObman = [0,
                         7, 8, 9, 20]
 
 vc_reg = np.reshape(np.random.uniform(0., 1., 778 * 3), (778, 3))
-
+h = np.array([[0,0,0,1]])
 
 class renderScene():
     def __init__(self, imgH, imgW):
@@ -269,7 +269,7 @@ def dump3DModel2DKpsHand(img, m, filename, camMat, est2DJoints = None, gt2DJoint
         plt.show()
 
 
-def dump3DModel2DKpsHand_forCrop(img, m, filename, camMat, img2bb=None, est2DJoints = None, gt2DJoints = None, outDir=None, camPose=np.eye(4, dtype=np.float32)):
+def dump3DModel2DKpsHand_forCrop(img, m, filename, camMat, img2bb=None, est2DJoints = None, gt2DJoints = None, outDir=None, mainCamPose=None, camPose=np.eye(4, dtype=np.float32), debug=None, scale=1.0):
     '''
     Saves the following in this order depending on availibility
     1. GT 2D joint locations
@@ -295,11 +295,23 @@ def dump3DModel2DKpsHand_forCrop(img, m, filename, camMat, img2bb=None, est2DJoi
     plot3dVisualize(ax, m, flip_x=False, camPose=camPose)
     ax.title.set_text("3D mesh")
 
+    if debug is not None:
+        targetPose = debug
+    else:
+        targetPose = m.J_transformed * scale
+        
+    # original projection   
+    mano4Dcamera = ch.concatenate([targetPose, np.ones((21, 1))], axis=1)
+    projection = ch.concatenate((mainCamPose, h), 0)
+    mano4Dworld = ch.linalg.inv(projection).dot(mano4Dcamera.T).T  
     
-    J3DHomo = ch.concatenate([m.J_transformed, np.ones((21, 1))], axis=1)
-    J3DTrans = J3DHomo.dot(camPose.T)[:, :3]
-    projPts = utilsEval.chProjectPoints(J3DTrans, camMat, False)[jointsMap]
+     ### project mano model pts to each cam     
+    mano4Dcamera2 = mano4Dworld.dot(camPose.reshape(3,4).T)#[:, :3]
     
+    ## need jointMap if it from mano model
+    projPts = utilsEval.chProjectPoints(mano4Dcamera2, camMat, False)[jointsMap]
+    
+    # add crop on bb
     uv1 = ch.concatenate((projPts, ch.ones_like(projPts[:, :1])), 1)
     projPts = ch.dot(img2bb, ch.transpose(uv1)).T
         

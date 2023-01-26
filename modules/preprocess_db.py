@@ -181,14 +181,14 @@ class datasetRecord():
         
         return kps
     
-    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, processed_kpts, camID='mas'):
+    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, camID='mas'):
         
         imgName = str(camID) + '_' + format(idx, '04') + '.png'
         cv2.imwrite(os.path.join(self.rgbCropDir, imgName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, imgName), procImgSet[1])
         
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb), 
-                'bb2img': np.float32(bb2img), 'kpts': np.float32(processed_kpts)}
+                'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
         
         metaName = str(camID) + '_' + format(idx, '04') + '.pkl'
         jsonPath = os.path.join(self.metaDir, metaName)
@@ -220,9 +220,8 @@ def main(argv):
 
             #     imgName = 'debug_' + format(idx, '04') + '.png'
             #     cv2.imwrite(os.path.join(db.debugDir, imgName), rgbCrop)
-            #     cv2.waitKey(0)
             
-            db.postProcess(idx, procImgSet, bb, img2bb, bb2img, procKps, camID=camID)
+            db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
             pbar.set_description("Processing idx %s" % (idx))
 
     print("end")

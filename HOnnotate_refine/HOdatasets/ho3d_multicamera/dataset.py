@@ -29,6 +29,7 @@ splitEnumMap = {
     splitType.TEST: 'test',
     splitType.VAL: 'val',
 }
+camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
 
 class datasetOXRMultiCamera(datasetBase):
@@ -141,6 +142,16 @@ class datasetOXRMultiCamera(datasetBase):
         camInd = fId.split('/')[1]
         id = fId.split('/')[2]
         img = self.readImg(join(self.dbDir, seq, 'rgb', camInd, id), True)
+        
+        otherImgSet = dict()
+        for camID in camIDset:
+            if camID == camInd:
+                continue
+            else:
+                id_other = camID + '_' + id.split('_')[-1]
+                subimg = self.readImg(join(self.dbDir, seq, 'rgb', camID, id_other), True)
+                otherImgSet[camID] = subimg
+                
 
         if self.removeBG:
             r = png.Reader(filename=join(self.dbDir, seq, 'depth', camInd, id+'.png'))
@@ -195,7 +206,7 @@ class datasetOXRMultiCamera(datasetBase):
         coordChangeMat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
         ds = dataSample(img=imgPatch, seg=newSeg, fName=fId, dataset=datasetType.HO3D,
                         outType=outputType.SEG | outputType.KEYPOINT_3D | outputType.KEYPOINTS_2D,
-                        camMat=camMat, depth=depthEnc)
+                        camMat=camMat, depth=depthEnc, otherImgSet=otherImgSet)
 
 
         return None, ds

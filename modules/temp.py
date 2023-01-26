@@ -23,3 +23,19 @@ with open(pkl_name, 'rb') as f:
     
     cv2.imshow('img', img)
     cv2.waitKey(0)
+    
+    
+def orthographic_proj_withz(X, trans, scale, offset_z=0.):
+    """
+    X: B x N x 3
+    trans: B x 2: [tx, ty]
+    scale: B x 1: [sc]
+    Orth preserving the z.
+    """
+    scale = scale.contiguous().view(-1, 1, 1)
+    trans = trans.contiguous().view(scale.size(0), 1, -1)
+    proj = scale * X
+
+    proj_xy = proj[:, :, :2] + trans[:,:,:2]
+    proj_z = proj[:, :, 2, None] + offset_z
+    return torch.cat((proj_xy, proj_z), 2)

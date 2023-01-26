@@ -73,7 +73,7 @@ class dataSample():
     '''
     This class stores all the network data i.e., inputs and outptus
     '''
-    def __init__(self, img, fName, dataset, outType, seg=None, pts2D=None, pts3D=None, camMat=None, depth=None):
+    def __init__(self, img, fName, dataset, outType, seg=None, pts2D=None, pts3D=None, camMat=None, depth=None, otherImgSet=None):
         '''
         :param img: raw input image, 3channels
         :param seg: raw seg map, 1channel
@@ -133,6 +133,8 @@ class dataSample():
         self.dataset = dataset
         self.outputType = outType
         self.camMat = camMat
+        
+        self.otherImgSet = otherImgSet
 
     def encodeImages(self, formatImg='.jpg', formatSeg='.png'):
         '''
