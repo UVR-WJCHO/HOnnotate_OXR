@@ -60,6 +60,7 @@ class handParams():
                  trans = np.array([0., 0., -0.4]),
                  JTransformed = np.zeros((21,3), dtype=np.float32),
                  JVis = np.zeros((21,), dtype=np.bool),
+                 Scale = np.zeros((1), dtype=np.float32),
                  JTransformed2D = None):
 
         assert theta.shape==(48,), 'theta should be (48,) shape'
@@ -74,6 +75,8 @@ class handParams():
         self.JTransformed = JTransformed.astype(np.float32).copy()
         self.JVis = JVis.astype(np.float32).copy()
         self.JTransformed2D = JTransformed2D
+        self.scale = Scale
+        self.xyzCam = self.JTransformed * Scale
         
 
 class objParams():

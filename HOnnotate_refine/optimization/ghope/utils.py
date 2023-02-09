@@ -367,7 +367,7 @@ def getHORelPose(handParamObj, objParamObj):
 
     theta = handParamObj.theta.copy()
     theta[:3] = RRelRod
-    handParamRel = handParams(theta=theta, beta=handParamObj.beta.copy(), trans=TRel[:,0])
+    handParamRel = handParams(theta=theta, beta=handParamObj.beta.copy(), trans=TRel[:,0], Scale=handParamObj.scale)
 
     return handParamRel
 

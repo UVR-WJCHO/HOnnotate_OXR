@@ -200,13 +200,13 @@ class datasetOXRMultiCamera(datasetBase):
 
         # read the depth file
         depth = self.load_depth(join(self.dbDir, seq, 'depth', camInd, id+'.png'))*depthScale
-
+        
         depthEnc = encodeDepthImg(depth)
 
         coordChangeMat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
         ds = dataSample(img=imgPatch, seg=newSeg, fName=fId, dataset=datasetType.HO3D,
                         outType=outputType.SEG | outputType.KEYPOINT_3D | outputType.KEYPOINTS_2D,
-                        camMat=camMat, depth=depthEnc, otherImgSet=otherImgSet)
+                        camMat=camMat, depth=depthEnc, otherImgSet=otherImgSet, depthScale=depthScale)
 
 
         return None, ds

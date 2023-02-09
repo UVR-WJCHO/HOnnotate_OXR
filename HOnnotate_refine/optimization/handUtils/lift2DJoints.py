@@ -579,7 +579,7 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
 
     err = 0 #loss['joints2D_0'].r + loss['joints2D_1'].r + loss['joints2D_2'].r + loss['joints2D_3'].r
     
-    return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), err, m.r.copy()
+    return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), err, scale
 
 
 

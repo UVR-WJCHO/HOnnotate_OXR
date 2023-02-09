@@ -298,7 +298,7 @@ def getFramewisePoseMultiview(dummy, camParamList, mainImgIDList, MetaDictperCam
         otherImgSet = ds.otherImgSet
         
         # metaperFrame : list of meta_info dict with order [mas, cam1, cam2, cam3]
-        kps3D, poseCoeff, beta, trans, err, _ = lift2Dto3DMultiview(metaperFrame, camParamList, camMat,
+        kps3D, poseCoeff, beta, trans, err, scale = lift2Dto3DMultiview(metaperFrame, camParamList, camMat,
                                                         ImgID, imgRaw,
                                                         weights=np.ones((21, 1), dtype=np.float32),
                                                         beta=beta,
@@ -312,7 +312,7 @@ def getFramewisePoseMultiview(dummy, camParamList, mainImgIDList, MetaDictperCam
                    'KPS3D': kps3D,
                    'poseCoeff': poseCoeff,
                    'beta': beta,
-                   'trans': trans, 'err': err}
+                   'trans': trans, 'err': err, 'scale': scale}
 
         with open(join(saveCandImgDir, mainImgID.split('/')[-1] +'.pickle'), 'wb') as f:
             pickle.dump(newDict, f)
@@ -344,8 +344,6 @@ def main(argv):
     ### no translation in mano space ###
     for camID in camIDset:
         cameraParams[camID] = cameraParams[camID].reshape(3, 4)
-        # cameraParams[camID][:, -1] = 0.0
-        # cameraParams[camID][-1, -1] = 1.0
         cameraParams[camID] = cameraParams[camID]
 
 

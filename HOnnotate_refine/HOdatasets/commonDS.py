@@ -29,6 +29,8 @@ class datasetType(IntEnum):
     FREIHAND = 8
 
     MANOHANDS = 9
+    
+    OXR_MULTICAMERA = 10
 
 class handType(IntEnum):
     '''
@@ -73,7 +75,7 @@ class dataSample():
     '''
     This class stores all the network data i.e., inputs and outptus
     '''
-    def __init__(self, img, fName, dataset, outType, seg=None, pts2D=None, pts3D=None, camMat=None, depth=None, otherImgSet=None):
+    def __init__(self, img, fName, dataset, outType, seg=None, pts2D=None, pts3D=None, camMat=None, depth=None, otherImgSet=None, depthScale=None):
         '''
         :param img: raw input image, 3channels
         :param seg: raw seg map, 1channel
@@ -135,6 +137,7 @@ class dataSample():
         self.camMat = camMat
         
         self.otherImgSet = otherImgSet
+        self.depthScale = depthScale
 
     def encodeImages(self, formatImg='.jpg', formatSeg='.png'):
         '''
