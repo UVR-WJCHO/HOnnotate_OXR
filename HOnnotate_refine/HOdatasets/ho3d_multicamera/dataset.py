@@ -40,6 +40,8 @@ class datasetOXRMultiCamera(datasetBase):
             fileList = fileListIn
 
         self.dbDir = join(OXR_MULTI_CAMERA_DIR, db)
+        self.calibDir = self.dbDir + '_hand'
+        
         imgDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'rgb_crop')
         segDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'segmentation', str(camInd), 'raw_seg_results')
         # metaDataDir = join(HO3D_CAMERA_DIR, split, 'meta')
@@ -141,7 +143,7 @@ class datasetOXRMultiCamera(datasetBase):
         seq = fId.split('/')[0]
         camInd = fId.split('/')[1]
         id = fId.split('/')[2]
-        img = self.readImg(join(self.dbDir, seq, 'rgb', camInd, id), True)
+        img = self.readImg(join(self.dbDir, seq, 'rgb_crop', camInd, id), True)
         
         otherImgSet = dict()
         for camID in camIDset:
@@ -149,12 +151,12 @@ class datasetOXRMultiCamera(datasetBase):
                 continue
             else:
                 id_other = camID + '_' + id.split('_')[-1]
-                subimg = self.readImg(join(self.dbDir, seq, 'rgb', camID, id_other), True)
+                subimg = self.readImg(join(self.dbDir, seq, 'rgb_crop', camID, id_other), True)
                 otherImgSet[camID] = subimg
                 
 
         if self.removeBG:
-            r = png.Reader(filename=join(self.dbDir, seq, 'depth', camInd, id+'.png'))
+            r = png.Reader(filename=join(self.dbDir, seq, 'depth_crop', camInd, id+'.png'))
             dep = np.vstack(map(np.uint16, r.asDirect()[2])).astype(np.float32)
             depScaleFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
             with open(depScaleFile, 'r') as f:
@@ -199,7 +201,7 @@ class datasetOXRMultiCamera(datasetBase):
         depthScale = float(line.strip())
 
         # read the depth file
-        depth = self.load_depth(join(self.dbDir, seq, 'depth', camInd, id+'.png'))*depthScale
+        depth = self.load_depth(join(self.dbDir, seq, 'depth_crop', camInd, id+'.png'))*depthScale
         
         depthEnc = encodeDepthImg(depth)
 

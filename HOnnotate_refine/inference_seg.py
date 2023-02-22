@@ -26,7 +26,7 @@ FLAGS = flags.FLAGS
 # flags.DEFINE_integer('start', 0, 'Cam ID') # name ,default, help
 # flags.DEFINE_integer('end', 2300, 'Cam ID') # name ,default, help
 flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
-flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
+# flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 # flags.DEFINE_string('camID', 'mas', 'target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
@@ -150,25 +150,28 @@ def runNetInLoop(fileListIn, numImgs, camID):
 
 def main(argv):
 
-    # fileListIn = os.listdir(join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq, 'rgb', '0'))
-    # fileListIn = [join(FLAGS.seq, '0', f[:-4]) for f in fileListIn if 'png' in f]
-    # fileListIn = sorted(fileListIn)
-
-    if not os.path.exists(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation')):
-        os.mkdir(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation'))
-        for camID in camIDset:
-            os.mkdir(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation', camID))
-            os.mkdir(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation', camID, 'visualization'))
-            os.mkdir(os.path.join(baseDir, FLAGS.db, FLAGS.seq, 'segmentation', camID, 'raw_seg_results'))
+    rootDir = os.path.join(baseDir, FLAGS.db)
     
-    for camID in camIDset:
-        fileListIn = os.listdir(join(baseDir, FLAGS.db, FLAGS.seq, 'rgb', camID))
-        fileListIn = [join(FLAGS.seq, camID, f[:-4]) for f in fileListIn if 'png' in f]
-        fileListIn = sorted(fileListIn)
+    for seq in os.listdir(rootDir):
+        d = os.path.join(rootDir, seq)
+        if os.path.isdir(d):            
+            print("start preprocessing ... target sequence : %s" % seq)
+            
+            if not os.path.exists(os.path.join(baseDir, FLAGS.db, seq, 'segmentation')):
+                os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation'))
+                for camID in camIDset:
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation', camID))
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation', camID, 'visualization'))
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation', camID, 'raw_seg_results'))
+            
+            for camID in camIDset:
+                fileListIn = os.listdir(join(baseDir, FLAGS.db, seq, 'rgb', camID))
+                fileListIn = [join(seq, camID, f[:-4]) for f in fileListIn if 'png' in f]
+                fileListIn = sorted(fileListIn)
 
-        numImgs = len(fileListIn)
+                numImgs = len(fileListIn)
 
-        runNetInLoop(fileListIn, numImgs, camID)
+                runNetInLoop(fileListIn, numImgs, camID)
 
 if __name__ == '__main__':
     app.run(main)

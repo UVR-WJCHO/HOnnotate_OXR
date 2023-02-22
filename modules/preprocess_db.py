@@ -21,7 +21,7 @@ mp_hands = mp.solutions.hands
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
-flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
+# flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 # flags.DEFINE_string('camID', 'mas', 'target camIDera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
@@ -29,23 +29,23 @@ baseDir = '/home/uvr-1080ti/projects/HOnnotate_OXR/dataset/'
 
 
 class datasetRecord():
-    def __init__(self):
-
-        self.dbDir = os.path.join(baseDir, FLAGS.db, FLAGS.seq)
-
-        self.rgbDir = os.path.join(self.dbDir, 'rgb_orig')
-        self.depthDir = os.path.join(self.dbDir, 'depth_orig')
+    def __init__(self, db, seq):
+        self.seq = seq
         
-        self.handDir = os.path.join(baseDir, FLAGS.db) + '_hand'
+        self.dbDir = os.path.join(baseDir, db, seq)
+        self.handDir = os.path.join(baseDir, db) + '_hand'
         
-        if not os.path.exists(os.path.join(self.dbDir, 'rgb')):
-            os.mkdir(os.path.join(self.dbDir, 'rgb'))
+        self.rgbDir = os.path.join(self.dbDir, 'rgb')
+        self.depthDir = os.path.join(self.dbDir, 'depth')
+        
+        if not os.path.exists(os.path.join(self.dbDir, 'rgb_crop')):
+            os.mkdir(os.path.join(self.dbDir, 'rgb_crop'))
             for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'rgb', camID))
-        if not os.path.exists(os.path.join(self.dbDir, 'depth')):
-            os.mkdir(os.path.join(self.dbDir, 'depth'))
+                os.mkdir(os.path.join(self.dbDir, 'rgb_crop', camID))
+        if not os.path.exists(os.path.join(self.dbDir, 'depth_crop')):
+            os.mkdir(os.path.join(self.dbDir, 'depth_crop'))
             for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'depth', camID))
+                os.mkdir(os.path.join(self.dbDir, 'depth_crop', camID))
         if not os.path.exists(os.path.join(self.dbDir, 'meta')):
             os.mkdir(os.path.join(self.dbDir, 'meta'))
             for camID in camIDset:
@@ -66,13 +66,13 @@ class datasetRecord():
         return len(os.listdir(self.rgbDir))
 
     def setSavePath(self, camID):           
-        self.rgbCropDir = os.path.join(self.dbDir, 'rgb', camID)
-        self.depthCropDir = os.path.join(self.dbDir, 'depth', camID)
+        self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
+        self.depthCropDir = os.path.join(self.dbDir, 'depth_crop', camID)
         self.metaDir = os.path.join(self.dbDir, 'meta', camID)
         self.debugDir = os.path.join(self.dbDir, 'debug')
     
     def loadKps(self):
-        kpsPath = os.path.join(self.handDir, 'hand_result', FLAGS.seq, 'handDetection_uvd.json')
+        kpsPath = os.path.join(self.handDir, 'hand_result', self.seq, 'handDetection_uvd.json')
         
         assert os.path.exists(kpsPath), 'handDetection_uvd.json does not exist'
         
@@ -197,34 +197,39 @@ class datasetRecord():
         
         
 def main(argv):
-    db = datasetRecord()
-    db.loadKps()
     
+    rootDir = os.path.join(baseDir, FLAGS.db)
     
-    # db includes data for [mas, sub1, sub2, sub3]
-    for camID in camIDset:
-        pbar = tqdm.tqdm(range(int(len(db) / 4)))
-        for idx in pbar:
-            db.setSavePath(camID)
+    for seq in os.listdir(rootDir):
+        d = os.path.join(rootDir, seq)
+        if os.path.isdir(d):            
+            db = datasetRecord(FLAGS.db, seq)
+            db.loadKps()
             
-            images = db.getItem(idx, camID=camID)
-            kps = db.getKps(idx, camID=camID)
+            # db includes data for [mas, sub1, sub2, sub3]
+            for camID in camIDset:
+                pbar = tqdm.tqdm(range(int(len(db) / 4)))
+                for idx in pbar:
+                    db.setSavePath(camID)
+                    
+                    images = db.getItem(idx, camID=camID)
+                    kps = db.getKps(idx, camID=camID)
 
-            bb, img2bb, bb2img, procImgSet = db.procImg(images)
-            procKps = db.translateKpts(kps, img2bb)
-            
-            rgbCrop = procImgSet[0]
-            # if not math.isnan(procKps[0, 0]):                
-            #     for joint_num in range(21):
-            #         cv2.circle(rgbCrop, center=(int(procKps[joint_num][0]), int(procKps[joint_num][1])), radius=3, color=[139, 53, 255], thickness=-1)
+                    bb, img2bb, bb2img, procImgSet = db.procImg(images)
+                    procKps = db.translateKpts(kps, img2bb)
+                    
+                    rgbCrop = procImgSet[0]
+                    # if not math.isnan(procKps[0, 0]):                
+                    #     for joint_num in range(21):
+                    #         cv2.circle(rgbCrop, center=(int(procKps[joint_num][0]), int(procKps[joint_num][1])), radius=3, color=[139, 53, 255], thickness=-1)
 
-            #     imgName = 'debug_' + format(idx, '04') + '.png'
-            #     cv2.imwrite(os.path.join(db.debugDir, imgName), rgbCrop)
-            
-            db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
-            pbar.set_description("Processing idx %s" % (idx))
+                    #     imgName = 'debug_' + format(idx, '04') + '.png'
+                    #     cv2.imwrite(os.path.join(db.debugDir, imgName), rgbCrop)
+                    
+                    db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
+                    pbar.set_description("...Processing idx %s in seq %s" % (idx, seq))
 
-    print("end")
+            print("end")
     
     
 if __name__ == '__main__':

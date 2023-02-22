@@ -24,7 +24,7 @@ from loadParameters import LoadCameraMatrix, LoadDistortionParam
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
-flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
+# flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 # flags.DEFINE_string('camID', '0', 'Cam ID')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
@@ -197,7 +197,7 @@ def selectCandidateFrames(files, numFrames, dataSet, frameSpacing=10, startFrame
     return finalIndList, finalPklDataList
 """
 
-def getMeta(files):
+def getMeta(files, seq):
     finalPklDataList = []
     ind = 0
     
@@ -205,7 +205,7 @@ def getMeta(files):
         file = files[ind]
         resultsDir = join(baseDir, FLAGS.db)
 
-        with open(join(resultsDir, FLAGS.seq, 'meta', file +'.pkl'), 'rb') as f:
+        with open(join(resultsDir, seq, 'meta', file +'.pkl'), 'rb') as f:
             pklData = pickle.load(f)
             finalPklDataList.append(pklData)
         ind = ind + 1
@@ -243,7 +243,7 @@ def getFramewisePose(dummy, kpsDictList, camMat, beta, dataSet, saveCandImgDir):
             pickle.dump(newDict, f)
 
 
-def getFramewisePoseSingleview(dummy, camParamList, mainImgIDList, MetaDictperCam, camMat, beta, dataSet, saveCandImgDir):
+def getFramewisePoseSingleview(dummy, seq, camParamList, mainImgIDList, MetaDictperCam, camMat, beta, dataSet, saveCandImgDir):
     # iterate in [startIdx:endIdx]
     
     for idx, mainImgID in enumerate(mainImgIDList):
@@ -251,7 +251,7 @@ def getFramewisePoseSingleview(dummy, camParamList, mainImgIDList, MetaDictperCa
         if np.isnan(projPtsGT[0, 0]):
             continue
              
-        ImgID = FLAGS.seq + '/' + mainImgID
+        ImgID = seq + '/' + mainImgID
         
         _, ds = dataSet.createTFExample(itemType='hand', fileIn=ImgID)
         imgRaw = ds.imgRaw
@@ -283,7 +283,7 @@ def getFramewisePoseSingleview(dummy, camParamList, mainImgIDList, MetaDictperCa
 
 
 
-def getFramewisePoseMultiview(dummy, camParamList, mainImgIDList, MetaDictperCam, camMat, beta, dataSet, saveCandImgDir, mainCamID):
+def getFramewisePoseMultiview(dummy, seq, camParamList, mainImgIDList, MetaDictperCam, camMat, beta, dataSet, saveCandImgDir, mainCamID):
     # iterate in [startIdx:endIdx]
     
     for idx, mainImgID in enumerate(mainImgIDList):
@@ -291,7 +291,7 @@ def getFramewisePoseMultiview(dummy, camParamList, mainImgIDList, MetaDictperCam
         for camIdx in range(len(camIDset)):
             metaperFrame.append(MetaDictperCam[camIdx][idx])
 
-        ImgID = FLAGS.seq + '/' + mainImgID
+        ImgID = seq + '/' + mainImgID
         
         _, ds = dataSet.createTFExample(itemType='hand', fileIn=ImgID)
         imgRaw = ds.imgRaw
@@ -312,7 +312,10 @@ def getFramewisePoseMultiview(dummy, camParamList, mainImgIDList, MetaDictperCam
                    'KPS3D': kps3D,
                    'poseCoeff': poseCoeff,
                    'beta': beta,
-                   'trans': trans, 'err': err, 'scale': scale}
+                   'trans': trans, 
+                   'err': err, 
+                   'scale': scale,
+                   'meta': metaperFrame}
 
         with open(join(saveCandImgDir, mainImgID.split('/')[-1] +'.pickle'), 'wb') as f:
             pickle.dump(newDict, f)
@@ -324,8 +327,6 @@ def main(argv):
     
     # camIDset = ['mas', 'sub1', 'sub2', 'sub3']
     mainCamID = 1
-    
-    
     
     resultDir = os.path.join(baseDir, FLAGS.db + '_hand')
     with open(os.path.join(resultDir, "cameraParamsBA.json")) as json_file:
@@ -346,85 +347,129 @@ def main(argv):
         cameraParams[camID] = cameraParams[camID].reshape(3, 4)
         cameraParams[camID] = cameraParams[camID]
 
-
     camParamList = intrinsicMatrices, cameraParams, distCoeffs
     
     
+    ### start handpose optimization for each sequences
+    rootDir = os.path.join(baseDir, FLAGS.db)
+    for seq in os.listdir(rootDir):
+        d = os.path.join(rootDir, seq)
+        if os.path.isdir(d):            
+            print("start handPoseMultiView optimization ... target sequence : %s" % seq)
     
-    saveInitDir = join(baseDir, FLAGS.db, FLAGS.seq, 'handInit')
-    if not os.path.exists(saveInitDir):
-        os.mkdir(saveInitDir)
-    # saveInitDir = join(saveInitDir, FLAGS.camID)
-    # if not os.path.exists(saveInitDir):
-    #     os.mkdir(saveInitDir)
+            saveInitDir = join(baseDir, FLAGS.db, seq, 'handInit')
+            if not os.path.exists(saveInitDir):
+                os.mkdir(saveInitDir)
 
-    saveCandImgDir = join(saveInitDir, 'singleFrameMultiViewFit')
-    if not os.path.exists(saveCandImgDir):
-        os.mkdir(saveCandImgDir)
+            saveCandImgDir = join(saveInitDir, 'singleFrameMultiViewFit')
+            if not os.path.exists(saveCandImgDir):
+                os.mkdir(saveCandImgDir)
 
-    
-    fileListIn = os.listdir(join(OXR_MULTI_CAMERA_DIR, FLAGS.db, FLAGS.seq, 'rgb', camIDset[mainCamID]))
-    fileListIn = [join(FLAGS.db, FLAGS.seq, camIDset[mainCamID], f[:-4]) for f in fileListIn if 'png' in f]
-    fileListIn = sorted(fileListIn)
-    dataSet = datasetOXRMultiCamera(FLAGS.db, FLAGS.seq, camIDset[mainCamID], fileListIn=fileListIn)
+            
+            fileListIn = os.listdir(join(OXR_MULTI_CAMERA_DIR, FLAGS.db, seq, 'rgb', camIDset[mainCamID]))
+            fileListIn = [join(FLAGS.db, seq, camIDset[mainCamID], f[:-4]) for f in fileListIn if 'png' in f]
+            fileListIn = sorted(fileListIn)
+            dataSet = datasetOXRMultiCamera(FLAGS.db, seq, camIDset[mainCamID], fileListIn=fileListIn)
 
-    # load meta data
-    pklDataperCam = []
-    mainImgIDList = None
-    for camID in camIDset:
-        pklFilesList = os.listdir(os.path.join(OXR_MULTI_CAMERA_DIR, FLAGS.db, FLAGS.seq, 'meta', camID))
-        pklFilesList = [camID +'/'+ff[:-4] for ff in pklFilesList if 'pkl' in ff]
-        pklFilesList = sorted(pklFilesList)
-        
-        pklDataList = getMeta(pklFilesList)
-        pklDataperCam.append(pklDataList)
-        
-        if camID == camIDset[mainCamID]:
-            mainImgIDList = np.copy(pklFilesList)
-        
-    # get camera matrix
-    camMat = dataSet.getCamMat(camIDset[mainCamID])
-
-    # run independent pose estimation on the candidate frames first. This provides good init for multi frame optimization later
-    numThreads = 10
-    numCandidateFrames = len(pklDataperCam[0])
-    numFramesPerThread = np.ceil(numCandidateFrames/numThreads).astype(np.uint32)
-    procs = []
-    
-    for proc_index in range(numThreads):
-        startIdx = proc_index*numFramesPerThread
-        endIdx = min(startIdx+numFramesPerThread,numCandidateFrames)
-        
-        proc_pklDataperCam = []
-        for pklDataList in pklDataperCam:
-            proc_pklDataperCam.append(pklDataList[startIdx:endIdx])
+            # load meta data
+            pklDataperCam = []
+            mainImgIDList = None
+            for camID in camIDset:
+                pklFilesList = os.listdir(os.path.join(OXR_MULTI_CAMERA_DIR, FLAGS.db, seq, 'meta', camID))
+                pklFilesList = [camID +'/'+ff[:-4] for ff in pklFilesList if 'pkl' in ff]
+                pklFilesList = sorted(pklFilesList)
                 
-        args = ([], camParamList, mainImgIDList[startIdx:endIdx], proc_pklDataperCam, camMat, beta, dataSet, saveCandImgDir, mainCamID)
-        # proc = mlp.Process(target=getFramewisePoseSingleview, args=args)
-        proc = mlp.Process(target=getFramewisePoseMultiview, args=args)
+                pklDataList = getMeta(pklFilesList, seq)
+                pklDataperCam.append(pklDataList)
+                
+                if camID == camIDset[mainCamID]:
+                    mainImgIDList = np.copy(pklFilesList)
+                
+            # get camera matrix
+            camMat = dataSet.getCamMat(camIDset[mainCamID])
 
-        proc.start()
-        procs.append(proc)
+            # run independent pose estimation on the candidate frames first. This provides good init for multi frame optimization later
+            numThreads = 10
+            numCandidateFrames = len(pklDataperCam[0])
+            numFramesPerThread = np.ceil(numCandidateFrames/numThreads).astype(np.uint32)
+            procs = []
+            
+            for proc_index in range(numThreads):
+                startIdx = proc_index*numFramesPerThread
+                endIdx = min(startIdx+numFramesPerThread,numCandidateFrames)
+                
+                proc_pklDataperCam = []
+                for pklDataList in pklDataperCam:
+                    proc_pklDataperCam.append(pklDataList[startIdx:endIdx])
+                        
+                args = ([], seq, camParamList, mainImgIDList[startIdx:endIdx], proc_pklDataperCam, camMat, beta, dataSet, saveCandImgDir, mainCamID)
+                # proc = mlp.Process(target=getFramewisePoseSingleview, args=args)
+                proc = mlp.Process(target=getFramewisePoseMultiview, args=args)
 
-    for i in range(len(procs)):
-        procs[i].join()
+                proc.start()
+                procs.append(proc)
+
+            for i in range(len(procs)):
+                procs[i].join()
+
+            ## visualize
+            # for i in range(len(fullposeList)):
+            #     _, ds = dataSet.createTFExample(itemType='hand', fileIn=perFrameFittingDataList[i]['imgID'])
+
+            #     img = ds.imgRaw
+
+            #     # save the segmentation
+            #     # save_annotation.save_annotation(
+            #     #     ds.segRaw, saveCandSegDir,
+            #     #     perFrameFittingDataList[i]['imgID'].split('/')[-1], add_colormap=True,
+            #     #     colormap_type='pascal')
+
+            #     # save the images with kps
+            #     manoVis.dump3DModel2DKpsHand(img, mList[i], perFrameFittingDataList[i]['imgID'].split('/')[-1],
+            #                                  camMat, est2DJoints=perFrameFittingDataList[i]['KPS2D'], gt2DJoints=None, outDir=saveCandAfterFitDir)
 
 
-    ## visualize
-    # for i in range(len(fullposeList)):
-    #     _, ds = dataSet.createTFExample(itemType='hand', fileIn=perFrameFittingDataList[i]['imgID'])
-
-    #     img = ds.imgRaw
-
-    #     # save the segmentation
-    #     # save_annotation.save_annotation(
-    #     #     ds.segRaw, saveCandSegDir,
-    #     #     perFrameFittingDataList[i]['imgID'].split('/')[-1], add_colormap=True,
-    #     #     colormap_type='pascal')
-
-    #     # save the images with kps
-    #     manoVis.dump3DModel2DKpsHand(img, mList[i], perFrameFittingDataList[i]['imgID'].split('/')[-1],
-    #                                  camMat, est2DJoints=perFrameFittingDataList[i]['KPS2D'], gt2DJoints=None, outDir=saveCandAfterFitDir)
-
+    """
+    [visualize code sample for kps3D in .pickle]
+    ### required info
+    # mainCampose(extrinsic) : main camera during pose optimization(fixed, currently sub1)
+    # camPose(extrinsic) : (3,4) extrinsic parameter of target camera for visualize
+    # camMat(intrinsic) : (3,3) intrinsic parameter of target camera for visualize
+    # CamID : target camera ID, index of camIDset = ['mas', 'sub1', 'sub2', 'sub3']
+    
+    
+    kps3D = sample['KPS3D']
+    scale = sample['scale']
+    meta = sample['meta']
+    
+    img2bb = meta[CamID]['img2bb']
+    
+    targetPose = kps3D * scale
+        
+    # original projection   
+    mano4Dcamera = np.concatenate([targetPose, np.ones((21, 1))], axis=1)
+    projection = np.concatenate((mainCamPose, h), 0)
+    mano4Dworld = np.linalg.inv(projection).dot(mano4Dcamera.T).T  
+    
+     ### project mano model pts to each cam     
+    mano4Dcamera2 = mano4Dworld.dot(camPose.reshape(3,4).T)
+    
+    ## already transformed jointmap
+    projPts = utilsEval.cv2ProjectPoints(mano4Dcamera2, camMat, False)  #[jointsMap]
+    
+    # add crop on bb
+    uv1 = np.concatenate((projPts, np.ones_like(projPts[:, :1])), 1)
+    projPts = np.dot(img2bb, np.transpose(uv1)).T
+        
+    axEst = fig.add_subplot(2, 2, 3)
+    imgOutEst = utilsEval.showHandJoints(img.copy(), np.copy(projPts).astype(np.float32), estIn=None,
+                                         filename=None,
+                                         upscale=1, lineThickness=3)
+    axEst.imshow(imgOutEst[:, :, [2, 1, 0]])
+    
+    """
+    
+    
+    
 if __name__ == '__main__':
     app.run(main)
