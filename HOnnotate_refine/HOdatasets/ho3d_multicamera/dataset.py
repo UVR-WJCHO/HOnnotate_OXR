@@ -40,7 +40,7 @@ class datasetOXRMultiCamera(datasetBase):
             fileList = fileListIn
 
         self.dbDir = join(OXR_MULTI_CAMERA_DIR, db)
-        self.calibDir = self.dbDir + '_hand'
+        self.calibDir = self.dbDir + '_calibration'
         
         imgDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'rgb_crop')
         segDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'segmentation', str(camInd), 'raw_seg_results')
@@ -107,10 +107,11 @@ class datasetOXRMultiCamera(datasetBase):
         return im
 
     def getCamMat(self, camInd):
-        camMatFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_intrinsics.txt' % (camInd))
-        depthScaleFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
+        camMatFile = os.path.join(self.calibDir, 'cam_%s_intrinsics.txt' % (camInd))
+        depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
 
         if not os.path.exists(camMatFile):
+            print(camMatFile)
             raise Exception('Where is the camera intrinsics file???')
         with open(camMatFile, 'r') as f:
             line = f.readline()
@@ -158,7 +159,7 @@ class datasetOXRMultiCamera(datasetBase):
         if self.removeBG:
             r = png.Reader(filename=join(self.dbDir, seq, 'depth_crop', camInd, id+'.png'))
             dep = np.vstack(map(np.uint16, r.asDirect()[2])).astype(np.float32)
-            depScaleFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
+            depScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
             with open(depScaleFile, 'r') as f:
                 line = f.readline()
             line = line.strip()
@@ -195,7 +196,7 @@ class datasetOXRMultiCamera(datasetBase):
         newSeg[maskPatch[:, :, 0] == objInd] = objInd
 
         camMat = self.getCamMat(camInd)
-        depthScaleFile = os.path.join(self.dbDir, 'calibration', 'cam_%s_depth_scale.txt' % (camInd))
+        depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
         with open(depthScaleFile, 'r') as f:
             line = f.readline()
         depthScale = float(line.strip())

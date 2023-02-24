@@ -36,167 +36,6 @@ baseDir = OXR_MULTI_CAMERA_DIR
 beta = np.zeros((10,), dtype=np.float32)
 
 
-"""
-def incrementalFarthestSearch(objPklDataList, k):
-    def distance(p, s):
-        return np.linalg.norm(p-s)
-
-    points = [pklData['rot'][0]/np.linalg.norm(pklData['rot'][0]) for pklData in objPklDataList]
-
-    remaining_points = points[:]
-    solution_set = []
-    solution_set.append(remaining_points.pop(\
-                                             np.random.randint(0, len(remaining_points) - 1)))
-    for _ in range(k-1):
-        distances = [distance(p, solution_set[0]) for p in remaining_points]
-        for i, p in enumerate(remaining_points):
-            for j, s in enumerate(solution_set):
-                distances[i] = min(distances[i], distance(p, s))
-        solution_set.append(remaining_points.pop(distances.index(max(distances))))
-    solution_set_ind = []
-    for p in solution_set:
-        solution_set_ind.append(np.argmin(np.linalg.norm(np.stack(points, axis=0) - p, axis=1)))
-    return solution_set, solution_set_ind
-
-def selectCandidateFramesFarthest(files, numFrames, dataSet, frameSpacing=10, startFrame=0):
-    '''
-    Chooses the frames in the sequence for hand pose estimation
-    criteria - the rotation vectors of the obj pose are placed as far apart as possible
-    :param files: list of frame ids
-    :param numFrames: number of frames to select
-    :param frameSpacing: initial frame gap
-    :param startFrame: staring frame number (not ID)
-    :return: select frame IDs list and pklData list (contains 2D kps and conf scores)
-    '''
-
-    confThresh = 0.5
-    confCntThresh = 12 # number of KPs where the conf is more than the 'confThresh'
-    neighborThresh = 1 # number of frames around the frame where we look for good frames if the curr frame is bad
-    objSegThresh = 0.010
-
-    finalIndList = []
-    handPklDataList = []
-    ObjPklDataList = []
-    ind = startFrame
-
-    while(ind < len(files)):
-        file = files[ind]
-        resultsDirHand = join(baseDir, FLAGS.seq, configDir, 'Results_hand', FLAGS.camID)
-        resultsDirObj = join(baseDir, FLAGS.seq, 'dirt_obj_pose', FLAGS.camID)
-
-
-
-        with open(join(resultsDirObj, file.split('/')[-1]+'.pkl'), 'rb') as f:
-            pklDataObj = pickle.load(f)
-        with open(join(resultsDirHand, file.split('/')[-1]+'.pickle'), 'rb') as f:
-            pklDataHand = pickle.load(f)
-
-        _, ds = dataSet.createTFExample(itemType='hand', fileIn=file)
-        # read obj segmentation
-        objSeg = ds.segRaw == 1
-        objOccupRatio = float(np.sum(objSeg))/float(objSeg.shape[0]*objSeg.shape[1])
-
-
-        if (np.sum(pklDataHand['conf']>confThresh) > confCntThresh) and (objOccupRatio > objSegThresh):# and (int(file.split('/')[-1])%2 == 0):
-            finalIndList.append(ind)
-            handPklDataList.append(pklDataHand)
-            ObjPklDataList.append(pklDataObj)
-        else:
-            # search within the neighbor
-            isCandFound = False
-            for i in range(-neighborThresh,neighborThresh,1):
-                nInd = ind + i
-                if (nInd < 0) or (nInd>=len(files)):
-                    continue
-                with open(join(resultsDirHand, files[nInd].split('/')[-1]+'.pickle'), 'rb') as f:
-                    pklDataHand = pickle.load(f)
-                with open(join(resultsDirObj, files[nInd].split('/')[-1]+'.pkl'), 'rb') as f:
-                    pklDataObj = pickle.load(f)
-                if (np.sum(pklDataHand['conf'] > confThresh) > confCntThresh) and (objOccupRatio > objSegThresh):# and (int(files[nInd].split('/')[-1])%2 == 0):
-                    finalIndList.append(ind)
-                    handPklDataList.append(pklDataHand)
-                    ObjPklDataList.append(pklDataObj)
-                    isCandFound = True
-                    ind = nInd
-                    break
-
-        ind = ind + frameSpacing
-
-    if len(finalIndList) >= numFrames:
-        _, finalIndList = incrementalFarthestSearch(ObjPklDataList, numFrames)
-        finalHandPklDataList = [handPklDataList[ind] for ind in finalIndList]
-    else:
-        raise Exception('Unable to find good candidate frames for hand pose initialization')
-
-    print('Found %d/%d candidates with %d spacing...\n'%(len(finalIndList), numFrames, frameSpacing))
-
-    return finalIndList, finalHandPklDataList
-
-def selectCandidateFrames(files, numFrames, dataSet, frameSpacing=10, startFrame=0):
-    '''
-    Chooses the frames in the sequence for hand pose estimation
-    criteria - equally (almost) and far placed + 2D joint estimation has good confidence + good object segmentation
-    :param files: list of frame ids
-    :param numFrames: number of frames to select
-    :param frameSpacing: initial frame gap
-    :param startFrame: staring frame number (not ID)
-    :return: select frame IDs list and pklData list (contains 2D kps and conf scores)
-    '''
-
-    confThresh = 0.5
-    confCntThresh = 12 # number of KPs where the conf is more than the 'confThresh'
-    neighborThresh = 10 # number of frames around the frame where we look for good frames if the curr frame is bad
-    objSegThresh = 0.010
-
-    finalIndList = []
-    finalPklDataList = []
-    ind = startFrame
-
-    while(ind < len(files)):
-        file = files[ind]
-        resultsDir = join(baseDir, FLAGS.seq, configDir, 'Results_hand', FLAGS.camID)
-
-
-
-        with open(join(resultsDir, file.split('/')[-1]+'.pickle'), 'rb') as f:
-            pklData = pickle.load(f)
-
-        _, ds = dataSet.createTFExample(itemType='hand', fileIn=file)
-        # read obj segmentation
-        objSeg = ds.segRaw == 1
-        objOccupRatio = float(np.sum(objSeg))/float(objSeg.shape[0]*objSeg.shape[1])
-
-
-        if (np.sum(pklData['conf']>confThresh) > confCntThresh) and (objOccupRatio > objSegThresh):# and (int(file.split('/')[-1])%2 == 0):
-            finalIndList.append(ind)
-            finalPklDataList.append(pklData)
-        else:
-            # search within the neighbor
-            isCandFound = False
-            for i in range(-neighborThresh,neighborThresh,1):
-                nInd = ind + i
-                if (nInd < 0) or (nInd>=len(files)):
-                    continue
-                with open(join(resultsDir, files[nInd].split('/')[-1]+'.pickle'), 'rb') as f:
-                    pklData = pickle.load(f)
-                if (np.sum(pklData['conf'] > confThresh) > confCntThresh) and (objOccupRatio > objSegThresh) and (int(files[nInd].split('/')[-1])%2 == 0):
-                    finalIndList.append(ind)
-                    finalPklDataList.append(pklData)
-                    isCandFound = True
-                    ind = nInd
-                    break
-
-        ind = ind + frameSpacing
-
-    if len(finalIndList) > numFrames:
-        finalIndList = finalIndList[:numFrames]
-        finalPklDataList = finalPklDataList[:numFrames]
-
-    print('Found %d/%d candidates with %d spacing...\n'%(len(finalIndList), numFrames, frameSpacing))
-
-    return finalIndList, finalPklDataList
-"""
-
 def getMeta(files, seq):
     finalPklDataList = []
     ind = 0
@@ -352,10 +191,16 @@ def main(argv):
     
     ### start handpose optimization for each sequences
     rootDir = os.path.join(baseDir, FLAGS.db)
-    for seq in os.listdir(rootDir):
+    total_seq = len(os.listdir(rootDir))
+    
+    for seqIdx, seq in enumerate(sorted(os.listdir(rootDir))):
+        
+        if seqIdx < 5:
+            continue
+        
         d = os.path.join(rootDir, seq)
         if os.path.isdir(d):            
-            print("start handPoseMultiView optimization ... target sequence : %s" % seq)
+            print("(%s in %s) : %s" % (seqIdx, total_seq, seq))
     
             saveInitDir = join(baseDir, FLAGS.db, seq, 'handInit')
             if not os.path.exists(saveInitDir):
@@ -366,7 +211,7 @@ def main(argv):
                 os.mkdir(saveCandImgDir)
 
             
-            fileListIn = os.listdir(join(OXR_MULTI_CAMERA_DIR, FLAGS.db, seq, 'rgb', camIDset[mainCamID]))
+            fileListIn = os.listdir(join(OXR_MULTI_CAMERA_DIR, FLAGS.db, seq, 'rgb_crop', camIDset[mainCamID]))
             fileListIn = [join(FLAGS.db, seq, camIDset[mainCamID], f[:-4]) for f in fileListIn if 'png' in f]
             fileListIn = sorted(fileListIn)
             dataSet = datasetOXRMultiCamera(FLAGS.db, seq, camIDset[mainCamID], fileListIn=fileListIn)
@@ -389,7 +234,7 @@ def main(argv):
             camMat = dataSet.getCamMat(camIDset[mainCamID])
 
             # run independent pose estimation on the candidate frames first. This provides good init for multi frame optimization later
-            numThreads = 10
+            numThreads = 5
             numCandidateFrames = len(pklDataperCam[0])
             numFramesPerThread = np.ceil(numCandidateFrames/numThreads).astype(np.uint32)
             procs = []
@@ -439,10 +284,8 @@ def main(argv):
     
     
     kps3D = sample['KPS3D']
-    scale = sample['scale']
-    meta = sample['meta']
-    
-    img2bb = meta[CamID]['img2bb']
+    scale = sample['scale']    
+    img2bb = sample['meta'][CamID]['img2bb']
     
     targetPose = kps3D * scale
         

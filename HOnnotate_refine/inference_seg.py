@@ -83,7 +83,7 @@ def postProcess(dummy, consQueue, numImgs, numConsThreads):
             return
 
 
-def runNetInLoop(fileListIn, numImgs, camID):
+def runNetInLoop(fileListIn, numImgs, camID, seq):
     myG = tf.Graph()
 
     with myG.as_default():
@@ -100,7 +100,7 @@ def runNetInLoop(fileListIn, numImgs, camID):
 
     sess, g, predictions, dataPreProcDict = getNetSess(data, h, w, myG)
 
-    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_mix, splitType.TEST, FLAGS.db, FLAGS.seq, camID, numThreads=1, isRemoveBG=False, fileListIn=fileListIn)
+    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_mix, splitType.TEST, FLAGS.db, seq, camID, numThreads=5, isRemoveBG=False, fileListIn=fileListIn)
 
     # start consumer threads
     consQueue = mlp.Queue(maxsize=100)
@@ -126,7 +126,7 @@ def runNetInLoop(fileListIn, numImgs, camID):
 
         startTime = time.time()
         predsDict = sess.run(predictions, feed_dict={data.image: ds.imgRaw},)
-        print('Runtime = %f'%(time.time() - startTime))
+        # print('Runtime = %f'%(time.time() - startTime))
 
         labels = predsDict[common.SEMANTIC]
         labels[labels == 1] = 1
@@ -151,11 +151,15 @@ def runNetInLoop(fileListIn, numImgs, camID):
 def main(argv):
 
     rootDir = os.path.join(baseDir, FLAGS.db)
-    
-    for seq in os.listdir(rootDir):
+    total_seq = len(os.listdir(rootDir))
+    for seqIdx, seq in enumerate(sorted(os.listdir(rootDir))):
+        
+        if seqIdx < 6:
+            continue
+        
         d = os.path.join(rootDir, seq)
         if os.path.isdir(d):            
-            print("start preprocessing ... target sequence : %s" % seq)
+            print("(%s in %s) : %s" % (seqIdx, total_seq, seq))
             
             if not os.path.exists(os.path.join(baseDir, FLAGS.db, seq, 'segmentation')):
                 os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation'))
@@ -165,13 +169,13 @@ def main(argv):
                     os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation', camID, 'raw_seg_results'))
             
             for camID in camIDset:
-                fileListIn = os.listdir(join(baseDir, FLAGS.db, seq, 'rgb', camID))
+                fileListIn = os.listdir(join(baseDir, FLAGS.db, seq, 'rgb_crop', camID))
                 fileListIn = [join(seq, camID, f[:-4]) for f in fileListIn if 'png' in f]
                 fileListIn = sorted(fileListIn)
 
                 numImgs = len(fileListIn)
 
-                runNetInLoop(fileListIn, numImgs, camID)
+                runNetInLoop(fileListIn, numImgs, camID, seq)
 
 if __name__ == '__main__':
     app.run(main)
