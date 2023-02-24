@@ -1,12 +1,14 @@
 [visualize code sample for kps3D in .pickle]
-    ### required info
-    # mainCampose(extrinsic) : main camera during pose optimization(fixed, currently sub1)
-    # camPose(extrinsic) : (3,4) extrinsic parameter of target camera for visualize
-    # camMat(intrinsic) : (3,3) intrinsic parameter of target camera for visualize
-    # CamID : target camera ID, index of camIDset = ['mas', 'sub1', 'sub2', 'sub3']
-    
+
+### required info ###
+    - mainCampose(extrinsic) : main camera during pose optimization(fixed, currently sub1)
+    - camPose(extrinsic) : (3,4) extrinsic parameter of target camera for visualize
+    - camMat(intrinsic) : (3,3) intrinsic parameter of target camera for visualize
+    - CamID : target camera ID, index of camIDset = ['mas', 'sub1', 'sub2', 'sub3']
+
+```
 from HOnnotate_refine.eval import utilsEval
-    
+
     kps3D = sample['KPS3D']
     scale = sample['scale']
     meta = sample['meta']
@@ -33,4 +35,4 @@ from HOnnotate_refine.eval import utilsEval
     axEst = fig.add_subplot(2, 2, 3)
     imgOutEst = utilsEval.showHandJoints(img.copy(), np.copy(projPts).astype(np.float32), estIn=None, filename=None, upscale=1, lineThickness=3)
     axEst.imshow(imgOutEst[:, :, [2, 1, 0]])
-    
+```

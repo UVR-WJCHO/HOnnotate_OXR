@@ -199,9 +199,11 @@ class datasetRecord():
 def main(argv):
     
     rootDir = os.path.join(baseDir, FLAGS.db)
-    
-    for seq in os.listdir(rootDir):
+    total_seq = len(os.listdir(rootDir))
+    for seqIdx, seq in enumerate(sorted(os.listdir(rootDir))):
         d = os.path.join(rootDir, seq)
+        
+        
         if os.path.isdir(d):            
             db = datasetRecord(FLAGS.db, seq)
             db.loadKps()
@@ -227,7 +229,7 @@ def main(argv):
                     #     cv2.imwrite(os.path.join(db.debugDir, imgName), rgbCrop)
                     
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
-                    pbar.set_description("...Processing idx %s in seq %s" % (idx, seq))
+                    pbar.set_description("(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, total_seq, camID, idx, seq))
 
             print("end")
     
