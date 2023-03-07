@@ -79,6 +79,7 @@ class Scene():
             projMat = creatCamMat(f=self.camPropsList[0].f, c=self.camPropsList[0].c,
                                  near=self.camPropsList[0].near, far=self.camPropsList[0].far,
                                  imShape=self.camPropsList[0].frameSize, pose=self.camPropsList[0].pose)
+            
             self.camProjMat = tf.tile(tf.expand_dims(projMat, 0), [self.numFrames, 1, 1])
             self.camFrameSize = np.array(self.camPropsList[0].frameSize)
 

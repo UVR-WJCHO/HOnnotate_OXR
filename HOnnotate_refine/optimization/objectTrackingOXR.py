@@ -26,7 +26,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore", category=FutureWarning) 
 
 
-depthScale = 0.0010000000474974513 # constant depth scale used throughout the project
+# depthScale = 0.0010000000474974513 # constant depth scale used throughout the project
 bgDepth = 2.0
 handLabel = 2
 DEPTH_THRESH = 0.85  # nearly meter 
@@ -70,6 +70,10 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCa
     frameCntInt, loadData, realObservs = LossObservs.getRealObservables(ds, numFrames, w, h)
     icp = Icp(realObservs, camProp)
 
+
+
+    #####################################
+
     # set up the scene
     scene = Scene(optModeEnum.MULTIFRAME_JOINT, frameCnt=1)
     objID = scene.addObject(objMesh, paramInit, segColor=np.array([1.,1.,1.]))
@@ -79,7 +83,18 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCa
     # render the scene
     renderer = DirtRenderer(finalMesh, renderModeEnum.SEG_DEPTH)
     virtObservs = renderer.render()
-
+    
+    
+    # python renderer for rendering object texture
+    pyRend = renderScene(h, w)
+    modelPath = os.path.join(YCB_MODELS_DIR, configData['obj'])
+    pyRend.addObjectFromMeshFile(modelPath, 'obj')    
+    pyRend.addCamera()
+    pyRend.creatcamProjMat(camProp.f, camProp.c, camProp.near, camProp.far)
+    
+    
+    #####################################    
+    
     # get loss over observables
     observLoss = LossObservs(virtObservs, realObservs, renderModeEnum.SEG_DEPTH)
     segLoss, depthLoss, _ = observLoss.getL2Loss(isClipDepthLoss=True, pyrLevel=2)
@@ -98,7 +113,7 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCa
     objImg = (realObservs.col)
     # totalLoss1 = 1.0*segLoss + 1e1*depthLoss + 1e4*icpLoss + 0.0*tf.reduce_sum(objImg-virtObservs.seg)
     totalLoss1 = 1.0e0 * segLoss  + 1e1 * depthLoss  + 1e2 * icpLoss + 0.0 * tf.reduce_sum(objImg - virtObservs.seg)
-    totalLoss2 = 1.15 * segLoss + 5.0 * depthLoss + 500.0*icpLoss
+    totalLoss2 = 1.15 * segLoss + 5.0 * depthLoss + 100.0 * icpLoss
 
     # get the variables for opt
     optVarsList = scene.getVarsByItemID(objID, [varTypeEnum.OBJ_ROT, varTypeEnum.OBJ_TRANS])
@@ -120,13 +135,6 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCa
     session.__enter__()
     tf.global_variables_initializer().run()
 
-    # python renderer for rendering object texture
-    pyRend = renderScene(h, w)
-    modelPath = os.path.join(YCB_MODELS_DIR, configData['obj'])
-    pyRend.addObjectFromMeshFile(modelPath, 'obj')
-    pyRend.addCamera()
-    pyRend.creatcamProjMat(camProp.f, camProp.c, camProp.near, camProp.far)
-
     # setup the plot window
     plt.ion()
     fig = plt.figure()
@@ -138,8 +146,6 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCa
     lDep = ax3.imshow(np.random.uniform(0,2,(240,320)))
     ax4 = fig.add_subplot(2, 2, 4)
     lMask = ax4.imshow(np.random.uniform(0,2,(240,320,3)))
-
-
 
     while(True):
         session.run(resetOpt1)
@@ -154,7 +160,7 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCa
         # run the optimization for new frame
         frameID = (realObservs.frameID.eval(feed_dict={loadData: False}))[0].decode('UTF-8')
         # opti1.runOptimization(session, 200, {loadData: False})#, logLossFunc=True, lossPlotName=out_dir+'/LossFunc/'+frameID+'_1.png')
-        opti2.runOptimization(session, 25, {loadData: False})#, logLossFunc=True, lossPlotName='handLoss/'+frameID+'_2.png')
+        opti2.runOptimization(session, 50, {loadData: False})#, logLossFunc=True, lossPlotName='handLoss/'+frameID+'_2.png')
 
         pyRend.setObjectPose('obj',poseMat.eval(feed_dict={loadData: False})[0].T)
         if USE_PYTHON_RENDERER:
@@ -162,6 +168,11 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCa
 
         frameID = frameID.split('/')[-1]
         plt.title(frameID)
+        
+        ## debug color image on DirtRenderer
+        # colRen = virtObservs.col.eval(feed_dict={loadData: False})[0]
+        # lRen.set_data(colRen) # object rendered in the optimized pose
+        
         depRen = virtObservs.depth.eval(feed_dict={loadData: False})[0]
         depGT = realObservs.depth.eval(feed_dict={loadData: False})[0]
         segRen = virtObservs.seg.eval(feed_dict={loadData: False})[0]

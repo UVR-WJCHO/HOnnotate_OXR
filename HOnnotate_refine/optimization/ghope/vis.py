@@ -87,7 +87,7 @@ class renderScene():
             [0., 0., 0., 1.]
         ], dtype=np.float32)
         elements = np.matmul(normMat, elements1)
-
+        
         self.camera.projMatrix = elements
         # self.camera.set_projection_matrix(elements)
 
