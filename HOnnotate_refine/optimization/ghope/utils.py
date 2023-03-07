@@ -9,8 +9,6 @@ from ghope.common import *
 from sklearn.preprocessing import normalize
 import math
 
-depthScale = 0.00012498664727900177
-
 jointsMapObmanToMano = [0,
                         5, 6, 7,
                         9, 10, 11,
@@ -56,7 +54,7 @@ def creatCamMat(f, c, near, far, imShape, name=None, pose=np.eye(4, dtype=np.flo
 
         return tf.transpose(elements)
 
-def encodeDepthImg(depth, outFileName=None):
+def encodeDepthImg(depth, outFileName=None, depthScale=0):
     '''
     Encode the depth (in mts) to BGR image. B has the residual, G has the factor, R is zero.
     Also save the image
@@ -64,6 +62,7 @@ def encodeDepthImg(depth, outFileName=None):
     :param outFileName: image name for saving
     :return: encoded image in uint8
     '''
+    assert False, "need depthScale per cam"
     depthInt = np.round(depth/depthScale)
     depthInt = depthInt.astype(np.uint32)
 
@@ -77,12 +76,13 @@ def encodeDepthImg(depth, outFileName=None):
 
     return depthImg
 
-def decodeDepthImg(inFileName, dsize=None):
+def decodeDepthImg(inFileName, dsize=None, depthScale=0):
     '''
     Decode the depth image to depth map in meters
     :param inFileName: input file name
     :return: depth map (float) in meters
     '''
+    assert False, "need depthScale per cam"
     depthImg = cv2.imread(inFileName)
     if dsize is not None:
         depthImg = cv2.resize(depthImg, dsize, interpolation=cv2.INTER_CUBIC)

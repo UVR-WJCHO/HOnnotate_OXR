@@ -135,6 +135,17 @@ class datasetOXRMultiCamera(datasetBase):
 
         return camMat
 
+
+    def getDepthScale(self, camInd):
+        depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+
+        with open(depthScaleFile, 'r') as f:
+            line = f.readline()
+        depthScale = float(line.strip())
+
+        return depthScale
+
+
     def createTFExample(self, itemType='hand', fileIn=None):
         if fileIn is None:
             fId = self.getNextFileName()
@@ -204,7 +215,8 @@ class datasetOXRMultiCamera(datasetBase):
         # read the depth file
         depth = self.load_depth(join(self.dbDir, seq, 'depth_crop', camInd, id+'.png'))*depthScale
         
-        depthEnc = encodeDepthImg(depth)
+        depthEnc = encodeDepthImg(depth, depthScale)
+        
 
         coordChangeMat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
         ds = dataSample(img=imgPatch, seg=newSeg, fName=fId, dataset=datasetType.HO3D,

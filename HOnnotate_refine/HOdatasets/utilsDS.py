@@ -3,8 +3,6 @@ from HOdatasets.commonDS import *
 from HOdatasets.mypaths import *
 import json
 
-depthScale = 0.00012498664727900177 # this will be the depth scale used everywhere for encoding the depth in dataSample class
-
 def loadPickleData(fName):
     with open(fName, 'rb') as f:
         try:
@@ -204,7 +202,7 @@ class ImageOps:
 
         return imgPatch, maskPatch, xmean, ymean, kpsAug, xmeanForEval, ymeanForEval
 
-def encodeDepthImg(depth, outFileName=None):
+def encodeDepthImg(depth, depthScale, outFileName=None):
     '''
     Encode the depth (in mts) to BGR image. B has the residual, G has the factor, R is zero.
     Also save the image

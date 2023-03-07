@@ -102,7 +102,7 @@ class LossObservs():
         gaussKernel = oneway * oneway.T
         gaussKernel = gaussKernel.astype(np.float32)
 
-        print("gaussKernel : ", gaussKernel.shape)
+        # print("gaussKernel : ", gaussKernel.shape)
         # err (1, 240, 320, 3), gaussKernel (3, 3)
 
         # if len(err.shape) == 4:
@@ -112,8 +112,8 @@ class LossObservs():
         gaussKernel = tf.tile(gaussKernel, [1, 1, tf.shape(err)[-1], 1])
 
         # gaussKernel = np.expand_dims(np.expand_dims(np.stack([gaussKernel, gaussKernel], axis=2), axis=-1), axis=-1)
-        print("err shape : ", err.shape)
-        print("gaussKernel after : ", gaussKernel.shape)
+        # print("err shape : ", err.shape)
+        # print("gaussKernel after : ", gaussKernel.shape)
         gaussErr = tf.nn.conv2d(err, gaussKernel, strides=[1, 1, 1, 1], padding="VALID")
 
         gaussErrDown = gaussErr[:, ::2, ::2, :]

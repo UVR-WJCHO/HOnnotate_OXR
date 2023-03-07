@@ -21,11 +21,15 @@ from HOdatasets.mypaths import *
 import argparse, yaml
 from ext.mesh_loaders import *
 import matplotlib.pyplot as plt
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning) 
+warnings.filterwarnings("ignore", category=FutureWarning) 
+
 
 depthScale = 0.0010000000474974513 # constant depth scale used throughout the project
 bgDepth = 2.0
 handLabel = 2
-DEPTH_THRESH = 0.75
+DEPTH_THRESH = 0.85  # nearly meter 
 
 datasetName = datasetType.OXR_MULTICAMERA
 
@@ -36,21 +40,17 @@ import argparse
 parser = argparse.ArgumentParser()
 FLAGS = flags.FLAGS
 
-FLAGS = flags.FLAGS
-
-flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
-flags.DEFINE_string('doPyRender', True, 'Show object rendering, very slow!') # name ,default, help
-camIDset = ['mas', 'sub1', 'sub2', 'sub3']
-
-
-parser.add_argument('--seq', default='0010', help='Sequence Name')
-parser.add_argument('--camID', default='0', help='Sequence Name')
-parser.add_argument('--doPyRender', action='store_true', help='Show object rendering, very slow!')
+parser.add_argument('--db', default='230104', help='Sequence Name')
+parser.add_argument('--seq', default='bowl_18_00', help='Sequence Name')
+parser.add_argument('--doPyRender', action='store_true', help='Show hand-object rendering, very slow!')
 FLAGS = parser.parse_args()
+
+camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
 USE_PYTHON_RENDERER = FLAGS.doPyRender # for visualization, but slows down
 
-def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData):
+
+def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCamId):
     '''
     Generative object tracking
     :param w: width of the image
@@ -61,7 +61,7 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData):
     :param out_dir: out directory
     :return:
     '''
-    ds = tf.data.Dataset.from_generator(lambda: dataGen(w, h, datasetName),
+    ds = tf.data.Dataset.from_generator(lambda: dataGen(w, h, datasetName, mainCamId),
                                         (tf.string, tf.float32, tf.float32, tf.float32, tf.float32),
                                         ((None,), (None, h, w, 3), (None, h, w, 3), (None, h, w, 3), (None, h, w, 3)))
     numFrames = 1
@@ -106,7 +106,7 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData):
     # setup optimizer
     opti1 = Optimizer(totalLoss1, optVarsList, 'Adam', learning_rate=0.02/2.0)
     opti2 = Optimizer(totalLoss2, optVarsList, 'Adam', learning_rate=0.005)
-    optiICP = Optimizer(1e1*icpLoss, optVarsList, 'Adam', learning_rate=0.01)
+    # optiICP = Optimizer(1e1*icpLoss, optVarsList, 'Adam', learning_rate=0.01)
 
     # get the optimization reset ops
     resetOpt1 = tf.variables_initializer(opti1.optimizer.variables())
@@ -160,7 +160,7 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData):
         if USE_PYTHON_RENDERER:
             cRend, dRend = pyRend.render()
 
-
+        frameID = frameID.split('/')[-1]
         plt.title(frameID)
         depRen = virtObservs.depth.eval(feed_dict={loadData: False})[0]
         depGT = realObservs.depth.eval(feed_dict={loadData: False})[0]
@@ -179,17 +179,17 @@ def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData):
         rotNp = rot.eval(feed_dict={loadData: False})
         savePickleData(out_dir+'/'+frameID+'.pkl', {'rot': rotNp, 'trans': transNp})
 
-def dataGen(w, h, datasetName):
+def dataGen(w, h, datasetName, mainCamId):
     '''
         Generator which provides rgb, depth and segmentation data for each frame
     '''
-    configFile = join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq, 'configs/configObjPose.json')
+    configFile = join(OXR_MULTI_CAMERA_DIR, FLAGS.db, FLAGS.seq, 'configs/configObjPose.json')
 
     # read the config file
     with open(configFile) as config_file:
         data = yaml.safe_load(config_file)
 
-    base_dir = os.path.join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq)
+    base_dir = os.path.join(OXR_MULTI_CAMERA_DIR, FLAGS.db, FLAGS.seq)
     obj = data['obj']
     objAliasLabelList = []
     objLabel = data['objLabel']
@@ -203,26 +203,19 @@ def dataGen(w, h, datasetName):
 
     plt.ion()
 
-    # get list of filenames
-    if datasetName == datasetType.HO3D_MULTICAMERA:
-        fileListIn = os.listdir(join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq, 'rgb', '0'))
-        fileListIn = [join(FLAGS.seq, '0', f[:-4]) for f in fileListIn if 'png' in f]
+    # get list of filenames         ### currently only cover mainCamID images
+    if datasetName == datasetType.OXR_MULTICAMERA:
+        fileListIn = os.listdir(join(base_dir, 'rgb_crop', mainCamId))
+        fileListIn = [join(FLAGS.seq, mainCamId, f[:-4]) for f in fileListIn if 'png' in f]
         fileListIn = sorted(fileListIn)
-        dataset = datasetHo3dMultiCamera(FLAGS.seq, 0, fileListIn=fileListIn)
+        dataset = datasetOXRMultiCamera(FLAGS.db, FLAGS.seq, mainCamId, fileListIn=fileListIn)
         files = dataset.fileList
-        if isinstance(startAt, str):
-            for i, f in enumerate(files):
-                if f.split('/')[-1] == startAt:
-                    break
-            files = files[i::skip]
-            # print(files)
-        else:
-            files = files[startAt:endAt + 1:skip]
+ 
+        files = files[startAt:endAt + 1:skip]
     else:
         raise Exception('Unsupported datasetName')
 
     for i, file in enumerate(files):
-
         # read RGB. depth and segmentations for current fileID
         seq = file.split('/')[0]
         camInd = file.split('/')[1]
@@ -231,15 +224,16 @@ def dataGen(w, h, datasetName):
         img = ds.imgRaw[:,:,[2,1,0]]
         dpt = ds.depth
         # reading the seg from file because the seg in ds has no objAliasLabel info
-        seg = cv2.imread(join(HO3D_MULTI_CAMERA_DIR, seq, 'segmentation', camInd, 'raw_seg_results', id+'.png'))[:, :, 0]
+        seg = cv2.imread(join(OXR_MULTI_CAMERA_DIR, FLAGS.db, seq, 'segmentation', camInd, 'raw_seg_results', id +'.png'))[:, :, 0]
         frameID = np.array([join(camInd, id)])
 
 
         # decode depth map
+        depthScale = dataset.getDepthScale(mainCamId)
         dpt = dpt[:, :, 0] + dpt[:, :, 1] * 256
         dpt = dpt * depthScale
 
-        # clean up depth map
+        # clean up depth map    (check threshold)
         dptMask = np.logical_or(dpt > DEPTH_THRESH, dpt == 0.0)
         dpt[dptMask] = bgDepth
 
@@ -247,7 +241,14 @@ def dataGen(w, h, datasetName):
         seg[dptMask] = 0
         for alias in objAliasLabelList:
             seg[seg == alias] = objLabel
-
+        
+        # dpt_vis = np.array(dpt * 125, dtype=int)
+        # seg_vis = np.array(seg * 125, dtype=int)
+        # tmp_0 = base_dir + "/temp/dpt_vis.png"
+        # tmp_1 = base_dir + "/temp/seg_vis.png"
+        # cv2.imwrite(tmp_0, dpt_vis)
+        # cv2.imwrite(tmp_1, seg_vis)
+                
         # Extract the object image in the image using the mask
         objMask = (seg == objLabel)
         handMask = (seg == handLabel)
@@ -293,21 +294,16 @@ if __name__ == '__main__':
     plt.ion()
 
     # read the config file
-    configFile = join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq, 'configs/configObjPose.json')
+    base_dir = os.path.join(OXR_MULTI_CAMERA_DIR, FLAGS.db, FLAGS.seq)
+    
+    configFile = join(base_dir, 'configs/configObjPose.json')
     with open(configFile) as config_file:
         configData = yaml.safe_load(config_file)
-    base_dir = os.path.join(HO3D_MULTI_CAMERA_DIR, FLAGS.seq)
+        
     out_dir = os.path.join(base_dir, 'dirt_obj_pose')
-
     # create out dir
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
-
-    # create more dir if required
-    if datasetName == datasetType.HO3D_MULTICAMERA:
-        for i in range(1):
-            if not os.path.exists(join(out_dir, str(i))):
-                os.mkdir(join(out_dir, str(i)))
 
 
     # initialization for rot and trans
@@ -316,7 +312,12 @@ if __name__ == '__main__':
 
     modelPath = os.path.join(YCB_MODELS_DIR, configData['obj'])
     mesh = load_mesh(modelPath)
-
+    
+          
+    mainCamId = camIDset[int(configData['camID'])]   
+    dummyfileListIn = os.listdir(join(base_dir, 'rgb_crop'))
+    dataSet = datasetOXRMultiCamera(FLAGS.db, FLAGS.seq, mainCamId, fileListIn=dummyfileListIn)
+    
     # ready the arguments
     paramInit = objParams(rot=rot, trans=trans)
     if datasetName == datasetType.HO3D_MULTICAMERA:
@@ -325,12 +326,19 @@ if __name__ == '__main__':
                            c=np.array([camMat[0,2], camMat[1,2]], dtype=np.float32) / dscale,
                            near=0.001, far=2.0, frameSize=[w, h],
                            pose=np.eye(4, dtype=np.float32))
+        
+    elif datasetName == datasetType.OXR_MULTICAMERA:     
+        camMat = dataSet.getCamMat(mainCamId)   # sub2 in bowl case.
+        camProp = camProps(ID=mainCamId, f=np.array([camMat[0,0], camMat[1,1]], dtype=np.float32) / dscale,
+                           c=np.array([camMat[0,2], camMat[1,2]], dtype=np.float32) / dscale,
+                           near=0.001, far=2.0, frameSize=[w, h],
+                           pose=np.eye(4, dtype=np.float32))
     else:
         raise NotImplementedError
 
     # for debugging
     if False:
-        myGen = dataGen(w, h, datasetName)
+        myGen = dataGen(w, h, datasetName, mainCamId)
         frameID, handMask, handDepth, col, mask = next(myGen)
 
-    objectTracker(w, h, paramInit, camProp, mesh, out_dir, configData)
+    objectTracker(w, h, paramInit, camProp, mesh, out_dir, configData, mainCamId)
