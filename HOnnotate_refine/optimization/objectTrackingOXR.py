@@ -41,13 +41,13 @@ parser = argparse.ArgumentParser()
 FLAGS = flags.FLAGS
 
 parser.add_argument('--db', default='230104', help='Sequence Name')
-parser.add_argument('--seq', default='bowl_18_00', help='Sequence Name')
+parser.add_argument('--seq', default='apple_11_00', help='Sequence Name')
 parser.add_argument('--doPyRender', action='store_true', help='Show hand-object rendering, very slow!')
 FLAGS = parser.parse_args()
 
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
-USE_PYTHON_RENDERER = FLAGS.doPyRender # for visualization, but slows down
+USE_PYTHON_RENDERER = False # FLAGS.doPyRender # for visualization, but slows down
 
 
 def objectTracker(w, h, paramInit, camProp, objMesh, out_dir, configData, mainCamId):
