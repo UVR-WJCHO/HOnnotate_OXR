@@ -4,7 +4,7 @@ import os
 sys.path.insert(0,os.path.join(os.getcwd(), 'models'))
 sys.path.insert(0,os.path.join(os.getcwd(), 'models/slim'))
 from HOdatasets.commonDS import *
-import models.deeplab.common as common
+import models.deeplab2.common as common
 from eval import evalSeg
 from eval import eval2DKps
 from utils import inferenceUtils as infUti
@@ -19,29 +19,29 @@ warnings.simplefilter("ignore", category=PendingDeprecationWarning)
 warnings.simplefilter("ignore", category=FutureWarning)
 from absl import flags
 from absl import app
+import cv2
+
 
 FLAGS = flags.FLAGS
-# flags.DEFINE_string('seq', 'test', 'Sequence Name') # name ,default, help
-# flags.DEFINE_string('camID', '0', 'Cam ID') # name ,default, help
-# flags.DEFINE_integer('start', 0, 'Cam ID') # name ,default, help
-# flags.DEFINE_integer('end', 2300, 'Cam ID') # name ,default, help
-flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
+flags.DEFINE_string('db', '230612', 'target db Name') # name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 # flags.DEFINE_string('camID', 'mas', 'target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
-dataset_mix = infUti.datasetMix.OXR_MULTICAMERA
+dataset_idx = infUti.datasetMix.OXR_MULTICAMERA
 w = 640
 h = 480
 numConsThreads = 1
 
-# baseDir = HO3D_MULTI_CAMERA_DIR
-baseDir = OXR_MULTI_CAMERA_DIR
+### config ###
+baseDir = './HOnnotate_OXR/dataset/NIA_test'
+YCB_MODELS_DIR = './HOnnotate_OXR/HOnnotate_refine/YCB_Models/models/'
+YCB_OBJECT_CORNERS_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../objCorners')
+MANO_MODEL_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../optimization/mano/models/MANO_RIGHT.pkl')
 
 
 def postProcess(dummy, consQueue, numImgs, numConsThreads):
     while True:
-
         queueElem = consQueue.get()
         predsDict = queueElem[0]
         ds = queueElem[1]
@@ -100,7 +100,7 @@ def runNetInLoop(fileListIn, numImgs, camID, seq):
 
     sess, g, predictions, dataPreProcDict = getNetSess(data, h, w, myG)
 
-    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_mix, splitType.TEST, FLAGS.db, seq, camID, numThreads=5, isRemoveBG=False, fileListIn=fileListIn)
+    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_idx, splitType.TEST, FLAGS.db, seq, camID, numThreads=5, isRemoveBG=False, fileListIn=fileListIn)
 
     # start consumer threads
     consQueue = mlp.Queue(maxsize=100)
@@ -115,15 +115,12 @@ def runNetInLoop(fileListIn, numImgs, camID, seq):
 
     # start the network
     for i in range(numImgs):
-
         while(dsQueue.empty()):
             waitTime = 10*1e-3
             time.sleep(waitTime)
 
         ds = dsQueue.get()
-
         assert isinstance(ds, dataSample)
-
         startTime = time.time()
         predsDict = sess.run(predictions, feed_dict={data.image: ds.imgRaw},)
         # print('Runtime = %f'%(time.time() - startTime))
@@ -133,7 +130,6 @@ def runNetInLoop(fileListIn, numImgs, camID, seq):
         labels[labels == 2] = 2
         labels[labels == 3] = 2
         predsDict[common.SEMANTIC] = labels
-
         consQueue.put([predsDict, ds, i])
 
     for proc in procs:
@@ -146,20 +142,21 @@ def runNetInLoop(fileListIn, numImgs, camID, seq):
     dsQueue.close()
 
 
-
-
 def main(argv):
+    ### Setup ###
 
     rootDir = os.path.join(baseDir, FLAGS.db)
+
+    ### Preprocess ###
+
+
+    ### Segmentation ###
+    print("start segmentation")
     total_seq = len(os.listdir(rootDir))
     for seqIdx, seq in enumerate(sorted(os.listdir(rootDir))):
-        
-        if seqIdx < 6:
-            continue
-        
-        d = os.path.join(rootDir, seq)
-        if os.path.isdir(d):            
-            print("(%s in %s) : %s" % (seqIdx, total_seq, seq))
+        seqDir = os.path.join(rootDir, seq)
+        if os.path.isdir(seqDir):
+            print("segmenting %s ... (%s in %s)" % (seq, seqIdx, total_seq))
             
             if not os.path.exists(os.path.join(baseDir, FLAGS.db, seq, 'segmentation')):
                 os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation'))
@@ -172,10 +169,11 @@ def main(argv):
                 fileListIn = os.listdir(join(baseDir, FLAGS.db, seq, 'rgb_crop', camID))
                 fileListIn = [join(seq, camID, f[:-4]) for f in fileListIn if 'png' in f]
                 fileListIn = sorted(fileListIn)
-
                 numImgs = len(fileListIn)
-
                 runNetInLoop(fileListIn, numImgs, camID, seq)
+
+
+
 
 if __name__ == '__main__':
     app.run(main)

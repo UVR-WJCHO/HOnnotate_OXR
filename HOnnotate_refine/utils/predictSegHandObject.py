@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
-import models.deeplab.common as common
-from models.deeplab import model
+import models.deeplab2.common as common
+from models.deeplab2 import model
 from onlineAug.commonAug  import networkData
 
 common.SEMANTIC = 'semantic'

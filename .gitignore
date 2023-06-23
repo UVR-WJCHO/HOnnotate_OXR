@@ -129,8 +129,7 @@ dmypy.json
 .pyre/
 
 .idea
-HOnnotate_refine/models/slim
-HOnnotate_refine/models/deeplab
+HOnnotate_refine/models
 HOnnotate_refine/checkpoints
 HOnnotate_refine/objCorners
 HOnnotate_refine/optimization/mano
