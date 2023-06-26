@@ -40,7 +40,7 @@ class datasetOXRMultiCamera(datasetBase):
             fileList = fileListIn
 
         self.dbDir = join(OXR_MULTI_CAMERA_DIR, db)
-        self.calibDir = self.dbDir + '_calibration'
+        self.calibDir = self.dbDir + '_cam'
         
         imgDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'rgb_crop')
         segDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'segmentation', str(camInd), 'raw_seg_results')
@@ -146,7 +146,7 @@ class datasetOXRMultiCamera(datasetBase):
         return depthScale
 
 
-    def createTFExample(self, itemType='hand', fileIn=None):
+    def createTFExample(self, itemType='hand', fileIn=None, beforeSeg=False):
         if fileIn is None:
             fId = self.getNextFileName()
         else:
@@ -185,14 +185,16 @@ class datasetOXRMultiCamera(datasetBase):
         objInd = 1
         handInd = 2
 
-        seg = self.readSeg(join(self.dbDir, seq, 'segmentation', camInd, 'raw_seg_results', id), True)
-        if seg is None:
+        if not beforeSeg:
+            seg = self.readSeg(join(self.dbDir, seq, 'segmentation', camInd, 'raw_seg_results', id), True)
+            if seg is None:
+                seg = np.zeros((img.shape[1], img.shape[0], 3), dtype=np.uint8)
+        else:
             seg = np.zeros((img.shape[1], img.shape[0], 3), dtype=np.uint8)
+
         seg = cv2.resize(seg, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
 
         meta = self.readMeta(join(self.dbDir, seq, 'meta', id), seq)
-
-
         if self.isCropImg:
             # Get the centroid of the seg mask, and crop a window of size MPII_HO3D_CROP_SIZE around it
             imOps = ImageOps(img, seg, np.concatenate([meta['pts2DHand'], meta['pts2DObj']], axis=0))

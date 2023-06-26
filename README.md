@@ -2,94 +2,63 @@
 ## Introduction
 TBD
 
-## Structure
-
-```
-            - HOnnotate_refine
-                - inference_seg.py
-                - ...
-            - modules
-                - calib.py
-                - preprocess_db.py
-                - utils
-```
-
-need to prepare dataset as below
-```
-            - dataset
-                - 230104
-                    - calibration
-                        - cam_mas_intrinsics.txt
-                        - cam_mas_depth_scale.txt
-                        - ...
-                    - rgb_orig
-                    - depth_orig
-
-                - 230104_hand
-                    - hand_result
-                        - bowl_18_00
-                        - ...
-```
-
 
 ## Installation
 
 Follow procedures in [HOnnotate](https://github.com/shreyashampali/HOnnotate?)
 
 [Note]
-- Environment
+- (old) Environment
 
 ```
     - Ubuntu 18.04, GTX1080 ti, CUDA 9.0
     - python 3.6.13, tensorflow-gpu 1.12, gcc 6, g++ 6, tensorflow_probability 0.5.0, PyOpenGL-accelerate
 ```
 
-- For dirt, install in development mode
-```
-    cd dirt
-    mkdir build ; cd build
-    cmake ../csrc -DCMAKE_CUDA_ARCHITECTURES=61
-    make
-    cd ..
-    pip install -e .
-    ...
-```
+- (new) Environment
 
-
+```
+    - Ubuntu 22.04, RTX3090, CUDA 11.8
+    - python 3.9.16, torch 2.0.0
+    - mediapipe, chumpy, cython, matplotlib, numpy, opencv-python, pillow, scikit-image, scipy, tqdm
+```
 
 
 
 
 ## Usage
 
-- Set recorded dataset as following format. For example, if target db is "230104", which includes sequences "bowl_18_00", "bowl_18_01", "apple_28_00", ...
+- Download sample dataset in [link](https://www.dropbox.com/s/kztfopvc7rmdab6/230612_samples.zip?dl=0)
+- Download mediapipe 2.5D hand results in [link](https://www.notion.so/20230612-6edc4de099ae492397d2727f53c3ae5a)
+
+- Set the dataset structure as below. 
+- Make sure both the image folder and the hand result folder have the same sequence name.
+
+
 ```
-	dataset/230104
-		bowl_18_00
-		bowl_18_01
-		apple_28_00
-		...
-	dataset/230104_calibration
-		cam_mas_depth_scale.txt
-		cam_mas_intrinsics.txt
-		...
-	dataset/230104_hand
-		hand_result
-		mas_intrinsic.json
-		...
-``` 
+            - dataset
+                - 230612
+                    - 230612_bare
+                        - rgb
+                        - depth
+                    - ...
+                - 230612_cam
+		    - cam_mas_intrinsics.txt
+		    - cam_mas_depth_scale.txt
+		    - ...
+		- 230612_hand
+		    - 230612_bare
+		        - handDetection_uvd.json
+		        - handDetection_xyz.json
+		    - ...
+```
+
 
 
 - run
 ```
-    modules/preprocess_db.py
-    HOnnotate_refine/inference_seg.py
-    HOnnotate_refine/optimization/handPoseMultiview.py
-
-
-    ...
+    main.py
 ```
-
 
 
 ## Acknowledgement

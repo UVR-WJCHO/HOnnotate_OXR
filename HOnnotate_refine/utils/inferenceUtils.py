@@ -67,7 +67,7 @@ def shardProc(dummy, shard_id, dataset_split, dataset_mix, db, seq, camID, numSh
     print('Launching thread %d'%(shard_id))
 
     for i in range(end_idx-start_idx):
-        _, ds = dsCurr.createTFExample(itemType=itemType)
+        _, ds = dsCurr.createTFExample(itemType=itemType, beforeSeg=True)
         dsQueue.put(ds)
 
 
