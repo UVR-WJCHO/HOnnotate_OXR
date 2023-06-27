@@ -132,8 +132,4 @@ dmypy.json
 HOnnotate_refine/models
 HOnnotate_refine/checkpoints
 HOnnotate_refine/objCorners
-HOnnotate_refine/optimization/mano
-HOnnotate_refine/YCB_Models
-HOnnotate_refine/sequence
-HOnnotate_refine/dirt
 dataset
