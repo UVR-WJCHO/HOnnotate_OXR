@@ -20,11 +20,13 @@ warnings.simplefilter("ignore", category=FutureWarning)
 from absl import flags
 from absl import app
 
-
 # preprocess
 import mediapipe as mp
 from modules.utils.processing import augmentation_real
 import numpy as np
+
+# optimization
+from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
 
 # others
 import cv2
@@ -43,33 +45,48 @@ flags.DEFINE_string('db', '230612', 'target db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
+FLAGS(sys.argv)
 
-# remove after debug
-flag_preprocess = False
-flag_segmentation = True
-flag_optim = False
 
-### config ###
+### Config ###
 baseDir = os.path.join(os.getcwd(), 'dataset')
-SEG_CKPT_DIR = 'HOnnotate_refine/checkpoints/Deeplab_seg'
+handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
 
+## TODO
+"""
+    - Issues in camResultDir 
+    - segmentation process(original) requires cam_mas_intrinsics.txt ... etc.
+        - check HOnnotate_refine.HOdatasets.ho3d_multicamera.dataset.py
+        - convert the process to utilize our format (230612_cameraInfo.txt)
+"""
+camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
+
+
+SEG_CKPT_DIR = 'HOnnotate_refine/checkpoints/Deeplab_seg'
 YCB_MODELS_DIR = './HOnnotate_OXR/HOnnotate_refine/YCB_Models/models/'
 YCB_OBJECT_CORNERS_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../objCorners')
 MANO_MODEL_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../optimization/mano/models/MANO_RIGHT.pkl')
-w = 640
-h = 480
+
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
-
 dataset_mix = infUti.datasetMix.OXR_MULTICAMERA
 numConsThreads = 1
+w = 640
+h = 480
+
+### Manual Flags (remove after debug) ###
+flag_preprocess = False
+flag_segmentation = True
+flag_MVobj = True
+flag_MVboth = True
+
 
 class loadDataset():
-    def __init__(self, db, seq):
+    def __init__(self, db, seq, flag_seg=False):
         self.seq = seq
 
         self.dbDir = os.path.join(baseDir, db, seq)
-        self.handDir = os.path.join(baseDir, db) + '_hand'
+        self.handDir = handResultDir
 
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
@@ -107,7 +124,6 @@ class loadDataset():
 
     def loadKps(self):
         kpsPath = os.path.join(self.handDir, self.seq, 'handDetection_uvd.json')
-        print("kpsPath : ", kpsPath)
         assert os.path.exists(kpsPath), 'handDetection_uvd.json does not exist'
 
         with open(kpsPath, 'rb') as f:
@@ -144,10 +160,6 @@ class loadDataset():
             # Convert the BGR image to RGB before processing.
             results = hands.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
 
-            idx_to_coord_0 = None
-            idx_to_coord_1 = None
-
-            hand_idx = 0
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
                     idx_to_coordinates = {}
@@ -158,18 +170,14 @@ class loadDataset():
                             # landmark_px has fliped x axis
                             orig_x = image_cols - landmark_px[0]
                             idx_to_coordinates[idx_land] = [orig_x, landmark_px[1]]
-                    if hand_idx == 0:
-                        idx_to_coord_0 = idx_to_coordinates
-                        hand_idx += 1
-                    else:
-                        idx_to_coord_1 = idx_to_coordinates
 
         # consider only one hand, if both hands are detected utilize idx_to_coord_1
         # if tracking fails, use the previous bbox
-        if idx_to_coord_0 is None:
+        idx_to_coord = idx_to_coordinates[0]
+        if idx_to_coord is None:
             bbox = self.prev_bbox
         else:
-            bbox = self.extractBbox(idx_to_coord_0, image_rows, image_cols)
+            bbox = self.extractBbox(idx_to_coord, image_rows, image_cols)
 
         rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
 
@@ -223,7 +231,7 @@ class loadDataset():
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
-def postProcess(dummy, consQueue, numImgs, numConsThreads):
+def runSegpostProc(dummy, consQueue, numImgs, numConsThreads):
     while True:
         queueElem = consQueue.get()
         predsDict = queueElem[0]
@@ -265,7 +273,7 @@ def postProcess(dummy, consQueue, numImgs, numConsThreads):
         if jobID>=(numImgs-numConsThreads):
             return
 
-def runNetInLoop(fileListIn, numImgs, camID, seq):
+def runSeg(fileListIn, numImgs, camID, seq):
     myG = tf.Graph()
 
     with myG.as_default():
@@ -289,7 +297,7 @@ def runNetInLoop(fileListIn, numImgs, camID, seq):
     procs = []
     for proc_index in range(numConsThreads):
         args = ([], consQueue, numImgs, numConsThreads)
-        proc = mlp.Process(target=postProcess, args=args)
+        proc = mlp.Process(target=runSegpostProc, args=args)
         # proc.daemon = True
 
         proc.start()
@@ -334,6 +342,19 @@ def main(argv):
     rootDir = os.path.join(baseDir, FLAGS.db)
     lenDBTotal = len(os.listdir(rootDir))
 
+    ### Hand pose initialization(mediapipe) ###
+    '''
+    [Current]
+        - preprocessed hand data(230612_hand) from mediapipe (modules.utils.detection.py)
+        - we run mediapipe redundantly in preprocessing to get hand ROI (main.py loadDataset.procImg())
+        - need to be merge.
+    
+    [TODO]
+        - merge mediapipe part in single class
+            - need to extract keypoint + bounding box + cropped image set
+        - consider two-hand situation (currently assume single hand detection)
+    '''
+
     ### Preprocess ###
     if flag_preprocess:
         print("start preprocess")
@@ -351,15 +372,6 @@ def main(argv):
 
                     bb, img2bb, bb2img, procImgSet = db.procImg(images)
                     procKps = db.translateKpts(kps, img2bb)
-
-                    # rgbCrop = procImgSet[0]
-                    # if not math.isnan(procKps[0, 0]):
-                    #     for joint_num in range(21):
-                    #         cv2.circle(rgbCrop, center=(int(procKps[joint_num][0]), int(procKps[joint_num][1])), radius=3, color=[139, 53, 255], thickness=-1)
-                    #     imgName = 'debug_' + format(idx, '04') + '.png'
-                    #     cv2.imwrite(os.path.join(db.debugDir, imgName), rgbCrop)
-                    #     print("[debug] save preprocessed image in db.debugDir")
-
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     pbar.set_description("(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, lenDBTotal, camID, idx, seqName))
             print("--------------------------------")
@@ -383,8 +395,68 @@ def main(argv):
 
                 numImgs = len(fileListIn)
 
-                runNetInLoop(fileListIn, numImgs, camID, seqName)
+                runSeg(fileListIn, numImgs, camID, seqName)
         print("end segmentation")
+
+    ### Multi-view object pose optimization ###
+    '''
+    [TODO]
+        - Load object pose & mesh (currently ICG)
+        - render the scene (object only, utilize pytorch3D)
+        - compute depth map error, silhouette error for each view
+        - optimize object initial pose per frame (torch-based)
+    '''
+    if flag_MVobj:
+        print("TODO")
+
+    ### Multi-view hand-object pose optimization ###
+    '''
+    [Current]
+        - HOnnotate_refine.optimization.NIA_handPoseMultiview.py
+        - tensorflow_v1 based optimization (without depth rendering) 
+        - only minimizing losses between 'mano mesh pose - multiview hand pose'
+    
+    [TODO]
+        - torch based optimization
+        - pytorch3D rendering (TW.H)
+        - adopt losses from HOnnotate (optimization.handPoseMultiframe.py)    
+    '''
+    if flag_MVboth:
+        print("TODO")
+
+
+        with open(os.path.join(camResultDir, "cameraParamsBA.json")) as json_file:
+            cameraParams = json.load(json_file)
+            cameraParams = {camera: np.array(cameraParams[camera]) for camera in cameraParams}
+
+        camInfoName = FLAGS.db + '_cameraInfo.txt'
+        intrinsicMatrices = LoadCameraMatrix(os.path.join(camResultDir, camInfoName))
+        distCoeffs = {}
+        distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_intrinsic.json"))
+        distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_intrinsic.json"))
+        distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_intrinsic.json"))
+        distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_intrinsic.json"))
+
+        ### no translation in mano space ###
+        for camID in camIDset:
+            cameraParams[camID] = cameraParams[camID].reshape(3, 4)
+            cameraParams[camID] = cameraParams[camID]
+
+        camParamList = intrinsicMatrices, cameraParams, distCoeffs
+
+        # TODO
+
+
+
+    ### Multi-view hand-object pose optimization ###
+    '''
+    [TODO]
+        - load object pose
+        - 
+    '''
+
+
+
 
 
 if __name__ == '__main__':

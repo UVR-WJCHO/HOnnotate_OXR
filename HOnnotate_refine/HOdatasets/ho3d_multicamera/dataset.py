@@ -108,7 +108,7 @@ class datasetOXRMultiCamera(datasetBase):
 
     def getCamMat(self, camInd):
         camMatFile = os.path.join(self.calibDir, 'cam_%s_intrinsics.txt' % (camInd))
-        depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+        #depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
 
         if not os.path.exists(camMatFile):
             print(camMatFile)
@@ -129,21 +129,21 @@ class datasetOXRMultiCamera(datasetBase):
 
         camMat = np.array([[ppx, 0, fx], [0, ppy, fy], [0, 0, 1]])
 
-        with open(depthScaleFile, 'r') as f:
-            line = f.readline()
-        depthScale = float(line.strip())
+        # with open(depthScaleFile, 'r') as f:
+        #     line = f.readline()
+        # depthScale = float(line.strip())
 
         return camMat
 
 
-    def getDepthScale(self, camInd):
-        depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
-
-        with open(depthScaleFile, 'r') as f:
-            line = f.readline()
-        depthScale = float(line.strip())
-
-        return depthScale
+    # def getDepthScale(self, camInd):
+    #     depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+    #
+    #     with open(depthScaleFile, 'r') as f:
+    #         line = f.readline()
+    #     depthScale = float(line.strip())
+    #
+    #     return depthScale
 
 
     def createTFExample(self, itemType='hand', fileIn=None, beforeSeg=False):
@@ -167,20 +167,18 @@ class datasetOXRMultiCamera(datasetBase):
                 otherImgSet[camID] = subimg
                 
 
-        if self.removeBG:
-            r = png.Reader(filename=join(self.dbDir, seq, 'depth_crop', camInd, id+'.png'))
-            dep = np.vstack(map(np.uint16, r.asDirect()[2])).astype(np.float32)
-            depScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
-            with open(depScaleFile, 'r') as f:
-                line = f.readline()
-            line = line.strip()
-            depScale = float(line)
-            dep = dep*depScale
-
-
-            depMask = np.logical_or(dep>0.95, dep==0)
-            depMask = np.logical_not(depMask)
-            img = img*np.expand_dims(depMask, 2)
+        # if self.removeBG:
+        #     r = png.Reader(filename=join(self.dbDir, seq, 'depth_crop', camInd, id+'.png'))
+        #     dep = np.vstack(map(np.uint16, r.asDirect()[2])).astype(np.float32)
+        #     depScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+        #     with open(depScaleFile, 'r') as f:
+        #         line = f.readline()
+        #     line = line.strip()
+        #     depScale = float(line)
+        #     dep = dep*depScale
+        #     depMask = np.logical_or(dep>0.95, dep==0)
+        #     depMask = np.logical_not(depMask)
+        #     img = img*np.expand_dims(depMask, 2)
 
         objInd = 1
         handInd = 2
@@ -209,21 +207,20 @@ class datasetOXRMultiCamera(datasetBase):
         newSeg[maskPatch[:, :, 0] == objInd] = objInd
 
         camMat = self.getCamMat(camInd)
-        depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
-        with open(depthScaleFile, 'r') as f:
-            line = f.readline()
-        depthScale = float(line.strip())
+        # depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+        # with open(depthScaleFile, 'r') as f:
+        #     line = f.readline()
+        # depthScale = float(line.strip())
 
-        # read the depth file
-        depth = self.load_depth(join(self.dbDir, seq, 'depth_crop', camInd, id+'.png'))*depthScale
-        
-        depthEnc = encodeDepthImg(depth, depthScale)
+        ##read the depth file
+        # depth = self.load_depth(join(self.dbDir, seq, 'depth_crop', camInd, id+'.png')) #*depthScale
+        # depthEnc = encodeDepthImg(depth, depthScale)
         
 
         coordChangeMat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
         ds = dataSample(img=imgPatch, seg=newSeg, fName=fId, dataset=datasetType.HO3D,
                         outType=outputType.SEG | outputType.KEYPOINT_3D | outputType.KEYPOINTS_2D,
-                        camMat=camMat, depth=depthEnc, otherImgSet=otherImgSet, depthScale=depthScale)
+                        camMat=camMat, depth=None, otherImgSet=otherImgSet, depthScale=None)
 
 
         return None, ds
@@ -392,7 +389,6 @@ class datasetHo3dMultiCamera(datasetBase):
 
         # read the depth file
         depth = self.load_depth(join(self.seqDir, seq, 'depth', camInd, id+'.png'))*depthScale
-
         depthEnc = encodeDepthImg(depth)
 
         kps2DHomoHand = np.concatenate([kpsAug[:21, :2], np.ones((21, 1), dtype=np.float32)], axis=1)
