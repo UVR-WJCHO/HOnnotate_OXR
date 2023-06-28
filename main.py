@@ -1,36 +1,40 @@
 import os
 import sys
 
-import HOnnotate_refine.models.DeepLabV3Plus.network as segNet
-import HOnnotate_refine.models.DeepLabV3Plus.utils as segUtil
-from HOnnotate_refine.models.DeepLabV3Plus.datasets import VOCSegmentation
-from HOnnotate_refine.models.DeepLabV3Plus.metrics import StreamSegMetrics
+sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine'))
+sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine/models'))
+sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine/models/slim'))
 
-# from HOnnotate_refine.HOdatasets.commonDS import *
-# from HOnnotate_refine.eval import evalSeg, eval2DKps
-# from HOnnotate_refine.utils import inferenceUtils as infUti
-
+# segmentation
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+import models.deeplab.common as common
+from utils.predictSegHandObject import getNetSess
+from onlineAug.commonAug import networkData
+from utils import inferenceUtils as infUti
+from eval import evalSeg
+from HOdatasets.commonDS import *
 import warnings
 warnings.simplefilter("ignore", category=PendingDeprecationWarning)
 warnings.simplefilter("ignore", category=FutureWarning)
 from absl import flags
 from absl import app
+
+
+# preprocess
+import mediapipe as mp
+from modules.utils.processing import augmentation_real
+import numpy as np
+
+# others
 import cv2
 import time
 import multiprocessing as mlp
-import mediapipe as mp
 import json
 import pickle
 import copy
 import tqdm
-import math
-from modules.utils.processing import augmentation_real
-import numpy as np
-from torchvision import transforms as T
-import torch
-import torch.nn as nn
-from PIL import Image
-from glob import glob
+
 
 
 ### FLAGS ###
@@ -47,6 +51,7 @@ flag_optim = False
 
 ### config ###
 baseDir = os.path.join(os.getcwd(), 'dataset')
+SEG_CKPT_DIR = 'HOnnotate_refine/checkpoints/Deeplab_seg'
 
 YCB_MODELS_DIR = './HOnnotate_OXR/HOnnotate_refine/YCB_Models/models/'
 YCB_OBJECT_CORNERS_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../objCorners')
@@ -56,11 +61,8 @@ h = 480
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
 
-# The format to save image.
-_IMAGE_FORMAT = '%s_image'
-# The format to save prediction
-_PREDICTION_FORMAT = '%s_prediction'
-
+dataset_mix = infUti.datasetMix.OXR_MULTICAMERA
+numConsThreads = 1
 
 class loadDataset():
     def __init__(self, db, seq):
@@ -221,89 +223,112 @@ class loadDataset():
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
-class segmentDataset():
-    def __init__(self, db, seq):
-        self.seq = seq
-        self.dbDir = os.path.join(baseDir, db, seq)
-        if not os.path.exists(os.path.join(self.dbDir, 'segmentation')):
-            os.mkdir(os.path.join(self.dbDir, 'segmentation'))
-            for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'segmentation', camID))
-                os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'))
-                os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'))
-        self.segDir = os.path.join(self.dbDir, 'segmentation')
+def postProcess(dummy, consQueue, numImgs, numConsThreads):
+    while True:
+        queueElem = consQueue.get()
+        predsDict = queueElem[0]
+        ds = queueElem[1]
+        jobID = queueElem[2]
 
-        self.fileDict = dict()
-        for camID in camIDset:
-            fileListIn = os.listdir(os.path.join(self.dbDir, 'rgb_crop', camID))
-            fileListIn = [os.path.join(self.dbDir, 'rgb_crop', camID, f[:-4]) for f in fileListIn if 'png' in f]
-            fileListIn = sorted(fileListIn)
-            self.fileDict[camID] = fileListIn
+        croppedImg = predsDict[common.IMAGE]
+        if common.SEMANTIC in predsDict.keys():
 
+            predsDict[common.SEMANTIC] = predsDict[common.SEMANTIC][0]
 
-        ### config for deeplab_v3+
-        self.moduleDir = os.path.join(os.getcwd(), 'HOnnotate_refine/models/DeepLabV3Plus')
-        self.trainDB = 'voc'
-        self.pretrained = 'deeplabv3plus_mobilenet'
-        self.ckpt = 'best_deeplabv3plus_mobilenet_voc_os16.pth'
-        self.num_classes = 21
-        self.output_stride = 16
-        self.decode_fn = VOCSegmentation.decode_target
-        flag_separable_conv = False
-        self.transform = T.Compose([T.ToTensor(),T.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]),])
+            assert len(ds.fileName.split('/')) == 3, 'Dont know this filename format'
 
-        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print("Device: %s" % self.device)
+            seq = ds.fileName.split('/')[0]
+            camInd = ds.fileName.split('/')[1]
+            id = ds.fileName.split('/')[2]
 
-        # Set up model (all models are 'constructed at network.modeling)
-        self.model = segNet.modeling.__dict__[self.pretrained](num_classes=self.num_classes, output_stride=self.output_stride)
-        if flag_separable_conv and 'plus' in self.pretrained:
-            segNet.convert_to_separable_conv(self.model.classifier)
-        segUtil.set_bn_momentum(self.model.backbone, momentum=0.01)
-
-        self.ckpt = os.path.join(self.moduleDir, 'weights', self.ckpt)
-        if self.ckpt is not None and os.path.isfile(self.ckpt):
-            # https://github.com/VainF/DeepLabV3Plus-Pytorch/issues/8#issuecomment-605601402, @PytaichukBohdan
-            checkpoint = torch.load(self.ckpt, map_location=torch.device('cpu'))
-            self.model.load_state_dict(checkpoint["model_state"])
-            self.model = nn.DataParallel(self.model)
-            self.model.to(self.device)
-            self.model = self.model.eval()
-            print("Resume deeplab_v3 model from %s" % self.ckpt)
-            del checkpoint
-
-    def __len__(self):
-        return len(os.listdir(os.path.join(self.dbDir, 'rgb')))
-
-    def runSegmentation(self, img_path):
-        with torch.no_grad():
-            img_path = img_path + '.png'
-            img = Image.open(img_path).convert('RGB')
-            img = self.transform(img).unsqueeze(0)  # To tensor of NCHW
-            img = img.to(self.device)
-
-            pred = self.model(img).max(1)[1].cpu().numpy()[0]  # HW
-            colorized_pred = self.decode_fn(pred).astype('uint8')
-            # colorized_pred = Image.fromarray(colorized_pred)
-        return pred, colorized_pred
-
-    def saveSegment(self, preds, colorized_preds, saveDir, rawSaveDir, imgID):
-        self.dump(preds, rawSaveDir, _IMAGE_FORMAT % (imgID), add_colormap=False)
-        self.dump(colorized_preds[:, :, [0, 1, 2]], saveDir, _PREDICTION_FORMAT % (imgID), add_colormap=True)
-
-    def dump(self, label, save_dir, filename, add_colormap=True):
-        if add_colormap:
-            colormap = np.array([[0,0,0],[128,0,0],[0,128,0],[0,0,128]])
-            colored_label = colormap[label]
-        else:
-            colored_label = label
-        pil_image = Image.fromarray(colored_label.astype(dtype=np.uint8))
-        # with tf.gfile.Open('%s/%s.png' % (save_dir, filename), mode='w') as f:
-        #     pil_image.save(f, 'PNG')
-        pil_image.save('%s/%s.png' % (save_dir, filename), 'PNG')
+            finalSaveDir =  os.path.join(baseDir, FLAGS.db, seq, 'segmentation', str(camInd), 'visualization')
+            finalRawSaveDir = os.path.join(baseDir, FLAGS.db, seq, 'segmentation', str(camInd), 'raw_seg_results')
 
 
+            labelFullImg = np.zeros_like(ds.imgRaw)[:,:,0]
+            patchSize = predsDict['bottomRight'] - predsDict['topLeft']
+
+            scaleW = float(patchSize[0]) / float(w)
+            scaleH = float(patchSize[1]) / float(h)
+            labelPatch = cv2.resize(np.expand_dims(predsDict[common.SEMANTIC],2).astype(np.uint8),
+                                    (int(ds.imgRaw.shape[1]*scaleW), int(ds.imgRaw.shape[0]*scaleH)),
+                                    interpolation=cv2.INTER_NEAREST)
+            labelFullImg[predsDict['topLeft'][1]:predsDict['bottomRight'][1], predsDict['topLeft'][0]:predsDict['bottomRight'][0]] = labelPatch
+
+            # save predictions
+            evalSeg.saveAnnotations(predsDict[common.SEMANTIC], croppedImg,
+                                    finalSaveDir, id,
+                                    raw_save_dir=finalRawSaveDir,
+                                    also_save_raw_predictions=True, fullRawImg=labelFullImg)
+
+        print('Frame %d of %d, (%s)' % (jobID, numImgs, ds.fileName))
+        if jobID>=(numImgs-numConsThreads):
+            return
+
+def runNetInLoop(fileListIn, numImgs, camID, seq):
+    myG = tf.Graph()
+
+    with myG.as_default():
+        data = networkData(image=tf.placeholder(tf.uint8, shape=(h, w, 3)),
+                           label=tf.placeholder(tf.uint8, shape=(h, w, 1)),
+                           kps2D=None,
+                           kps3D=None,
+                           imageID='0',
+                           h=h,
+                           w=w,
+                           outType=None,
+                           dsName=None,
+                           camMat=None)
+
+    sess, g, predictions, dataPreProcDict = getNetSess(data, h, w, myG, SEG_CKPT_DIR)
+
+    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_mix, splitType.TEST, FLAGS.db, seq, camID, numThreads=5, isRemoveBG=False, fileListIn=fileListIn)
+
+    # start consumer threads
+    consQueue = mlp.Queue(maxsize=100)
+    procs = []
+    for proc_index in range(numConsThreads):
+        args = ([], consQueue, numImgs, numConsThreads)
+        proc = mlp.Process(target=postProcess, args=args)
+        # proc.daemon = True
+
+        proc.start()
+        procs.append(proc)
+
+    # start the network
+    for i in range(numImgs):
+
+        while(dsQueue.empty()):
+            waitTime = 10*1e-3
+            time.sleep(waitTime)
+
+        ds = dsQueue.get()
+
+        assert isinstance(ds, dataSample)
+
+        startTime = time.time()
+        predsDict = sess.run(predictions, feed_dict={data.image: ds.imgRaw},)
+        # print('Runtime = %f'%(time.time() - startTime))
+
+        labels = predsDict[common.SEMANTIC]
+        labels[labels == 1] = 1
+        labels[labels == 2] = 2
+        labels[labels == 3] = 2
+        predsDict[common.SEMANTIC] = labels
+
+        consQueue.put([predsDict, ds, i])
+
+    for proc in procs:
+        proc.join()
+
+    while(not consQueue.empty()):
+        time.sleep(10*1e-3)
+
+    consQueue.close()
+    dsQueue.close()
+
+
+################# depth scale value need to be update #################
 def main(argv):
     ### Setup ###
     rootDir = os.path.join(baseDir, FLAGS.db)
@@ -344,29 +369,22 @@ def main(argv):
     if flag_segmentation:
         print("start segmentation")
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
-            seg = segmentDataset(FLAGS.db, seqName)
+            if not os.path.exists(os.path.join(baseDir, FLAGS.db, seqName, 'segmentation')):
+                os.mkdir(os.path.join(baseDir, FLAGS.db, seqName, 'segmentation'))
+                for camID in camIDset:
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seqName, 'segmentation', camID))
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seqName, 'segmentation', camID, 'visualization'))
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seqName, 'segmentation', camID, 'raw_seg_results'))
 
             for camID in camIDset:
-                pbar = tqdm.tqdm(range(int(len(seg) / 4)))
+                fileListIn = os.listdir(os.path.join(baseDir, FLAGS.db, seqName, 'rgb_crop', camID))
+                fileListIn = [os.path.join(seqName, camID, f[:-4]) for f in fileListIn if 'png' in f]
+                fileListIn = sorted(fileListIn)
 
-                saveDir = os.path.join(seg.segDir, camID, 'visualization')
-                rawSaveDir = os.path.join(seg.segDir, camID, 'raw_seg_results')
+                numImgs = len(fileListIn)
 
-                for idx in pbar:
-                    img_path = seg.fileDict[camID][idx]
-                    pred, colorized_pred = seg.runSegmentation(img_path)
-                    # seg.saveSegment(pred, colorized_pred, saveDir, rawSaveDir, idx)
-
-                    cv2.imshow("segment results", colorized_pred)
-                    cv2.waitKey(0)
-
-                    pbar.set_description(
-                        "(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, lenDBTotal, camID, idx, seqName))
-            print("--------------------------------")
+                runNetInLoop(fileListIn, numImgs, camID, seqName)
         print("end segmentation")
-
-
-
 
 
 if __name__ == '__main__':

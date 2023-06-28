@@ -5,17 +5,7 @@ TBD
 
 ## Installation
 
-Follow procedures in [HOnnotate](https://github.com/shreyashampali/HOnnotate?)
-
-[Note]
-- (old) Environment
-
-```
-    - Ubuntu 18.04, GTX1080 ti, CUDA 9.0
-    - python 3.6.13, tensorflow-gpu 1.12, gcc 6, g++ 6, tensorflow_probability 0.5.0, PyOpenGL-accelerate
-```
-
-- (new) Environment
+- Create a conda environment and install the following main packages
 
 ```
     - Ubuntu 22.04, RTX3090, CUDA 11.8
@@ -25,32 +15,27 @@ Follow procedures in [HOnnotate](https://github.com/shreyashampali/HOnnotate?)
 
 
 
+## Setup
 
-## Usage
-
-- Download sample dataset in [link](https://www.dropbox.com/s/kztfopvc7rmdab6/230612_samples.zip?dl=0)
-- Download mediapipe 2.5D hand results in [link](https://www.notion.so/20230612-6edc4de099ae492397d2727f53c3ae5a)
-
+- Clone the repository and checkout the develop branch
+- Download all resources in the link [Dropbox](https://www.dropbox.com/scl/fo/un34gknh23o8sr559j2d3/h?dl=0&rlkey=6ds7v183pp4htjy8hp1kq6wlh)
 - Set the dataset structure as below. 
 - Make sure both the image folder and the hand result folder have the same sequence name.
 
 
 ```
-            - dataset
-                - 230612
-                    - 230612_bare
-                        - rgb
-                        - depth
-                    - ...
-                - 230612_cam
-		    - cam_mas_intrinsics.txt
-		    - cam_mas_depth_scale.txt
-		    - ...
-		- 230612_hand
-		    - 230612_bare
-		        - handDetection_uvd.json
-		        - handDetection_xyz.json
-		    - ...
+    - HOnnotate_refine
+        - checkpoints
+        - models
+        - objCorners
+    	- ...
+    - dataset
+        - 230612
+        - 230612_cam
+	- 230612_hand
+    - modules
+    - README.md
+    - ...
 ```
 
 
