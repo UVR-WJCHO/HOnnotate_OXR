@@ -405,41 +405,7 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
 
     # (3d homogeneous point in image coordinate) = (intrinsic) * (extrinsic) * (3d homogeneous point in world coordinate)
     # (3d homogeneous point in camera coordinate) = (extrinsic) * (3d homogeneous point in world coordinate)
- 
-    ######### debug log #########
-    """
-    projPtsGT_mas = metaperFrame[0]['kpts'][:, 0:2]
-    projPtsGT_sub1 = metaperFrame[1]['kpts'][:, 0:2]
-    
-    ex_mas = extrinsicMatrices['mas'].reshape(3,4)      
-    ex_sub1 = extrinsicMatrices['sub1'].reshape(3,4)
-    
-    ## [ex_mas]
-    ## array([ 0.99651512, -0.00185681,  0.00172505,  1.06138909])
-    ## array([-3.77008816e-04,  9.94952911e-01,  1.74648926e-04,  2.17816869e-01])
-    ## array([-0.00515595, -0.00294564,  1.00277799,  1.61680288])
-        
-    ## [ex_sub1]    
-    ## array([ 5.56268556e-01, -1.83593177e-01,  8.07564738e-01, -3.57132190e+02])
-    ## array([  -0.27903086,    0.8662851 ,    0.39915127, -179.61030311])
-    ## array([ -0.78594016,  -0.44296072,   0.43649803, 320.80500681])
 
-    mano4Dcamera2_mas = mano4Dworld.dot(extrinsicMatrices['mas'].reshape(3,4).T)[:, :3]
-    mano4Dcamera2_sub1 = mano4Dworld.dot(extrinsicMatrices['sub1'].reshape(3,4).T)[:, :3]
-        
-    ## mano4Dcamera2_mas : array([[0.09566993, 0.00638343, 0.50618631], ...])
-    ## mano4Dcamera2_sub1 : array([-358.53030295, -179.96887255,  321.17378001], ... 1 이하 range 유사한 value 반복)
-    
-    ## 다른 cam인것 감안해도 sub1에서의 coord가 거의 점 사이즈의 손으로 보임.
-        
-    projPts_mas = utilsEval.chProjectPoints(mano4Dcamera2_mas, intrinsicMatrices['mas'], False)[jointsMap]
-    projPts_sub1 = utilsEval.chProjectPoints(mano4Dcamera2_sub1, intrinsicMatrices['sub1'], False)[jointsMap]
-    
-    
-    #2Dproj value도 sub1은 1 이하 value 차이로 변화 joint u value : (-43.71582987, -43.61781355, -43.55728923, ...))
-    """
-    #############################
-        
     loss_joint2D = 0
     loss_joint2DClip = 0
     JVis = np.tile(np.expand_dims(JVis, 1), [1, 2])
@@ -457,16 +423,13 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
         mano4Dcamera2 = mano4Dworld.dot(extrinsicMatrices[cam].reshape(3,4).T)#[:, :3]
         # ## need jointMap if it from mano model
         projPts = utilsEval.chProjectPoints(mano4Dcamera2, intrinsicMatrices[cam], False)[jointsMap]
-        
-        
+
         # xyz_cam = ch.matmul(mano4Dworld, extrinsicMatrices[cam].T)
         # xyz_cam = xyz_cam[:, :3] / xyz_cam[:, -1:]  # xyz_cam : (-0.38 0.16, 1)
 
         # uv = ch.matmul(xyz_cam, intrinsicMatrices[cam].T)
         # projPts = uv[:, :2] / uv[:, -1:]
-        
-        
-    
+
         ### transform pts with each cropped bb
         img2bb = metaperFrame[camIdx]['img2bb']
         uv1 = ch.concatenate((projPts, ch.ones_like(projPts[:, :1])), 1)
@@ -482,9 +445,7 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
             dep = -dep
         loss['wristDep'] = (m.J_transformed[0,2] - dep)*1e2
 
-
     # vis_mesh(m)
-
 
     render = False
 
@@ -492,7 +453,6 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
 
         pass
         # print(loss['joints'].r)
-
 
     print(filename)
     filename = filename.split('/')[-1]
@@ -564,10 +524,6 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
                 manoVis.dump3DModel2DKpsHand_forCrop(otherimg, m, otherFilename, othercamMat, 
                                                      img2bb=otherimg2bb, gt2DJoints=otherprojPtsGT, 
                                                      outDir=outDir, camPose=othercamPose, mainCamPose=maincamPose, debug=debugPose, scale=scale)
-     
-                
-                
-
 
 
     # vis_mesh(m)
@@ -577,7 +533,7 @@ def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=
     # print(betaCh.r)
     # print((relDepPred.r - relDepGT))
 
-    err = 0 #loss['joints2D_0'].r + loss['joints2D_1'].r + loss['joints2D_2'].r + loss['joints2D_3'].r
+    err = loss['joints2D_0'].r + loss['joints2D_1'].r + loss['joints2D_2'].r + loss['joints2D_3'].r
     
     return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), err, scale
 

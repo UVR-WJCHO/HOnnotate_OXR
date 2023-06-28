@@ -412,7 +412,7 @@ def main(argv):
     ### Multi-view hand-object pose optimization ###
     '''
     [Current]
-        - HOnnotate_refine.optimization.NIA_handPoseMultiview.py
+        - optimization.NIA_handPoseMultiview.py
         - tensorflow_v1 based optimization (without depth rendering) 
         - only minimizing losses between 'mano mesh pose - multiview hand pose'
     
@@ -423,7 +423,6 @@ def main(argv):
     '''
     if flag_MVboth:
         print("TODO")
-
 
         with open(os.path.join(camResultDir, "cameraParamsBA.json")) as json_file:
             cameraParams = json.load(json_file)
@@ -444,15 +443,15 @@ def main(argv):
 
         camParamList = intrinsicMatrices, cameraParams, distCoeffs
 
-        # TODO
+        # ~ NIA_handPoseMultiview.py 189 line
 
 
 
-    ### Multi-view hand-object pose optimization ###
+    ### Multi-frame pose refinement ###
     '''
     [TODO]
-        - load object pose
-        - 
+        - optimization over multi-frames while including every hand-object loss        
+        - check optimization.handObjectRefinementMultiframe.py
     '''
 
 
