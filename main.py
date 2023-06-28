@@ -342,6 +342,9 @@ def main(argv):
     rootDir = os.path.join(baseDir, FLAGS.db)
     lenDBTotal = len(os.listdir(rootDir))
 
+
+
+
     ### Hand pose initialization(mediapipe) ###
     '''
     [Current]
@@ -355,9 +358,12 @@ def main(argv):
         - consider two-hand situation (currently assume single hand detection)
     '''
 
+
+
+
     ### Preprocess ###
     if flag_preprocess:
-        print("start preprocess")
+        print("---------------start preprocess---------------")
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
             db = loadDataset(FLAGS.db, seqName)
             db.loadKps()
@@ -374,12 +380,13 @@ def main(argv):
                     procKps = db.translateKpts(kps, img2bb)
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     pbar.set_description("(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, lenDBTotal, camID, idx, seqName))
-            print("--------------------------------")
-        print("end preprocess")
+        print("---------------end preprocess---------------")
+
+
 
     ### Segmentation ###
     if flag_segmentation:
-        print("start segmentation")
+        print("---------------start segmentation---------------")
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
             if not os.path.exists(os.path.join(baseDir, FLAGS.db, seqName, 'segmentation')):
                 os.mkdir(os.path.join(baseDir, FLAGS.db, seqName, 'segmentation'))
@@ -396,7 +403,9 @@ def main(argv):
                 numImgs = len(fileListIn)
 
                 runSeg(fileListIn, numImgs, camID, seqName)
-        print("end segmentation")
+        print("---------------end segmentation---------------")
+
+
 
     ### Multi-view object pose optimization ###
     '''
@@ -408,6 +417,9 @@ def main(argv):
     '''
     if flag_MVobj:
         print("TODO")
+
+
+
 
     ### Multi-view hand-object pose optimization ###
     '''
@@ -447,6 +459,7 @@ def main(argv):
 
 
 
+
     ### Multi-frame pose refinement ###
     '''
     [TODO]
@@ -455,6 +468,9 @@ def main(argv):
     '''
 
 
+
+
+    print("end")
 
 
 
