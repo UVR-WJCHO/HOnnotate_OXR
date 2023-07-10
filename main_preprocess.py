@@ -27,6 +27,7 @@ import numpy as np
 
 # optimization
 from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
+from renderer_pytorch import *
 
 # others
 import cv2
@@ -76,7 +77,7 @@ h = 480
 
 ### Manual Flags (remove after debug) ###
 flag_preprocess = False
-flag_segmentation = True
+flag_segmentation = False
 flag_MVobj = True
 flag_MVboth = True
 
@@ -405,72 +406,6 @@ def main(argv):
                 runSeg(fileListIn, numImgs, camID, seqName)
         print("---------------end segmentation---------------")
 
-
-
-    ### Multi-view object pose optimization ###
-    '''
-    [TODO]
-        - Load object pose & mesh (currently ICG)
-        - render the scene (object only, utilize pytorch3D)
-        - compute depth map error, silhouette error for each view
-        - optimize object initial pose per frame (torch-based)
-    '''
-    if flag_MVobj:
-        print("TODO")
-
-
-
-
-    ### Multi-view hand-object pose optimization ###
-    '''
-    [Current]
-        - optimization.NIA_handPoseMultiview.py
-        - tensorflow_v1 based optimization (without depth rendering) 
-        - only minimizing losses between 'mano mesh pose - multiview hand pose'
-    
-    [TODO]
-        - torch based optimization
-        - pytorch3D rendering (TW.H)
-        - adopt losses from HOnnotate (optimization.handPoseMultiframe.py)    
-    '''
-    if flag_MVboth:
-        print("TODO")
-
-        with open(os.path.join(camResultDir, "cameraParamsBA.json")) as json_file:
-            cameraParams = json.load(json_file)
-            cameraParams = {camera: np.array(cameraParams[camera]) for camera in cameraParams}
-
-        camInfoName = FLAGS.db + '_cameraInfo.txt'
-        intrinsicMatrices = LoadCameraMatrix(os.path.join(camResultDir, camInfoName))
-        distCoeffs = {}
-        distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_intrinsic.json"))
-        distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_intrinsic.json"))
-        distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_intrinsic.json"))
-        distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_intrinsic.json"))
-
-        ### no translation in mano space ###
-        for camID in camIDset:
-            cameraParams[camID] = cameraParams[camID].reshape(3, 4)
-            cameraParams[camID] = cameraParams[camID]
-
-        camParamList = intrinsicMatrices, cameraParams, distCoeffs
-
-        # ~ NIA_handPoseMultiview.py 189 line
-
-
-
-
-    ### Multi-frame pose refinement ###
-    '''
-    [TODO]
-        - optimization over multi-frames while including every hand-object loss        
-        - check optimization.handObjectRefinementMultiframe.py
-    '''
-
-
-
-
-    print("end")
 
 
 
