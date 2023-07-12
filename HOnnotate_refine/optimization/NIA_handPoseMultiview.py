@@ -23,7 +23,7 @@ from loadParameters import LoadCameraMatrix, LoadDistortionParam
 
 FLAGS = flags.FLAGS
 
-flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
+flags.DEFINE_string('db', '230612', 'target db Name') # name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 # flags.DEFINE_string('camID', '0', 'Cam ID')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -167,13 +167,13 @@ def main(argv):
     # camIDset = ['mas', 'sub1', 'sub2', 'sub3']
     mainCamID = 1
     
-    resultDir = os.path.join(baseDir, FLAGS.db + '_hand')
+    resultDir = os.path.join(baseDir, FLAGS.db + '_cam')
     with open(os.path.join(resultDir, "cameraParamsBA.json")) as json_file:
         cameraParams = json.load(json_file)
         cameraParams = {camera: np.array(cameraParams[camera]) for camera in cameraParams}
 
     
-    intrinsicMatrices = LoadCameraMatrix(os.path.join(resultDir, "220809_cameraInfo.txt"))
+    intrinsicMatrices = LoadCameraMatrix(os.path.join(resultDir, "230612_cameraInfo.txt"))
     distCoeffs = {}
     distCoeffs["mas"] = LoadDistortionParam(os.path.join(resultDir, "mas_intrinsic.json"))
     distCoeffs["sub1"] = LoadDistortionParam(os.path.join(resultDir, "sub1_intrinsic.json"))
@@ -188,16 +188,11 @@ def main(argv):
 
     camParamList = intrinsicMatrices, cameraParams, distCoeffs
     
-    
     ### start handpose optimization for each sequences
     rootDir = os.path.join(baseDir, FLAGS.db)
     total_seq = len(os.listdir(rootDir))
     
     for seqIdx, seq in enumerate(sorted(os.listdir(rootDir))):
-        
-        if seqIdx < 5:
-            continue
-        
         d = os.path.join(rootDir, seq)
         if os.path.isdir(d):            
             print("(%s in %s) : %s" % (seqIdx, total_seq, seq))

@@ -122,9 +122,13 @@ def getHandModel():
     chTrans = ch.array([0., 0., 0.5])
 
     fullpose = ch.concatenate([chRot, globalJoints], axis=0)
-    m = load_model_withInputs(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../mano/models/MANO_RIGHT.pkl'), fullpose, chTrans,
-                              globalBeta,
-                              ncomps=15, flat_hand_mean=True)
+    m = load_model_withInputs_poseCoeffs(os.path.join(os.path.dirname(os.path.realpath(__file__)), '../mano/models/MANO_RIGHT.pkl'),
+                                         chRot=chRot,
+                                         chTrans=chTrans,
+                                         chPoseCoeff=globalJoints,
+                                         chBetas=globalBeta,
+                                         ncomps=15, flat_hand_mean=True)
+
 
     return m, chRot, globalJoints, chTrans, globalBeta
 
@@ -296,7 +300,7 @@ def lift2Dto3D(projPtsGT, camMat, filename, img, JVis=np.ones((21,), dtype=np.fl
     return joints3D, poseCoeffCh.r.copy(), betaCh.r.copy(), transCh.r.copy(), loss['joints2D'].r.copy(), m.r.copy()
 
 
-def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=np.ones((21,), dtype=np.float32), trans=None, beta=None, wrist3D = None, withPoseCoeff=True,
+def lift2Dto3DMultiview(metaperFrame, camParamList, camMat, filename, img, JVis=np.ones((21,), dtype=np.float32), trans=None, beta=None, wrist3D = None, withPoseCoeff=False,
                weights=1.0, relDepGT=None, rel3DCoordGT = None, rel3DCoordNormGT = None, img2DGT = None, outDir = None,
                poseCoeffInit=None, transInit=None, betaInit=None, otherImgSet=None, mainCamID=None):
 

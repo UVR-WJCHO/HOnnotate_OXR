@@ -41,6 +41,7 @@ class datasetOXRMultiCamera(datasetBase):
 
         self.dbDir = join(OXR_MULTI_CAMERA_DIR, db)
         self.calibDir = self.dbDir + '_cam'
+        self.handDir = self.dbDir + '_hand'
         
         imgDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'rgb_crop')
         segDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'segmentation', str(camInd), 'raw_seg_results')

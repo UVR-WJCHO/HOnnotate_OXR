@@ -47,6 +47,9 @@ FLAGS(sys.argv)
 baseDir = os.path.join(os.getcwd(), 'dataset')
 handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
 
+rootDir = os.path.join(baseDir, FLAGS.db)
+lenDBTotal = len(os.listdir(rootDir))
+
 ## TODO
 """
     - Issues in camResultDir 
@@ -77,14 +80,31 @@ flag_MVboth = True
 
 
 
-def singleHandOptim(camParamList, metaList, imgList):
+def singleHandOptim(seqName, camParamList, metaList, imgList):
 
     optim = optimizer_torch()
     intrinsicMatrices, extrinsicMatrices, distCoeffs = camParamList
 
     for metas, imgs in zip(metaList, imgList):
+        rgbSet = []
+        depthSet = []
+        camSet = []
+        for name in imgs:
+            camID = name[:-5]
+            rgb = os.path.join(rootDir, seqName, 'rgb_crop', camID, name+'.png')
+            depth = os.path.join(rootDir, seqName, 'depth_crop', camID, name+'.png')
+            seg = os.path.join(rootDir, seqName, 'segmentation', camID, 'raw_seg_results', name+'.png')
+            rgbSet.append(rgb)
+            depthSet.append(depth)
+
+        for camID in camIDset:
+            camSet.append([intrinsicMatrices[camID], extrinsicMatrices[camID]])
+
         # run opitmizer per frame
-        losses, param = optim.run(camParamList, metas, imgs, iter=50)
+        losses, param = optim.run(camSet, metas, rgbSet, depthSet, iter=500)
+        # optim.debug(camSet, metas, rgbSet, depthSet)
+        print("break for debug")
+        break
 
     # dump optimized mano parameters as pkl
     return None
@@ -127,8 +147,6 @@ def getMeta(files, seq):
 
 def main(argv):
     ### Setup ###
-    rootDir = os.path.join(baseDir, FLAGS.db)
-    lenDBTotal = len(os.listdir(rootDir))
 
     ### Multi-view object pose optimization ###
     '''
@@ -187,7 +205,7 @@ def main(argv):
                 metas.append(metasperFrame)
                 imgs.append(imgsperFrame)
 
-            singleHandOptim(camParamList, metas, imgs)
+            singleHandOptim(seqName, camParamList, metas, imgs)
 
 
 
