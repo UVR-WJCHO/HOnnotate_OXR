@@ -21,7 +21,7 @@ import numpy as np
 
 # optimization
 from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
-from renderer_pytorch import optimizer_torch
+from renderer_pytorch import optimizer_torch, optimizer_chumpy
 
 # others
 import cv2
@@ -82,7 +82,7 @@ flag_MVboth = True
 
 def singleHandOptim(seqName, camParamList, metaList, imgList):
 
-    optim = optimizer_torch()
+    optim = optimizer_chumpy()
     intrinsicMatrices, extrinsicMatrices, distCoeffs = camParamList
 
     for metas, imgs in zip(metaList, imgList):
@@ -101,8 +101,8 @@ def singleHandOptim(seqName, camParamList, metaList, imgList):
             camSet.append([intrinsicMatrices[camID], extrinsicMatrices[camID]])
 
         # run opitmizer per frame
-        losses, param = optim.run(camSet, metas, rgbSet, depthSet, iter=500)
-        # optim.debug(camSet, metas, rgbSet, depthSet)
+        # losses, param = optim.run(camSet, metas, rgbSet, depthSet, iter=500)
+        losses, param = optim.debug(camSet, metas, rgbSet, depthSet, iter=500)
         print("break for debug")
         break
 
