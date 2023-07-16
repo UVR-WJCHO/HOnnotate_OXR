@@ -28,51 +28,38 @@ import modules.NIA_utils as NIA_utils
 def init_pytorch3d(camParam=None):
     device = torch.device("cuda:0")
 
-    ### debugging Perspective Camera ###
-    # intrinsic, extrinsic = camParam
-    # K = np.eye(4)
-    # K[:-1, :-1] = intrinsic
-    # K = torch.unsqueeze(torch.FloatTensor(K), 0)
-    # R = torch.unsqueeze(torch.FloatTensor(extrinsic[:, :-1]), 0)
-    # T = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), 0)
-    #
-    # img_size = np.zeros((2))
-    # img_size[0] = cfg.IMG_HEIGHT
-    # img_size[1] = cfg.IMG_WIDTH
-    # img_size = torch.unsqueeze(torch.FloatTensor(img_size), 0)
-    #
-    # cameras = PerspectiveCameras(R=R, T=T, K=K, device=device,image_size=img_size)
+    intrinsic, extrinsic = camParam
 
-    ### Manual fov calculation. wrong ###
-    w, h = 1920, 1080
-    fx, fy = 908.67419434, 908.34960938
-    fov_x = np.rad2deg(2 * np.arctan2(w, 2 * fx))
-    fov_y = np.rad2deg(2 * np.arctan2(h, 2 * fy))
+    image_size = (cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH)
+    focal_l = (intrinsic[0, 0], intrinsic[1, 1])
+    principal_p = (intrinsic[0, -1], intrinsic[1, -1])
+    R = torch.unsqueeze(torch.FloatTensor(extrinsic[:, :-1]), 0)
+    T = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), 0)
 
-    fov = (fov_y + fov_x) / 2.0
+    cameras = PerspectiveCameras(device=device, image_size=(image_size,), focal_length=(focal_l,),
+                                 principal_point=(principal_p,), R=R, T=T, in_ndc=False)
 
-    # Initialize an OpenGL perspective camera.
-    cameras = FoVPerspectiveCameras(fov=fov, device=device)
 
     # Set blend params
     blend_params = BlendParams(sigma=1e-4, gamma=1e-4)
     # Define the settings for rasterization and shading.
 
     raster_settings = RasterizationSettings(
-        image_size=(cfg.IMG_HEIGHT, cfg.IMG_WIDTH),
+        image_size=(cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH),
         blur_radius=np.log(1. / 1e-4 - 1.) * blend_params.sigma,
-        faces_per_pixel=20,
+        faces_per_pixel=1,
         bin_size = None,
         max_faces_per_bin = None
     )
-    silhouette_renderer = MeshRenderer(
-        rasterizer=MeshRasterizer(
-            cameras=cameras,
-            raster_settings=raster_settings
-        ),
-        shader=SoftSilhouetteShader(blend_params=blend_params)
-    )
+    # silhouette_renderer = MeshRenderer(
+    #     rasterizer=MeshRasterizer(
+    #         cameras=cameras,
+    #         raster_settings=raster_settings
+    #     ),
+    #     shader=SoftSilhouetteShader(blend_params=blend_params)
+    # )
     lights = PointLights(device=device, location=((2.0, 2.0, -2.0),))
+
     phong_renderer = MeshRenderer(
         rasterizer=MeshRasterizer(
             cameras=cameras,
@@ -80,13 +67,12 @@ def init_pytorch3d(camParam=None):
         ),
         shader=SoftPhongShader(device=device, cameras=cameras, lights=lights)
     )
-
-    rasterizer_col = MeshRasterizer(
+    rasterizer_depth = MeshRasterizer(
         cameras=cameras,
         raster_settings=raster_settings
     )
 
-    return device, cameras, blend_params, raster_settings, rasterizer_col, lights, phong_renderer
+    return device, cameras, blend_params, raster_settings, rasterizer_depth, lights, phong_renderer
 
 
 def load_mano_model(mano_path, silhouette_renderer, phong_renderer, device):
@@ -127,14 +113,22 @@ class manoFitter(object):
         self.img_input_width = cfg.IMG_WIDTH
         self.img_input_height = cfg.IMG_HEIGHT
 
-    def get_rendered_img(self, img2bb=None):
+    def get_rendered_img(self, img2bb=None, bbox=None):
         self.mano_model.change_render_setting(True)
         _, _, _, _, depth_rendered, img_rendered = self.mano_model()
-        img_rendered = (img_rendered.cpu().data.numpy()[0][:,:,:3]*255.0).astype(np.uint8)
-        depth_rendered = (depth_rendered.cpu().data.numpy()[0][:, :, :3] * 255.0).astype(np.uint8)
 
+        # transfer to cpu
+        img_rendered = (img_rendered.cpu().data.numpy()[0][:,:,:3]*255.0).astype(np.uint8)
+        depth_rendered = depth_rendered.cpu().data.numpy()[0]
         kpts_2d = self.mano_model.kpts_2d_glob[0].cpu().data.numpy()
-        if img2bb is not None:
+
+        # if bbox exist, crop rendered mesh image and project 2D keypoints
+        if bbox is not None and img2bb is not None:
+            # bbox = [x_min, y_min, self.bbox_width, self.bbox_height]
+            bbox = bbox.astype(int)
+            img_rendered = img_rendered[bbox[1]:bbox[1]+bbox[3], bbox[0]:bbox[0]+bbox[2], :]
+            depth_rendered = depth_rendered[bbox[1]:bbox[1] + bbox[3], bbox[0]:bbox[0] + bbox[2], :]
+
             uv1 = np.concatenate((kpts_2d, np.ones_like(kpts_2d[:, :1])), 1)
             kpts_2d = (img2bb @ uv1.T).T
         img_rendered = NIA_utils.paint_kpts(None, img_rendered, kpts_2d)
@@ -385,12 +379,8 @@ class optimizer_torch():
     def run(self, data):
         camSet, rgbSet, depthSet, metas = data
 
-
         # transfer main cam first
         self.mano_fit_tool = manoFitter(camSet[0])
-
-
-
 
         for idx, cam in enumerate(camSet):
             intrinsic, extrinsic = cam
@@ -402,11 +392,11 @@ class optimizer_torch():
             depthPath = depthSet[idx]
             meta = metas[idx]
 
+            bbox = np.copy(meta['bb'])
             img2bb = np.copy(meta['img2bb'])
             mp_GT = np.copy(meta['kpts'])
             kpts_3d_gt = mp_GT
             kpts_2d_gt = mp_GT[:, :2]
-
 
             self.mano_fit_tool.fit_2d_pose(kpts_2d_gt, iter=500)
 
@@ -424,7 +414,7 @@ class optimizer_torch():
             # self.mano_fit_tool.fit_all_pose(kpts_3d_can_pred_np, kpts_2d_glob_gt_np)
 
 
-            rgb, depth = self.mano_fit_tool.get_rendered_img(img2bb=None)
+            rgb, depth = self.mano_fit_tool.get_rendered_img(img2bb=img2bb, bbox=bbox)
             cv2.imshow("depth", depth)
 
             # Display blended image

@@ -253,7 +253,7 @@ class Model(nn.Module):
                 textures=textures
             )
             self.image_render2 = self.renderer2(meshes_world=hand_mesh, R=self.R, T=self.T)
-            self.image_render = self.renderer(meshes_world=hand_mesh, R=self.R, T=self.T).zbuf
+            self.image_render = self.renderer(meshes_world=hand_mesh).zbuf
 
             # Calculate the silhouette loss
         if self.is_loss_seg:
