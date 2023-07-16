@@ -207,14 +207,14 @@ class manoFitter(object):
                       is_debugging=is_debugging)
         self.reset_mano_optimization_var()
 
-    def fit_2d_pose(self, kpts_2d_gt):
+    def fit_2d_pose(self, kpts_2d_gt, iter=300):
         self.mano_model.set_kpts_2d_gt(kpts_2d_gt)
 
         self.mano_model.change_root_grads(True)
         self.mano_model.change_rot_grads(True)
         self.mano_model.change_pose_grads(True)
         optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
-        self.fit_mano(optimizer_adam_mano_fit, lr_scheduler, "all", 300, is_loss_2d_glob=True, \
+        self.fit_mano(optimizer_adam_mano_fit, lr_scheduler, "all", iter, is_loss_2d_glob=True, \
             is_loss_reg=True, is_optimizing=True, is_debugging=True)
         self.reset_mano_optimization_var()
 
@@ -396,7 +396,7 @@ class optimizer_torch():
             intrinsic, extrinsic = cam
 
             self.mano_fit_tool.mano_model.set_cam_intrinsic(intrinsic)
-            self.mano_fit_tool.mano_model.set_up_camera_wRT(extrinsic)
+            self.mano_fit_tool.mano_model.set_cam_extrinsic(extrinsic)
 
             rgbPath = rgbSet[idx]
             depthPath = depthSet[idx]
@@ -408,7 +408,7 @@ class optimizer_torch():
             kpts_2d_gt = mp_GT[:, :2]
 
 
-            self.mano_fit_tool.fit_2d_pose(kpts_2d_gt)
+            self.mano_fit_tool.fit_2d_pose(kpts_2d_gt, iter=500)
 
             #### debug
             #

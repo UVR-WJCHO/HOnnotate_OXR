@@ -59,8 +59,8 @@ class Model(nn.Module):
         self.shape_adjusted = NIA_utils.clip_mano_hand_shape(self.input_shape)
 
         self.camera_position = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
-        self.ups = torch.tensor([0.0,-1.0,1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
-        self.ats = torch.tensor([0.0,0.0,1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
+        self.ups = torch.tensor([0.0,1.0,1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
+        self.ats = torch.tensor([0.0,0.0,-1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
 
         self.image_render = None
         self.image_render2 = None
@@ -72,7 +72,7 @@ class Model(nn.Module):
         self.is_root_only = False
 
         self.is_loss_leap3d = False
-        self.set_up_camera()
+        self.set_up_camera()    # camera for projecting mano model joints, different with camera for rendering mesh
         
         # Inital set up
         self.pose_reg_tensor, self.pose_mean_tensor = NIA_utils.get_pose_constraint_tensor()
@@ -85,9 +85,7 @@ class Model(nn.Module):
 
         self.init_loss_mode()
 
-    def set_cam_intrinsic(self, K):
-        self.K = torch.tensor(K, dtype=torch.float32).cuda()
-    
+
     def set_kpts_3d_glob_leap(self, data):
         self.kpts_3d_glob_leap = torch.from_numpy(data).cuda()[1:, :].reshape((21, 3)) # ignore palm joint
         self.set_xyz_root(self.kpts_3d_glob_leap[self.root_idx:self.root_idx+1, [1, 0, 2]])
@@ -166,14 +164,18 @@ class Model(nn.Module):
         self.is_rot_only = False
         self.is_root_only = False
 
+    def set_cam_intrinsic(self, K):
+        self.K = torch.tensor(K, dtype=torch.float32).cuda()
+
     def set_up_camera(self):
         self.R = look_at_rotation(self.camera_position, at=self.ats, up=self.ups, device=self.device)
         self.T = -torch.bmm(self.R.transpose(1, 2), self.camera_position[:,:,None])[:, :, 0]
 
-    def set_up_camera_wRT(self, extrinsic):
+    def set_cam_extrinsic(self, extrinsic):
         self.R = torch.unsqueeze(torch.FloatTensor(extrinsic[:, :-1]), 0).cuda()
         self.T = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), 0).cuda()
 
+        # why?
         self.R[0, 0, 0] *= -1.0
         self.R[0, 1, 1] *= -1.0
 
