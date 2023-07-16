@@ -25,9 +25,6 @@ import mediapipe as mp
 from modules.utils.processing import augmentation_real
 import numpy as np
 
-# optimization
-from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
-from renderer_pytorch import *
 
 # others
 import cv2
@@ -76,10 +73,8 @@ w = 640
 h = 480
 
 ### Manual Flags (remove after debug) ###
-flag_preprocess = False
+flag_preprocess = True
 flag_segmentation = False
-flag_MVobj = True
-flag_MVboth = True
 
 
 class loadDataset():
@@ -154,6 +149,7 @@ class loadDataset():
 
         image_rows, image_cols, _ = rgb.shape
 
+        idx_to_coordinates = None
         #### extract image bounding box ####
         with mp_hands.Hands(static_image_mode=True, max_num_hands=1, min_detection_confidence=0.3) as hands:
             image = cv2.flip(rgb, 1)
@@ -174,7 +170,8 @@ class loadDataset():
 
         # consider only one hand, if both hands are detected utilize idx_to_coord_1
         # if tracking fails, use the previous bbox
-        idx_to_coord = idx_to_coordinates[0]
+        idx_to_coord = idx_to_coordinates
+
         if idx_to_coord is None:
             bbox = self.prev_bbox
         else:
@@ -223,6 +220,8 @@ class loadDataset():
         imgName = str(camID) + '_' + format(idx, '04') + '.png'
         cv2.imwrite(os.path.join(self.rgbCropDir, imgName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, imgName), procImgSet[1])
+
+
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
@@ -378,7 +377,8 @@ def main(argv):
                     kps = db.getKps(idx, camID=camID)
 
                     bb, img2bb, bb2img, procImgSet = db.procImg(images)
-                    procKps = db.translateKpts(kps, img2bb)
+                    procKps = db.translateKpts(np.copy(kps), img2bb)
+
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     pbar.set_description("(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, lenDBTotal, camID, idx, seqName))
         print("---------------end preprocess---------------")

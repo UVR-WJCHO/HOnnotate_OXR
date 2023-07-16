@@ -23,6 +23,12 @@ from pytorch3d.renderer import (
     TexturesVertex,
     PerspectiveCameras
 )
+
+from pytorch3d.renderer import (
+    FoVPerspectiveCameras, look_at_view_transform, look_at_rotation,
+    RasterizationSettings, MeshRenderer, MeshRasterizer, BlendParams,
+    SoftSilhouetteShader, HardPhongShader, PointLights, TexturesVertex,
+)
 import transforms3d as t3d
 from HOnnotate_refine.eval.utilsEval import showHandJoints
 
@@ -157,10 +163,13 @@ class torchRenderer():
         self.Trans = torch.unsqueeze(torch.zeros(3), 0)
 
 
-        self.Trans[:, 0] = -0.8
-        self.Trans[:, 1] = -0.8
-        self.Trans[:, 2] = 1.0
-        self.camera = PerspectiveCameras(device=self.device, R=self.Rot, T=self.Trans, K=self.K)
+            self.Trans[:, 0] = -0.8
+            self.Trans[:, 1] = -0.8
+            self.Trans[:, 2] = 1.0
+            self.camera = PerspectiveCameras(device=self.device, R=self.Rot, T=self.Trans, K=self.K)
+
+
+
 
     def setCam(self, K, R, T):
         self.camera = PerspectiveCameras(device=self.device, R=R, T=T, K=K)
@@ -238,6 +247,18 @@ class handModel(nn.Module):
         return self.weights
 
 
+class jointModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        weights = torch.zeros(1, 21, 3)    # manolayer parameter
+
+        weights.requires_grad = True
+        self.weights = nn.Parameter(weights)
+
+    def forward(self):
+        return self.weights
+
+
 class optimizer_torch():
     def __init__(self):
         os.environ["CUDA_VISIBLE_DEVICES"] = '0'
@@ -250,6 +271,8 @@ class optimizer_torch():
         self.m.mano_layer.to(self.device)
 
         self.model = handModel().to(self.device)       # model = nn.DataParallel(model)
+        self.joint = jointModel().to(self.device)
+
         self.r = torchRenderer(self.device)
 
         self.optim = torch.optim.Adam(self.model.parameters(), lr=0.1, betas=(0.5, 0.99))
@@ -553,6 +576,152 @@ class optimizer_torch():
 
         return lossperIter, final_param
 
+
+    def debug2(self, camSet, metas, rgbSet, depthSet, iter=50):
+        lossperIter = []
+
+        for idx, camParam in enumerate(camSet):
+            meta = metas[idx]
+            projPtsGT = meta['kpts_crop'][:, 0:2]
+
+        for i in range(iter):
+            print("%d / %d"%(i+1, iter))
+            losses = []
+            curr_param = self.model()
+            self.m(curr_param)
+
+            ## render mesh
+            hand_render = self.r.render(self.m)
+            hand_color = hand_render.col
+            hand_depth = hand_render.depth
+
+            color = torch.squeeze(hand_color).detach().cpu().numpy()
+            depth = torch.squeeze(hand_depth).detach().cpu().numpy()
+            cv2.imshow("c ", color[:, :, :-1])
+            cv2.imshow("d ", depth[:, :])
+            cv2.waitKey(0)
+
+            ### 1. transform mano space pts to world space with renderer camera parameter.
+            # R = torch.squeeze(self.r.Rot)
+            # T = self.r.Trans.T
+            # ext = torch.cat((R, T), axis=-1)
+            # extrinsic = torch.FloatTensor(ext).cuda()
+            #
+            # mano3Dcam = torch.squeeze(self.m.j)
+            # mano4Dcam = torch.concatenate([mano3Dcam, a], axis=1)
+            # projMat = torch.concatenate((extrinsic, h), 0)
+            # inv = torch.linalg.inv(projMat)
+            # mano4Dworld = (inv @ mano4Dcam.T).T
+
+            ### or 2. mano space is world space(w. default camera parameter)
+            mano3Dworld = torch.squeeze(self.m.j)
+            mano4Dworld = torch.concatenate([mano3Dworld, a], axis=1)
+
+            ### or 3. transform to world space with main cam
+            # intrinsic, extrinsic = camSet[0]
+            # intrinsic = torch.FloatTensor(intrinsic).cuda()
+            # extrinsic = torch.FloatTensor(extrinsic).cuda()
+            #
+            # mano3Dcam = torch.squeeze(self.m.j)
+            # mano4Dcam = torch.concatenate([mano3Dcam, a], axis=1)
+            # projMat = torch.concatenate((extrinsic, h), 0)
+            #
+            # mano4Dworld = (torch.linalg.inv(projMat) @ mano4Dcam.T).T
+
+            for idx, camParam in enumerate(camSet):
+                ### get camera parameter for each cam
+                meta = metas[idx]
+                intrinsic, extrinsic = camParam
+                intrinsic = torch.FloatTensor(intrinsic).cuda()
+                extrinsic = torch.FloatTensor(extrinsic).cuda()
+                img2bb = torch.FloatTensor(meta['img2bb']).cuda()
+
+                ### transform world coordinate pts to each camera coordinate
+                mano4Dtargetcam = (extrinsic @ mano4Dworld.T).T
+                projPts = torchProjectPoints(intrinsic, mano4Dtargetcam, isPytorch3DCoords=True)#[jointsMap]
+
+                ### transform camera coordinate pts to cropped region
+                uv1 = torch.concatenate((projPts, torch.ones_like(projPts[:, :1])), 1)
+                projPts = (img2bb @ uv1.T).T
+
+                # get GT 2D keypoints(mediapipe)
+                projPtsGT = meta['kpts_crop'][:, 0:2]
+                if np.isnan(projPtsGT[0, 0]):
+                    continue
+                projPtsGT = torch.FloatTensor(projPtsGT).cuda()
+
+                # compute 2D joint loss per camera
+                loss = self.l1(projPtsGT.to(self.device), projPts.to(self.device))
+                losses.append(loss)
+
+                # # compute depth loss (manual depth)
+                loss = self.l1(mano4Dtargetcam[:, -1], manualDepth)
+                losses.append(loss)
+                break
+
+            ### update ###
+            totalLoss = sum(losses) / len(losses)
+            print(totalLoss)
+
+            self.optim.zero_grad()
+            totalLoss.backward()
+            self.optim.step()
+            lossperIter.append(totalLoss.detach().cpu())
+
+            # camMas = camSet[0]
+            # intrinsic, extrinsic = camMas
+            # K = np.eye(4, dtype=float)
+            # K[:3, :3] = intrinsic
+            # R = extrinsic[:, :-1]
+            # T = extrinsic[:, -1]
+            #
+            # K = torch.unsqueeze(torch.FloatTensor(K), 0)
+            # R = torch.unsqueeze(torch.FloatTensor(R), 0)
+            # T = torch.unsqueeze(torch.FloatTensor(T), 0)
+            #
+            # self.r.setCam(K, R, T)
+
+            curr_param = self.model()
+            self.m(curr_param)
+
+
+            rgbMas = cv2.imread(rgbSet[0])
+            height = rgbMas.shape[0]
+            width = rgbMas.shape[1]
+
+            projPtsGT = metas[0]['kpts_crop'][:, 0:2]
+            rgbGT = showHandJoints(rgbMas.copy(), np.copy(projPtsGT).astype(np.float32), estIn=None,
+                                                 filename=None,
+                                                 upscale=1, lineThickness=3)
+
+            projPts = np.squeeze(projPts.detach().cpu().numpy())[:, 0:2]
+            rgbPred = showHandJoints(rgbMas.copy(), np.copy(projPts).astype(np.float32), estIn=None,
+                                       filename=None,
+                                       upscale=1, lineThickness=3)
+
+            # cv2.imshow("input", rgbMas)
+            cv2.imshow("GT", rgbGT)
+            cv2.imshow("Pred", rgbPred)
+
+            ## render mesh
+            # hand_render = self.r.render(self.m)
+            # hand_color = hand_render.col
+            # hand_depth = hand_render.depth
+            #
+            # color = torch.squeeze(hand_color).detach().cpu().numpy() * 255.0
+            # depth = torch.squeeze(hand_depth).detach().cpu().numpy() * 255.0
+            # cv2.imshow("c ", color[:, :, :-1])
+            # cv2.imshow("d ", depth[:, :])
+            #
+            cv2.waitKey(1)
+
+
+        ### note
+        # mano model joint 0 looks like anchord in 0, 0
+
+        final_param = self.model()
+
+        return lossperIter, final_param
 
 
 
