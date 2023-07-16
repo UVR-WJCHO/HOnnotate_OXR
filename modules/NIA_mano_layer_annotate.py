@@ -23,13 +23,13 @@ def compute_reg_loss(mano_tensor, pose_mean_tensor, pose_reg_tensor):
 
 
 class Model(nn.Module):
-    def __init__(self, mano_path, renderer, renderer2, device, batch_size, root_idx = 0):
+    def __init__(self, mano_path, device, batch_size, root_idx=0):
         super().__init__()
 
         self.device = device
         self.change_render_setting(False)
-        self.renderer = renderer
-        self.renderer2 = renderer2
+        self.renderer_d = None
+        self.renderer_col = None
         self.wrist_idx = 0
         self.mcp_idx = 9
         self.root_idx = root_idx
@@ -62,13 +62,10 @@ class Model(nn.Module):
         self.ups = torch.tensor([0.0,1.0,1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
         self.ats = torch.tensor([0.0,0.0,-1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
 
-        self.image_render = None
-        self.image_render2 = None
-        
-        self.change_root_grads(False)
-        self.change_rot_grads(False)
-        self.change_pose_grads(False)
-        self.change_shape_grads(False)
+        self.image_render_rgb = None
+        self.image_render_d = None
+
+        self.change_grads(root=False, rot=False, pose=False, shape=False)
         self.is_root_only = False
 
         self.is_loss_leap3d = False
@@ -85,7 +82,7 @@ class Model(nn.Module):
 
         self.init_loss_mode()
 
-
+    """
     def set_kpts_3d_glob_leap(self, data):
         self.kpts_3d_glob_leap = torch.from_numpy(data).cuda()[1:, :].reshape((21, 3)) # ignore palm joint
         self.set_xyz_root(self.kpts_3d_glob_leap[self.root_idx:self.root_idx+1, [1, 0, 2]])
@@ -96,10 +93,15 @@ class Model(nn.Module):
             self.set_xyz_root(self.kpts_3d_glob_leap[self.root_idx:self.root_idx+1, [1, 0, 2]])
         else:
             self.kpts_3d_glob_leap = self.kpts_3d_glob_leap + torch.cat((self.xy_root, self.z_root), -1)
-
+    
 
     def set_image_ref(self, image_ref_new):
         self.image_ref, _ = torch.max(torch.tensor(image_ref_new[None,...] > 128, dtype=torch.float32).cuda(), -1)
+    """
+
+    def set_renderer(self, renderer_d, renderer_col):
+        self.renderer_d = renderer_d
+        self.renderer_col = renderer_col
 
     def set_kpts_2d_glob_gt_val(self, kpt_2d_idx, kpt_2d_val):
         self.kpts_2d_idx_set.add(kpt_2d_idx)
@@ -135,6 +137,7 @@ class Model(nn.Module):
         input_pose = input_pose.view(self.batch_size, -1)
         self.input_pose.data = input_pose.clone().detach()
 
+
     def reset_kpts_2d(self):
         self.kpts_2d_idx_set = set()
         self.kpts_2d_glob_ref[...] = 0.0
@@ -157,21 +160,13 @@ class Model(nn.Module):
         self.reset_param_grads()
 
     def reset_param_grads(self):
-        self.change_root_grads(False)
-        self.change_rot_grads(False)
-        self.change_pose_grads(False)
-        self.change_shape_grads(False)
+        self.change_grads(root=False, rot=False, pose=False, shape=False)
         self.is_rot_only = False
         self.is_root_only = False
 
-    def set_cam_intrinsic(self, K):
-        self.K = torch.tensor(K, dtype=torch.float32).cuda()
+    def set_cam_params(self, intrinsic, extrinsic):
+        self.K = torch.tensor(intrinsic, dtype=torch.float32).cuda()
 
-    def set_up_camera(self):
-        self.R = look_at_rotation(self.camera_position, at=self.ats, up=self.ups, device=self.device)
-        self.T = -torch.bmm(self.R.transpose(1, 2), self.camera_position[:,:,None])[:, :, 0]
-
-    def set_cam_extrinsic(self, extrinsic):
         self.R = torch.unsqueeze(torch.FloatTensor(extrinsic[:, :-1]), 0).cuda()
         self.T = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), 0).cuda()
 
@@ -179,22 +174,21 @@ class Model(nn.Module):
         self.R[0, 0, 0] *= -1.0
         self.R[0, 1, 1] *= -1.0
 
+    def set_up_camera(self):
+        self.R = look_at_rotation(self.camera_position, at=self.ats, up=self.ups, device=self.device)
+        self.T = -torch.bmm(self.R.transpose(1, 2), self.camera_position[:,:,None])[:, :, 0]
+
 
     def change_render_setting(self, new_state):
         self.is_rendering = new_state
 
-    def change_root_grads(self, new_state):
-        self.xy_root.requires_grad = new_state
-        self.z_root.requires_grad = new_state
-    
-    def change_rot_grads(self, new_state):
-        self.input_rot.requires_grad = new_state
+    def change_grads(self, root=False, rot=False, pose=False, shape=False):
+        self.xy_root.requires_grad = root
+        self.z_root.requires_grad = root
+        self.input_rot.requires_grad = rot
+        self.input_pose.requires_grad = pose
+        self.input_shape.requires_grad = shape
 
-    def change_pose_grads(self, new_state):
-        self.input_pose.requires_grad = new_state
-
-    def change_shape_grads(self, new_state):
-        self.input_shape.requires_grad = new_state
 
     def init_loss_mode(self):
         self.set_loss_mode(False, False, False, False)
@@ -233,7 +227,6 @@ class Model(nn.Module):
         self.verts = hand_verts/(self.scale)
         self.verts += self.xyz_root[:,None,:]
 
-
         uv_mano_full = projectPoints(hand_joints, self.K)
         uv_mano_full[torch.isnan(uv_mano_full)] = 0.0
         self.kpts_2d_glob = uv_mano_full.clone().detach()
@@ -252,12 +245,12 @@ class Model(nn.Module):
                 faces=faces,
                 textures=textures
             )
-            self.image_render2 = self.renderer2(meshes_world=hand_mesh, R=self.R, T=self.T)
-            self.image_render = self.renderer(meshes_world=hand_mesh).zbuf
+            self.image_render_rgb = self.renderer_col(meshes_world=hand_mesh, R=self.R, T=self.T)
+            self.image_render_d = self.renderer_d(meshes_world=hand_mesh, R=self.R, T=self.T).zbuf
 
             # Calculate the silhouette loss
         if self.is_loss_seg:
-            loss_seg = torch.sum(((self.image_render[..., 3] - self.image_ref) ** 2).view(self.batch_size, -1), -1)
+            loss_seg = torch.sum(((self.image_render_d[..., 3] - self.image_ref) ** 2).view(self.batch_size, -1), -1)
         else:
             loss_seg = 0.0
 
@@ -304,4 +297,4 @@ class Model(nn.Module):
             loss_leap3d = 0.0
 
 
-        return loss_seg, loss_2d, loss_reg, loss_leap3d, self.image_render, self.image_render2
+        return loss_seg, loss_2d, loss_reg, loss_leap3d, self.image_render_d, self.image_render_rgb

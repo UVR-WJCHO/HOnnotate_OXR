@@ -79,11 +79,11 @@ flag_MVobj = True
 flag_MVboth = True
 
 
-def singleHandOptim(seqName, camParamList, metaList, imgList):
+def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
 
-    intrinsicMatrices, extrinsicMatrices, distCoeffs = camParamList
+    intrinsics, extrinsics, distCoeffs = camParamList
 
-    optm = optimizer_torch()
+    optm = optimizer_torch(camIDset, [intrinsics, extrinsics], flag_multi=flag_multi)
 
     # run each frame with set of metas/images
     for metas, imgs in zip(metaList, imgList):
@@ -99,15 +99,21 @@ def singleHandOptim(seqName, camParamList, metaList, imgList):
             depthSet.append(depth)
 
         for camID in camIDset:
-            camSet.append([intrinsicMatrices[camID], extrinsicMatrices[camID]])
+            camSet.append([intrinsics[camID], extrinsics[camID]])
 
         data = [camSet, rgbSet, depthSet, metas]
-        optm.run(data)
+
+        if not flag_multi:
+            optm.run(data)
+        else:
+            optm.run_multiview(data)
+
         print("break for debug")
         break
 
     # dump optimized mano parameters as pkl
     return None
+
 
 def getCam():
     with open(os.path.join(camResultDir, "cameraParamsBA.json")) as json_file:
@@ -205,10 +211,7 @@ def main(argv):
                 metas.append(metasperFrame)
                 imgs.append(imgsperFrame)
 
-            singleHandOptim(seqName, camParamList, metas, imgs)
-
-
-
+            handOptim(seqName, camParamList, metas, imgs, flag_multi=False)
 
     ### Multi-frame pose refinement ###
     '''

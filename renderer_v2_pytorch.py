@@ -25,9 +25,7 @@ from modules.NIA_mano_layer_annotate import Model
 import modules.NIA_utils as NIA_utils
 
 
-def init_pytorch3d(camParam=None):
-    device = torch.device("cuda:0")
-
+def init_pytorch3d(device=None, camParam=None):
     intrinsic, extrinsic = camParam
 
     image_size = (cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH)
@@ -38,7 +36,6 @@ def init_pytorch3d(camParam=None):
 
     cameras = PerspectiveCameras(device=device, image_size=(image_size,), focal_length=(focal_l,),
                                  principal_point=(principal_p,), R=R, T=T, in_ndc=False)
-
 
     # Set blend params
     blend_params = BlendParams(sigma=1e-4, gamma=1e-4)
@@ -51,16 +48,10 @@ def init_pytorch3d(camParam=None):
         bin_size = None,
         max_faces_per_bin = None
     )
-    # silhouette_renderer = MeshRenderer(
-    #     rasterizer=MeshRasterizer(
-    #         cameras=cameras,
-    #         raster_settings=raster_settings
-    #     ),
-    #     shader=SoftSilhouetteShader(blend_params=blend_params)
-    # )
+
     lights = PointLights(device=device, location=((2.0, 2.0, -2.0),))
 
-    phong_renderer = MeshRenderer(
+    renderer_rgb = MeshRenderer(
         rasterizer=MeshRasterizer(
             cameras=cameras,
             raster_settings=raster_settings
@@ -72,24 +63,19 @@ def init_pytorch3d(camParam=None):
         raster_settings=raster_settings
     )
 
-    return device, cameras, blend_params, raster_settings, rasterizer_depth, lights, phong_renderer
+    # silhouette_renderer = MeshRenderer(
+    #     rasterizer=MeshRasterizer(
+    #         cameras=cameras,
+    #         raster_settings=raster_settings
+    #     ),
+    #     shader=SoftSilhouetteShader(blend_params=blend_params)
+    # )
 
+    return cameras, blend_params, raster_settings, lights, rasterizer_depth, renderer_rgb
 
-def load_mano_model(mano_path, silhouette_renderer, phong_renderer, device):
-    root_idx = 0
-    mano_model = Model(
-        mano_path = mano_path,
-        renderer = silhouette_renderer,
-        renderer2 = phong_renderer,
-        device = device,
-        batch_size = 1,
-        root_idx = root_idx).to(device)
-    return mano_model
 
 class manoFitter(object):
-    def __init__(self, camParam):
-
-
+    def __init__(self, camIDset, camParams, flag_multi=False):
         self.lr_rot_init = 1.0
         self.lr_pose_init = 0.2
         self.lr_xyz_root_init = 1.0
@@ -101,10 +87,32 @@ class manoFitter(object):
         self.img_input_height = None
         self.img_input_width = None
 
+        self.device = torch.device("cuda:0")
+
+        # Multi-view setting
+        self.camIDset = camIDset
+        self.renderer_depth_list = []
+        self.renderer_col_list = []
+
         # Prep pytorch 3d for visualization
-        self.device, self.cameras, self.blend_params, self.raster_settings, self.silhouette_renderer, \
-            self.lights, self.phong_renderer = init_pytorch3d(camParam)
-        self.mano_model = load_mano_model(cfg.MANO_ROOT, self.silhouette_renderer, self.phong_renderer, self.device)
+        self.intrinsicSet, self.extrinsicSet = camParams
+
+        if not flag_multi:
+            camParam = [self.intrinsicSet['mas'], self.extrinsicSet['mas']]
+
+            _, _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
+            self.renderer_depth_list.append(renderer_depth)
+            self.renderer_col_list.append(renderer_col)
+
+        else:
+            for camID in camIDset:
+                camParam = [self.intrinsicSet[camID], self.extrinsicSet[camID]]
+
+                _, _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
+                self.renderer_depth_list.append(renderer_depth)
+                self.renderer_col_list.append(renderer_col)
+
+        self.mano_model = Model(mano_path=cfg.MANO_ROOT, device=self.device, batch_size=1, root_idx=0).to(self.device)
 
         self.mano_model.change_render_setting(True)
         self.optimizer_adam_mano_fit_all = None
@@ -112,6 +120,9 @@ class manoFitter(object):
 
         self.img_input_width = cfg.IMG_WIDTH
         self.img_input_height = cfg.IMG_HEIGHT
+
+    def change_renderer_cam(self, camID):
+        self.mano_model.set_cam_params(self.intrinsicSet[camID], self.extrinsicSet[camID])
 
     def get_rendered_img(self, img2bb=None, bbox=None):
         self.mano_model.change_render_setting(True)
@@ -134,89 +145,55 @@ class manoFitter(object):
         img_rendered = NIA_utils.paint_kpts(None, img_rendered, kpts_2d)
         return img_rendered, depth_rendered
 
-    def fit_3d_can_init(self, kpts_3d_can):
-        # Set 3D target
-        kpts_3d_can = kpts_3d_can.reshape(-1, 3)
-        kpts_3d_can -= kpts_3d_can[0]
-        kpts_3d_glob = kpts_3d_can * cfg.mano_key_bone_len
-        self.mano_model.set_kpts_3d_glob_leap_no_palm(kpts_3d_glob)
-
-        is_debugging = True
-        # Step1: fit canonical pose using canonical 3D kpts
-        self.mano_model.change_rot_grads(True)
-        self.mano_model.set_rot_only()
-        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('rot')
-        self.fit_mano(optimizer_adam_mano_fit, lr_scheduler, "rot", 50, is_loss_leap3d=True, is_optimizing=True, \
-                      is_debugging=is_debugging)
-        self.reset_mano_optimization_var()
-
-        self.mano_model.change_rot_grads(True)
-        self.mano_model.change_pose_grads(True)
-        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
-        self.fit_mano(optimizer_adam_mano_fit, lr_scheduler, "pose", 50, is_loss_leap3d=True, is_loss_reg=True, \
-                      is_optimizing=True, is_debugging=is_debugging)
-        self.reset_mano_optimization_var()
-
-    def fit_xyz_root_init(self, kpts_2d_glob):
-        # Scale kpts 2d glob to match pytorch 3d resolution
-        # assert self.img_input_height is not None
-        # kpts_2d_glob = kpts_2d_glob * np.array([float(cfg.IMG_HEIGHT) / self.img_input_height, \
-        #                                         float(cfg.IMG_WIDTH) / self.img_input_width])
-
-        is_debugging = True
-
-        # Step2: fit xyz root using global 2D kpts
-        self.mano_model.set_xyz_root(torch.tensor([0, 0, 50.0]).view(1, -1).cuda())
-        joint_idx_set = set([0, 1, 5, 9, 13, 17])
-        for joint_idx, kpt_2d_glob in enumerate(kpts_2d_glob):
-            if joint_idx in joint_idx_set:
-                self.mano_model.set_kpts_2d_glob_gt_val(joint_idx, kpt_2d_glob)
-        self.mano_model.change_root_grads(True)
-        optimizer_adam_mano_fit_xyz_root, lr_scheduler = self.reset_mano_optimizer('xyz_root')
-        self.fit_mano(optimizer_adam_mano_fit_xyz_root, lr_scheduler, "xyz_root", 50, is_loss_2d_glob=True, \
-                      is_optimizing=True, is_debugging=is_debugging)
-        self.reset_mano_optimization_var()
-
-    def fit_all_pose(self, kpts_3d_can, kpts_2d_glob):
-        # Step final: fit all params using global 2D and canonical 3D kpts
-        # Set 3D target
-        kpts_3d_can = kpts_3d_can.reshape(-1, 3)
-        kpts_3d_can -= kpts_3d_can[0]
-        kpts_3d_glob = kpts_3d_can * cfg.mano_key_bone_len
-        self.mano_model.set_kpts_3d_glob_leap_no_palm(kpts_3d_glob, with_xyz_root=True)
-
-        is_debugging = True
-
-        for joint_idx, kpt_2d_glob in enumerate(kpts_2d_glob):
-            self.mano_model.set_kpts_2d_glob_gt_val(joint_idx, kpt_2d_glob)
-        self.mano_model.change_root_grads(True)
-        self.mano_model.change_rot_grads(True)
-        self.mano_model.change_pose_grads(True)
-        self.mano_model.change_shape_grads(True)
-        if self.optimizer_adam_mano_fit_all is None:
-            self.optimizer_adam_mano_fit_all, self.lr_scheduler_all = self.reset_mano_optimizer('all')
-        num_iters = 50
-        self.fit_mano(self.optimizer_adam_mano_fit_all, self.lr_scheduler_all, "all", num_iters, \
-                      is_loss_2d_glob=True, is_loss_leap3d=True, is_loss_reg=True, is_optimizing=True,
-                      is_debugging=is_debugging)
-        self.reset_mano_optimization_var()
-
     def fit_2d_pose(self, kpts_2d_gt, iter=300):
+        self.mano_model.set_renderer(self.renderer_depth_list[0], self.renderer_col_list[0])
         self.mano_model.set_kpts_2d_gt(kpts_2d_gt)
 
-        self.mano_model.change_root_grads(True)
-        self.mano_model.change_rot_grads(True)
-        self.mano_model.change_pose_grads(True)
+        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=False)
         optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
-        self.fit_mano(optimizer_adam_mano_fit, lr_scheduler, "all", iter, is_loss_2d_glob=True, \
-            is_loss_reg=True, is_optimizing=True, is_debugging=True)
+
+        self.fit_mano(optimizer_adam_mano_fit, "all", iter, is_loss_2d_glob=True, \
+            is_loss_reg=True, is_debugging=True)
+        self.reset_mano_optimization_var()
+
+    def fit_multi2d_pose(self, rgbSet, depthSet, metas, iter=300):
+        ### Procedure ###
+        # 0. consider only 2D kpts GT of each cam
+        # 1. For each camera, set kpts(/mask/depth) GT in manoModel, calculate loss, save loss_list
+        # 2. backpropagate losses
+
+        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=False)
+        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
+
+        # for idx, (rgbPath, depthPath, meta) in enumerate(zip(rgbSet, depthSet, metas)):
+        #     kpts_2d_gt = np.copy(meta['kpts'])[:, :2]
+
+        # TODO
+        # need to modify fit_mano function
+
+        # self.change_renderer_cam(self.camIDset[idx])
+        # self.mano_model.set_kpts_2d_gt(kpts_2d_gt)
+
+        self.fit_mano(optimizer_adam_mano_fit, "all", iter, is_loss_2d_glob=True, \
+            is_loss_reg=True, is_debugging=True)
+
         self.reset_mano_optimization_var()
 
 
-    def fit_mano(self, optimizer, lr_scheduler, mode, iter_fit, is_loss_seg=False, \
-                 is_loss_2d_glob=False, is_loss_leap3d=False, is_loss_reg=False, is_optimizing=True, \
+    def compute_loss(self, optimizer, mode, is_loss_seg=False, \
+                 is_loss_2d_glob=False, is_loss_leap3d=False, is_loss_reg=False, \
                  best_performance=True, is_debugging=True, is_visualizing=False,
                  show_progress=False):
+        self.mano_model.set_loss_mode(is_loss_seg=is_loss_seg, is_loss_2d_glob=is_loss_2d_glob,
+                                      is_loss_leap3d=is_loss_leap3d, is_loss_reg=is_loss_reg)
+        self.mano_model.change_render_setting(False)
+
+
+    def fit_mano(self, optimizer, mode, iter_fit, is_loss_seg=False, \
+                 is_loss_2d_glob=False, is_loss_leap3d=False, is_loss_reg=False, \
+                 best_performance=True, is_debugging=True, is_visualizing=False,
+                 show_progress=False):
+
         self.mano_model.set_loss_mode(is_loss_seg=is_loss_seg, is_loss_2d_glob=is_loss_2d_glob,
                                       is_loss_leap3d=is_loss_leap3d, is_loss_reg=is_loss_reg)
         self.mano_model.change_render_setting(False)
@@ -227,16 +204,11 @@ class manoFitter(object):
         lr_stage = 3
         update_finished = False
 
-        if not best_performance:
-            rot_th = 20000
-            pose_th = 20000
-            xyz_root_th = 2000
-        else:
-            rot_th = 20000
-            pose_th = 20000
-            xyz_root_th = 1000
+        rot_th = 20000
+        pose_th = 20000
+        xyz_root_th = 1000
 
-        while not update_finished and is_optimizing:
+        while not update_finished:
             loss_seg_batch, loss_2d_glob_batch, loss_reg_batch, loss_leap3d_batch, _, _ = self.mano_model()
 
             loss_total = 0
@@ -294,17 +266,14 @@ class manoFitter(object):
             if iter_count >= iter_fit:
                 update_finished = True
 
-            if is_optimizing:
-                optimizer.zero_grad()
-                loss_total.backward(retain_graph=True)
-                optimizer.step()
+            optimizer.zero_grad()
+            loss_total.backward(retain_graph=True)
+            optimizer.step()
 
-                # Adjust pinky
-                # with torch.no_grad():
-                #     self.mano_model.input_pose[0, cfg.fin4_ver_fix_idx - 3] = \
-                #         -self.mano_model.input_pose[0, cfg.fin4_ver_idx2 - 3]
-            else:
-                update_finished = True
+            # Adjust pinky
+            # with torch.no_grad():
+            #     self.mano_model.input_pose[0, cfg.fin4_ver_fix_idx - 3] = \
+            #         -self.mano_model.input_pose[0, cfg.fin4_ver_idx2 - 3]
 
         if is_debugging:
             print("Optimization stopped. Iter = {}".format(iter_count))
@@ -372,21 +341,98 @@ class manoFitter(object):
         self.loss_xyz_root_best = float('inf')
         self.loss_all_best = float('inf')
 
+# backup fitting function
+"""
+    def fit_3d_can_init(self, kpts_3d_can):
+        # Set 3D target
+        kpts_3d_can = kpts_3d_can.reshape(-1, 3)
+        kpts_3d_can -= kpts_3d_can[0]
+        kpts_3d_glob = kpts_3d_can * cfg.mano_key_bone_len
+        self.mano_model.set_kpts_3d_glob_leap_no_palm(kpts_3d_glob)
+
+        is_debugging = True
+        # Step1: fit canonical pose using canonical 3D kpts
+        self.mano_model.change_rot_grads(True)
+        self.mano_model.set_rot_only()
+        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('rot')
+        self.fit_mano(optimizer_adam_mano_fit, lr_scheduler, "rot", 50, is_loss_leap3d=True, is_optimizing=True, \
+                      is_debugging=is_debugging)
+        self.reset_mano_optimization_var()
+
+        self.mano_model.change_rot_grads(True)
+        self.mano_model.change_pose_grads(True)
+        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
+        self.fit_mano(optimizer_adam_mano_fit, lr_scheduler, "pose", 50, is_loss_leap3d=True, is_loss_reg=True, \
+                      is_optimizing=True, is_debugging=is_debugging)
+        self.reset_mano_optimization_var()
+
+    def fit_xyz_root_init(self, kpts_2d_glob):
+        # Scale kpts 2d glob to match pytorch 3d resolution
+        # assert self.img_input_height is not None
+        # kpts_2d_glob = kpts_2d_glob * np.array([float(cfg.IMG_HEIGHT) / self.img_input_height, \
+        #                                         float(cfg.IMG_WIDTH) / self.img_input_width])
+
+        is_debugging = True
+
+        # Step2: fit xyz root using global 2D kpts
+        self.mano_model.set_xyz_root(torch.tensor([0, 0, 50.0]).view(1, -1).cuda())
+        joint_idx_set = set([0, 1, 5, 9, 13, 17])
+        for joint_idx, kpt_2d_glob in enumerate(kpts_2d_glob):
+            if joint_idx in joint_idx_set:
+                self.mano_model.set_kpts_2d_glob_gt_val(joint_idx, kpt_2d_glob)
+        self.mano_model.change_root_grads(True)
+        optimizer_adam_mano_fit_xyz_root, lr_scheduler = self.reset_mano_optimizer('xyz_root')
+        self.fit_mano(optimizer_adam_mano_fit_xyz_root, lr_scheduler, "xyz_root", 50, is_loss_2d_glob=True, \
+                      is_optimizing=True, is_debugging=is_debugging)
+        self.reset_mano_optimization_var()
+
+    def fit_all_pose(self, kpts_3d_can, kpts_2d_glob):
+        # Step final: fit all params using global 2D and canonical 3D kpts
+        # Set 3D target
+        kpts_3d_can = kpts_3d_can.reshape(-1, 3)
+        kpts_3d_can -= kpts_3d_can[0]
+        kpts_3d_glob = kpts_3d_can * cfg.mano_key_bone_len
+        self.mano_model.set_kpts_3d_glob_leap_no_palm(kpts_3d_glob, with_xyz_root=True)
+
+        is_debugging = True
+
+        for joint_idx, kpt_2d_glob in enumerate(kpts_2d_glob):
+            self.mano_model.set_kpts_2d_glob_gt_val(joint_idx, kpt_2d_glob)
+        self.mano_model.change_root_grads(True)
+        self.mano_model.change_rot_grads(True)
+        self.mano_model.change_pose_grads(True)
+        self.mano_model.change_shape_grads(True)
+        if self.optimizer_adam_mano_fit_all is None:
+            self.optimizer_adam_mano_fit_all, self.lr_scheduler_all = self.reset_mano_optimizer('all')
+        num_iters = 50
+        self.fit_mano(self.optimizer_adam_mano_fit_all, self.lr_scheduler_all, "all", num_iters, \
+                      is_loss_2d_glob=True, is_loss_leap3d=True, is_loss_reg=True, is_optimizing=True,
+                      is_debugging=is_debugging)
+        self.reset_mano_optimization_var()
+"""
+
+
+
 class optimizer_torch():
-    def __init__(self):
-        from modules.HandsForAll.kpts_global_projector import kpts_global_projector
-        self.kpts_global_project_tool = kpts_global_projector('mano_hand', foc_l=908.67, cam_h=cfg.IMG_HEIGHT, cam_w=cfg.IMG_WIDTH)
+    def __init__(self, camIDset, camSet, flag_multi=False):
+        self.camIDset = camIDset
+        if not flag_multi:
+            print("initialize optimizer for single-view(master cam)")
+            self.mano_fit_tool = manoFitter(camIDset, camSet, flag_multi=flag_multi)
+        else:
+            print("initialize optimizer for multi-view")
+            self.mano_fit_tool = manoFitter(camIDset, camSet, flag_multi=flag_multi)
+
+
     def run(self, data):
         camSet, rgbSet, depthSet, metas = data
 
         # transfer main cam first
-        self.mano_fit_tool = manoFitter(camSet[0])
 
         for idx, cam in enumerate(camSet):
             intrinsic, extrinsic = cam
 
-            self.mano_fit_tool.mano_model.set_cam_intrinsic(intrinsic)
-            self.mano_fit_tool.mano_model.set_cam_extrinsic(extrinsic)
+            self.mano_fit_tool.mano_model.set_cam_params(intrinsic, extrinsic)
 
             rgbPath = rgbSet[idx]
             depthPath = depthSet[idx]
@@ -400,20 +446,6 @@ class optimizer_torch():
 
             self.mano_fit_tool.fit_2d_pose(kpts_2d_gt, iter=500)
 
-            #### debug
-            #
-            # img_debug = NIA_utils.paint_kpts(None, rgb, kpts_2d_glob_gt_np)
-            # cv2.imshow("debug gt kpts", img_debug)
-            # cv2.waitKey(0)
-
-            # # # Fit xyz root
-            # self.mano_fit_tool.mano_model.set_xyz_root(torch.from_numpy(kpts_3d_can_pred_np[0, :]).cuda())
-            #
-            #
-            # # Fit pose
-            # self.mano_fit_tool.fit_all_pose(kpts_3d_can_pred_np, kpts_2d_glob_gt_np)
-
-
             rgb, depth = self.mano_fit_tool.get_rendered_img(img2bb=img2bb, bbox=bbox)
             cv2.imshow("depth", depth)
 
@@ -426,6 +458,37 @@ class optimizer_torch():
 
             print("only master cam")
             break
+
+    def run_multiview(self, data):
+        camSet, rgbSet, depthSet, metas = data
+
+        self.mano_fit_tool.fit_multi2d_pose(rgbSet, depthSet, metas, iter=500)
+
+        # visualization of each cam results
+        for idx, (rgbPath, depthPath, meta) in enumerate(zip(rgbSet, depthSet, metas)):
+            # change renderer cam of hand model
+            self.mano_fit_tool.change_renderer_cam(self.camIDset[idx])
+
+            bbox = np.copy(meta['bb'])
+            img2bb = np.copy(meta['img2bb'])
+            kpts_2d_gt = np.copy(meta['kpts'])[:, :2]
+
+            rgb_input = np.asarray(cv2.imread(rgbPath))
+            rgb_GT = NIA_utils.paint_kpts(None, np.copy(rgb_input), kpts_2d_gt)
+            rgb_mano, depth_mano = self.mano_fit_tool.get_rendered_img(img2bb=img2bb, bbox=bbox)
+
+            # Display blended image
+            rgb_blend = cv2.addWeighted(rgb_input, 0.5, rgb_mano, 0.7, 0)
+
+            imgName_blend = "rgb_blend_" + str(self.camIDset[idx])
+            imgName_GT = "rgb_GT" + str(self.camIDset[idx])
+            imgName_depth = "depth" + str(self.camIDset[idx])
+            cv2.imshow(imgName_blend, rgb_blend)
+            cv2.imshow(imgName_GT, rgb_GT)
+            cv2.imshow(imgName_depth, depth_mano)
+            cv2.waitKey(0)
+
+
 
 if __name__ == '__main__':
    print("l")
