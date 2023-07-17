@@ -25,6 +25,8 @@ from modules.NIA_mano_layer_annotate import Model
 import modules.NIA_utils as NIA_utils
 
 
+DEBUG_IDX = 3
+
 def init_pytorch3d(device=None, camParam=None):
     intrinsic, extrinsic = camParam
 
@@ -114,6 +116,7 @@ class manoFitter(object):
 
         self.mano_model = Model(mano_path=cfg.MANO_ROOT, device=self.device, batch_size=1, root_idx=0).to(self.device)
 
+        self.mano_model.set_renderer(self.renderer_depth_list[0], self.renderer_col_list[0])
         self.mano_model.change_render_setting(True)
         self.optimizer_adam_mano_fit_all = None
         self.lr_scheduler_all = None
@@ -121,17 +124,22 @@ class manoFitter(object):
         self.img_input_width = cfg.IMG_WIDTH
         self.img_input_height = cfg.IMG_HEIGHT
 
-    def change_renderer_cam(self, camID):
-        self.mano_model.set_cam_params(self.intrinsicSet[camID], self.extrinsicSet[camID])
+
+    def change_renderer_cam(self, idx):
+        camID = self.camIDset[idx]
+        self.mano_model.set_renderer(self.renderer_depth_list[idx], self.renderer_col_list[idx])
+        self.mano_model.set_cam_params(self.intrinsicSet['mas'], self.extrinsicSet['mas'])
 
     def get_rendered_img(self, img2bb=None, bbox=None):
         self.mano_model.change_render_setting(True)
-        _, _, _, _, depth_rendered, img_rendered = self.mano_model()
+        _, _, _, _, depth_rendered, img_rendered, hand_joints = self.mano_model()
+
+        # mano_3Djoint = hand_joints.cpu().data.numpy()[0]
 
         # transfer to cpu
         img_rendered = (img_rendered.cpu().data.numpy()[0][:,:,:3]*255.0).astype(np.uint8)
         depth_rendered = depth_rendered.cpu().data.numpy()[0]
-        kpts_2d = self.mano_model.kpts_2d_glob[0].cpu().data.numpy()
+        kpts_2d = self.mano_model.kpts_2d[0].cpu().data.numpy()
 
         # if bbox exist, crop rendered mesh image and project 2D keypoints
         if bbox is not None and img2bb is not None:
@@ -145,57 +153,46 @@ class manoFitter(object):
         img_rendered = NIA_utils.paint_kpts(None, img_rendered, kpts_2d)
         return img_rendered, depth_rendered
 
-    def fit_2d_pose(self, kpts_2d_gt, iter=300):
+    def fit_2d_pose(self, cam, kpts_2d_gt, iter=300):
+        intrinsic, extrinsic = cam
+        self.mano_model.set_cam_params(intrinsic, extrinsic)
         self.mano_model.set_renderer(self.renderer_depth_list[0], self.renderer_col_list[0])
+
         self.mano_model.set_kpts_2d_gt(kpts_2d_gt)
 
         self.mano_model.change_grads(root=True, rot=True, pose=True, shape=False)
         optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
 
-        self.fit_mano(optimizer_adam_mano_fit, "all", iter, is_loss_2d_glob=True, \
+        self.fit_mano(optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
             is_loss_reg=True, is_debugging=True)
         self.reset_mano_optimization_var()
 
-    def fit_multi2d_pose(self, rgbSet, depthSet, metas, iter=300):
-        ### Procedure ###
-        # 0. consider only 2D kpts GT of each cam
-        # 1. For each camera, set kpts(/mask/depth) GT in manoModel, calculate loss, save loss_list
-        # 2. backpropagate losses
+    def fit_multi2d_pose(self, camSet, rgbSet, depthSet, metas, iter=300):
 
-        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=False)
+        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=True)
         optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
 
-        # for idx, (rgbPath, depthPath, meta) in enumerate(zip(rgbSet, depthSet, metas)):
-        #     kpts_2d_gt = np.copy(meta['kpts'])[:, :2]
-
-        # TODO
-        # need to modify fit_mano function
-
-        # self.change_renderer_cam(self.camIDset[idx])
-        # self.mano_model.set_kpts_2d_gt(kpts_2d_gt)
-
-        self.fit_mano(optimizer_adam_mano_fit, "all", iter, is_loss_2d_glob=True, \
-            is_loss_reg=True, is_debugging=True)
+        self.fit_mano_multiview(camSet, rgbSet, depthSet, metas, optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
+            is_loss_reg=True, is_loss_depth=False, is_debugging=True)
 
         self.reset_mano_optimization_var()
 
 
     def compute_loss(self, optimizer, mode, is_loss_seg=False, \
-                 is_loss_2d_glob=False, is_loss_leap3d=False, is_loss_reg=False, \
+                 is_loss_2d=False, is_loss_leap3d=False, is_loss_reg=False, \
                  best_performance=True, is_debugging=True, is_visualizing=False,
                  show_progress=False):
-        self.mano_model.set_loss_mode(is_loss_seg=is_loss_seg, is_loss_2d_glob=is_loss_2d_glob,
+        self.mano_model.set_loss_mode(is_loss_seg=is_loss_seg, is_loss_2d=is_loss_2d,
                                       is_loss_leap3d=is_loss_leap3d, is_loss_reg=is_loss_reg)
         self.mano_model.change_render_setting(False)
 
 
     def fit_mano(self, optimizer, mode, iter_fit, is_loss_seg=False, \
-                 is_loss_2d_glob=False, is_loss_leap3d=False, is_loss_reg=False, \
+                 is_loss_2d=False, is_loss_reg=False, \
                  best_performance=True, is_debugging=True, is_visualizing=False,
                  show_progress=False):
 
-        self.mano_model.set_loss_mode(is_loss_seg=is_loss_seg, is_loss_2d_glob=is_loss_2d_glob,
-                                      is_loss_leap3d=is_loss_leap3d, is_loss_reg=is_loss_reg)
+        self.mano_model.set_loss_mode(is_loss_seg=is_loss_seg, is_loss_2d=is_loss_2d, is_loss_reg=is_loss_reg)
         self.mano_model.change_render_setting(False)
 
         if is_debugging:
@@ -209,31 +206,28 @@ class manoFitter(object):
         xyz_root_th = 1000
 
         while not update_finished:
-            loss_seg_batch, loss_2d_glob_batch, loss_reg_batch, loss_leap3d_batch, _, _ = self.mano_model()
+            loss_seg_batch, loss_2d_batch, loss_reg_batch, _, _, _ = self.mano_model()
 
             loss_total = 0
             loss_seg_sum = 0
-            loss_2d_glob_sum = 0
+            loss_2d_sum = 0
             loss_3d_can_sum = 0
             loss_reg_sum = 0
             loss_leap3d_sum = 0
             if is_loss_seg:
                 loss_seg_sum = torch.sum(loss_seg_batch)
                 loss_total += loss_seg_sum
-            if is_loss_2d_glob:
-                loss_2d_glob_sum = torch.sum(loss_2d_glob_batch)
-                loss_total += loss_2d_glob_sum
+            if is_loss_2d:
+                loss_2d_sum = torch.sum(loss_2d_batch)
+                loss_total += loss_2d_sum
             if is_loss_reg:
                 loss_reg_sum = torch.sum(loss_reg_batch)
                 loss_total += loss_reg_sum
-            if is_loss_leap3d:
-                loss_leap3d_sum = 10000 * torch.sum(loss_leap3d_batch)  # original 100000
-                loss_total += loss_leap3d_sum
 
             if is_debugging and iter_count % 1 == 0:
                 print(
                     "[{}] Fit loss total {:.5f}, loss 2d {:.2f}, loss 3d {:.5f}, loss leap3d {:.2f}, loss reg {:.2f}, " \
-                    .format(iter_count, float(loss_total), float(loss_2d_glob_sum), float(loss_3d_can_sum), \
+                    .format(iter_count, float(loss_total), float(loss_2d_sum), float(loss_3d_can_sum), \
                             float(loss_leap3d_sum), float(loss_reg_sum)))
 
             iter_count += 1
@@ -248,19 +242,19 @@ class manoFitter(object):
                     update_finished = True
 
             if mode == 'xyz_root':
-                if loss_2d_glob_sum < xyz_root_th:
+                if loss_2d_sum < xyz_root_th:
                     update_finished = True
 
             if mode == 'all':
                 if not best_performance:
                     if iter_count >= 10:
-                        if loss_2d_glob_sum < 1500:
+                        if loss_2d_sum < 1500:
                             update_finished = True
                     else:
-                        if loss_2d_glob_sum < 1000:
+                        if loss_2d_sum < 1000:
                             update_finished = True
                 else:
-                    if loss_2d_glob_sum < 1000:
+                    if loss_2d_sum < 1000:
                         update_finished = True
 
             if iter_count >= iter_fit:
@@ -280,12 +274,118 @@ class manoFitter(object):
 
         if is_visualizing or show_progress:
             self.mano_model.change_render_setting(True)
-            _, _, _, _, _, img_render = self.mano_model()
+            _, _, _, _, _, img_render, _ = self.mano_model()
             img_render = (img_render.cpu().data.numpy()[0][:, :, :3] * 255.0).astype(np.uint8)
-            img_render = NIA_utils.paint_kpts(None, img_render, self.mano_model.kpts_2d_glob[0].cpu().data.numpy())
+            img_render = NIA_utils.paint_kpts(None, img_render, self.mano_model.kpts_2d[0].cpu().data.numpy())
             return img_render
         else:
             self.mano_model()
+
+    def fit_mano_multiview(self, camSet, rgbSet, depthSet, metas, optimizer, mode, iter_fit, is_loss_seg=False, \
+                 is_loss_2d=False, is_loss_reg=False, is_loss_depth=True, is_debugging=True, is_visualizing=False, show_progress=False):
+
+        self.mano_model.set_loss_mode(is_loss_seg, is_loss_2d, is_loss_reg, is_loss_depth)
+        self.mano_model.change_render_setting(False)
+
+        if is_debugging:
+            print("Fitting {}".format(mode))
+        iter_count = 0
+        lr_stage = 3
+        update_finished = False
+
+        # rot_th = 20000
+        # pose_th = 20000
+        xyz_root_th = 1000
+
+        while not update_finished:
+
+            loss_total = 0
+            loss_seg_sum = 0
+            loss_2d_sum = 0
+            loss_reg_sum = 0
+            loss_dep_sum = 0
+
+            for camIdx, camID in enumerate(self.camIDset):
+                if not camIdx == DEBUG_IDX:
+                    continue
+                intrinsic, extrinsic = camSet[camIdx]
+                self.mano_model.set_cam_params(intrinsic, extrinsic)
+                # self.mano_model.set_renderer(self.renderer_depth_list[camIdx], self.renderer_col_list[camIdx])
+
+                meta = metas[camIdx]
+                kpts_GT = np.copy(meta['kpts'])
+                # check if the view has valid GT value
+                if np.isnan(kpts_GT).any():
+                    continue
+
+                kpts_2d_gt = kpts_GT[:, :2]
+                self.mano_model.set_kpts_2d_gt(kpts_2d_gt)
+
+                depth = depthSet[camIdx] / 10.0
+                self.mano_model.set_depthmap(depth)
+
+                bbox = np.copy(meta['bb'])
+                self.mano_model.set_bbox(bbox)
+
+                loss_seg_batch, loss_2d_batch, loss_reg_batch, loss_dep_batch, _, _, _ = self.mano_model()
+
+                if is_loss_seg:
+                    loss_seg_sum = torch.sum(loss_seg_batch)
+                    loss_total += loss_seg_sum
+                if is_loss_2d:
+                    loss_2d_sum = torch.sum(loss_2d_batch)
+                    loss_total += loss_2d_sum
+                if is_loss_reg:
+                    loss_reg_sum = torch.sum(loss_reg_batch)
+                    loss_total += loss_reg_sum
+                if is_loss_depth:
+                    loss_dep_sum = torch.sum(loss_dep_batch)
+                    loss_total += loss_dep_sum
+
+            if is_debugging and iter_count % 1 == 0:
+                print(
+                    "[{}] Fit loss total {:.5f}, loss seg {:.2f}, loss 2d {:.2f}, loss reg {:.2f}, loss depth {:.2f}, " \
+                    .format(iter_count, float(loss_total), float(loss_seg_sum), float(loss_2d_sum), float(loss_reg_sum), float(loss_dep_sum)))
+
+            iter_count += 1
+
+            # Check stopping criteria
+            # if mode == 'rot':
+            #     if loss_leap3d_sum < rot_th:
+            #         update_finished = True
+            # if mode == 'pose':
+            #     if loss_leap3d_sum < pose_th:
+            #         update_finished = True
+            if mode == 'xyz_root':
+                if loss_2d_sum < xyz_root_th:
+                    update_finished = True
+            if mode == 'all':
+                if loss_2d_sum < 1000:
+                    update_finished = True
+            if iter_count >= iter_fit:
+                update_finished = True
+
+            optimizer.zero_grad()
+            loss_total.backward(retain_graph=True)
+            optimizer.step()
+
+            # Adjust pinky
+            # with torch.no_grad():
+            #     self.mano_model.input_pose[0, cfg.fin4_ver_fix_idx - 3] = \
+            #         -self.mano_model.input_pose[0, cfg.fin4_ver_idx2 - 3]
+
+        if is_debugging:
+            print("Optimization stopped. Iter = {}".format(iter_count))
+
+        if is_visualizing or show_progress:
+            self.mano_model.change_render_setting(True)
+            _, _, _, _, _, img_render, _ = self.mano_model()
+            img_render = (img_render.cpu().data.numpy()[0][:, :, :3] * 255.0).astype(np.uint8)
+            img_render = NIA_utils.paint_kpts(None, img_render, self.mano_model.kpts_2d[0].cpu().data.numpy())
+            return img_render
+        else:
+            self.mano_model()
+
 
     def reset_mano_optimizer(self, mode):
         if mode == 'rot':
@@ -430,10 +530,6 @@ class optimizer_torch():
         # transfer main cam first
 
         for idx, cam in enumerate(camSet):
-            intrinsic, extrinsic = cam
-
-            self.mano_fit_tool.mano_model.set_cam_params(intrinsic, extrinsic)
-
             rgbPath = rgbSet[idx]
             depthPath = depthSet[idx]
             meta = metas[idx]
@@ -444,7 +540,7 @@ class optimizer_torch():
             kpts_3d_gt = mp_GT
             kpts_2d_gt = mp_GT[:, :2]
 
-            self.mano_fit_tool.fit_2d_pose(kpts_2d_gt, iter=500)
+            self.mano_fit_tool.fit_2d_pose(cam, kpts_2d_gt, iter=500)
 
             rgb, depth = self.mano_fit_tool.get_rendered_img(img2bb=img2bb, bbox=bbox)
             cv2.imshow("depth", depth)
@@ -462,31 +558,40 @@ class optimizer_torch():
     def run_multiview(self, data):
         camSet, rgbSet, depthSet, metas = data
 
-        self.mano_fit_tool.fit_multi2d_pose(rgbSet, depthSet, metas, iter=500)
+        # fitting mesh
+        self.mano_fit_tool.fit_multi2d_pose(camSet, rgbSet, depthSet, metas, iter=700)
 
         # visualization of each cam results
-        for idx, (rgbPath, depthPath, meta) in enumerate(zip(rgbSet, depthSet, metas)):
-            # change renderer cam of hand model
-            self.mano_fit_tool.change_renderer_cam(self.camIDset[idx])
-
+        for idx, (rgb, depth, meta) in enumerate(zip(rgbSet, depthSet, metas)):
+            if not idx == DEBUG_IDX:
+                continue
             bbox = np.copy(meta['bb'])
             img2bb = np.copy(meta['img2bb'])
             kpts_2d_gt = np.copy(meta['kpts'])[:, :2]
 
-            rgb_input = np.asarray(cv2.imread(rgbPath))
-            rgb_GT = NIA_utils.paint_kpts(None, np.copy(rgb_input), kpts_2d_gt)
+            # depth = depth / 10.0
+            # cv2.imshow("GT_depth", depth)
+
+            # change renderer cam of hand model
+            self.mano_fit_tool.change_renderer_cam(idx)
+
             rgb_mano, depth_mano = self.mano_fit_tool.get_rendered_img(img2bb=img2bb, bbox=bbox)
-
             # Display blended image
-            rgb_blend = cv2.addWeighted(rgb_input, 0.5, rgb_mano, 0.7, 0)
+            rgb_blend = cv2.addWeighted(rgb, 0.5, rgb_mano, 0.7, 0)
 
-            imgName_blend = "rgb_blend_" + str(self.camIDset[idx])
-            imgName_GT = "rgb_GT" + str(self.camIDset[idx])
-            imgName_depth = "depth" + str(self.camIDset[idx])
+            # GT 2D pose (mediapipe)
+            uv1 = np.concatenate((kpts_2d_gt, np.ones_like(kpts_2d_gt[:, :1])), 1)
+            kpts_2d_gt = (img2bb @ uv1.T).T
+            rgb_GT = NIA_utils.paint_kpts(None, np.copy(rgb), kpts_2d_gt)
+
+            imgName_blend = "Pred_rgb_" + str(self.camIDset[idx])
+            imgName_GT = "GT_rgb_" + str(self.camIDset[idx])
+            imgName_depth = "Pred_depth_" + str(self.camIDset[idx])
             cv2.imshow(imgName_blend, rgb_blend)
             cv2.imshow(imgName_GT, rgb_GT)
             cv2.imshow(imgName_depth, depth_mano)
             cv2.waitKey(0)
+
 
 
 

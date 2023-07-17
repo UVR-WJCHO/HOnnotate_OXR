@@ -370,6 +370,8 @@ def main(argv):
 
             # db includes data for [mas, sub1, sub2, sub3]
             for camID in camIDset:
+                if camID != 'sub1':
+                    continue
                 db.setSavePath(camID)
                 pbar = tqdm.tqdm(range(int(len(db) / 4)))
                 for idx in pbar:

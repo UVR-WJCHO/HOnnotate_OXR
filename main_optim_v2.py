@@ -95,6 +95,13 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
             rgb = os.path.join(rootDir, seqName, 'rgb_crop', camID, name+'.png')
             depth = os.path.join(rootDir, seqName, 'depth_crop', camID, name+'.png')
             seg = os.path.join(rootDir, seqName, 'segmentation', camID, 'raw_seg_results', name+'.png')
+
+            rgb = np.asarray(cv2.imread(rgb))
+            depth = np.asarray(cv2.imread(depth, -1))
+
+            # masking depth
+            depth[depth>700] = 0
+
             rgbSet.append(rgb)
             depthSet.append(depth)
 
@@ -211,7 +218,7 @@ def main(argv):
                 metas.append(metasperFrame)
                 imgs.append(imgsperFrame)
 
-            handOptim(seqName, camParamList, metas, imgs, flag_multi=False)
+            handOptim(seqName, camParamList, metas, imgs, flag_multi=True)
 
     ### Multi-frame pose refinement ###
     '''
