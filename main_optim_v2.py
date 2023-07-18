@@ -83,6 +83,18 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
 
     intrinsics, extrinsics, distCoeffs = camParamList
 
+    for camID in camIDset:
+        # mano world is cm? scale translation value
+        extrinsics[camID][:, -1] = np.copy(extrinsics[camID][:, -1]) / 10.0
+
+        # extrinsics[camID][0, -1] = extrinsics[camID][0, -1] * -1.0
+        # extrinsics[camID][1, -1] = extrinsics[camID][1, -1] * -1.0
+        # extrinsics[camID][2, -1] = extrinsics[camID][2, -1] * -1.0
+
+        # extrinsics[camID][:, 0] = extrinsics[camID][:, 0] * -1.0
+        # extrinsics[camID][:, 1] = extrinsics[camID][:, 1] * -1.0
+        # extrinsics[camID][:, 2] = extrinsics[camID][:, 2] * -1.0
+
     optm = optimizer_torch(camIDset, [intrinsics, extrinsics], flag_multi=flag_multi)
 
     # run each frame with set of metas/images
@@ -114,9 +126,6 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
             optm.run(data)
         else:
             optm.run_multiview(data)
-
-        print("break for debug")
-        break
 
     # dump optimized mano parameters as pkl
     return None
@@ -218,6 +227,7 @@ def main(argv):
                 metas.append(metasperFrame)
                 imgs.append(imgsperFrame)
 
+            # 현재 sequence 별로 초기화 진행. 낭비. 이후에 db 별로 초기화하도록 변경.
             handOptim(seqName, camParamList, metas, imgs, flag_multi=True)
 
     ### Multi-frame pose refinement ###

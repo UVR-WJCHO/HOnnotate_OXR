@@ -25,7 +25,7 @@ from modules.NIA_mano_layer_annotate import Model
 import modules.NIA_utils as NIA_utils
 
 
-DEBUG_IDX = 3
+# DEBUG_IDX = 3
 
 def init_pytorch3d(device=None, camParam=None):
     intrinsic, extrinsic = camParam
@@ -117,6 +117,7 @@ class manoFitter(object):
         self.mano_model = Model(mano_path=cfg.MANO_ROOT, device=self.device, batch_size=1, root_idx=0).to(self.device)
 
         self.mano_model.set_renderer(self.renderer_depth_list[0], self.renderer_col_list[0])
+
         self.mano_model.change_render_setting(True)
         self.optimizer_adam_mano_fit_all = None
         self.lr_scheduler_all = None
@@ -127,8 +128,9 @@ class manoFitter(object):
 
     def change_renderer_cam(self, idx):
         camID = self.camIDset[idx]
-        self.mano_model.set_renderer(self.renderer_depth_list[idx], self.renderer_col_list[idx])
-        self.mano_model.set_cam_params(self.intrinsicSet['mas'], self.extrinsicSet['mas'])
+        self.mano_model.set_renderer(self.renderer_depth_list[0], self.renderer_col_list[0])
+        # self.mano_model.set_cam_params(self.intrinsicSet['mas'], self.extrinsicSet['mas'])
+        self.mano_model.set_cam_params(self.intrinsicSet[camID], self.extrinsicSet[camID])
 
     def get_rendered_img(self, img2bb=None, bbox=None):
         self.mano_model.change_render_setting(True)
@@ -176,15 +178,6 @@ class manoFitter(object):
             is_loss_reg=True, is_loss_depth=False, is_debugging=True)
 
         self.reset_mano_optimization_var()
-
-
-    def compute_loss(self, optimizer, mode, is_loss_seg=False, \
-                 is_loss_2d=False, is_loss_leap3d=False, is_loss_reg=False, \
-                 best_performance=True, is_debugging=True, is_visualizing=False,
-                 show_progress=False):
-        self.mano_model.set_loss_mode(is_loss_seg=is_loss_seg, is_loss_2d=is_loss_2d,
-                                      is_loss_leap3d=is_loss_leap3d, is_loss_reg=is_loss_reg)
-        self.mano_model.change_render_setting(False)
 
 
     def fit_mano(self, optimizer, mode, iter_fit, is_loss_seg=False, \
@@ -305,12 +298,14 @@ class manoFitter(object):
             loss_reg_sum = 0
             loss_dep_sum = 0
 
+            intrinsic, extrinsic = camSet[0]
+            self.mano_model.set_cam_params(intrinsic, extrinsic, flag_main=True)
+
             for camIdx, camID in enumerate(self.camIDset):
                 # if not camIdx == DEBUG_IDX:
                 #     continue
-                intrinsic, extrinsic = camSet[camIdx]
-                self.mano_model.set_cam_params(intrinsic, extrinsic)
-                # self.mano_model.set_renderer(self.renderer_depth_list[camIdx], self.renderer_col_list[camIdx])
+
+                self.change_renderer_cam(camIdx)
 
                 meta = metas[camIdx]
                 kpts_GT = np.copy(meta['kpts'])
@@ -329,6 +324,37 @@ class manoFitter(object):
 
                 loss_seg_batch, loss_2d_batch, loss_reg_batch, loss_dep_batch, _, _, _ = self.mano_model()
 
+                ### debug
+                # param_pose = self.mano_model.pose_adjusted_all.clone().detach()
+                # param_xy = self.mano_model.xy_root.clone().detach()
+                # param_z = self.mano_model.z_root.clone().detach()
+
+                # kpts_2d_pred = np.squeeze(self.mano_model.kpts_2d.cpu().numpy())
+                # rgb = rgbSet[camIdx]
+                # img2bb = np.copy(meta['img2bb'])
+                #
+                # uv1 = np.concatenate((kpts_2d_gt, np.ones_like(kpts_2d_gt[:, :1])), 1)
+                # kpts_2d_gt = (img2bb @ uv1.T).T
+                # rgb_2d_gt = NIA_utils.paint_kpts(None, rgb, kpts_2d_gt)
+                #
+                # uv1 = np.concatenate((kpts_2d_pred, np.ones_like(kpts_2d_pred[:, :1])), 1)
+                # kpts_2d_pred = (img2bb @ uv1.T).T
+                # rgb_2d_pred = NIA_utils.paint_kpts(None, rgb, kpts_2d_pred)
+                #
+                # cv2.imshow("gt", rgb_2d_gt)
+                # cv2.imshow("pred", rgb_2d_pred)
+                #
+                # _, _, _, _, _, img_render, _ = self.mano_model()
+                #
+                # img_render = (img_render.cpu().data.numpy()[0][:, :, :3] * 255.0).astype(np.uint8)
+                # bbox = bbox.astype(int)
+                # img_render = img_render[bbox[1]:bbox[1] + bbox[3], bbox[0]:bbox[0] + bbox[2], :]
+                #
+                # rgb_blend = cv2.addWeighted(img_render, 0.5, rgb_2d_pred, 0.7, 0)
+                # cv2.imshow("blend", rgb_blend)
+                # cv2.waitKey(0)
+
+
                 if is_loss_seg:
                     loss_seg_sum = torch.sum(loss_seg_batch)
                     loss_total += loss_seg_sum
@@ -341,6 +367,10 @@ class manoFitter(object):
                 if is_loss_depth:
                     loss_dep_sum = torch.sum(loss_dep_batch)
                     loss_total += loss_dep_sum
+
+            if loss_total == 0:
+                print("No valid kpts in current sample")
+                break
 
             if is_debugging and iter_count % 1 == 0:
                 print(
@@ -528,7 +558,6 @@ class optimizer_torch():
         camSet, rgbSet, depthSet, metas = data
 
         # transfer main cam first
-
         for idx, cam in enumerate(camSet):
             rgbPath = rgbSet[idx]
             depthPath = depthSet[idx]
@@ -559,7 +588,7 @@ class optimizer_torch():
         camSet, rgbSet, depthSet, metas = data
 
         # fitting mesh
-        self.mano_fit_tool.fit_multi2d_pose(camSet, rgbSet, depthSet, metas, iter=700)
+        self.mano_fit_tool.fit_multi2d_pose(camSet, rgbSet, depthSet, metas, iter=500)
 
         # visualization of each cam results
         for idx, (rgb, depth, meta) in enumerate(zip(rgbSet, depthSet, metas)):
@@ -569,6 +598,9 @@ class optimizer_torch():
             img2bb = np.copy(meta['img2bb'])
             kpts_2d_gt = np.copy(meta['kpts'])[:, :2]
 
+            # check if the view has valid GT value
+            if np.isnan(kpts_2d_gt).any():
+                continue
             # depth = depth / 10.0
             # cv2.imshow("GT_depth", depth)
 

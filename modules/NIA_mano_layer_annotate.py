@@ -14,6 +14,7 @@ import modules.NIA_utils as NIA_utils
 import cv2
 
 
+
 def projectPoints(xyz, K):
     """ Project 3D coordinates into image space. """
     uv = torch.matmul(K, xyz.transpose(2, 1)).transpose(2, 1)
@@ -22,6 +23,7 @@ def projectPoints(xyz, K):
 def compute_reg_loss(mano_tensor, pose_mean_tensor, pose_reg_tensor):
     reg_loss = ((mano_tensor - pose_mean_tensor)**2)*pose_reg_tensor
     return reg_loss
+
 
 
 class Model(nn.Module):
@@ -47,13 +49,21 @@ class Model(nn.Module):
         self.batch_size = batch_size
 
         self.K = None
+        self.R = None
+        self.T = None
+        self.K_main = None
+        self.R_main = None
+        self.T_main = None
+        self.extrinsic = None
+        self.extrinsic_main = None
+
         self.kpts_2d_idx_set = set()
         self.kpts_2d_ref = torch.zeros((self.batch_size, 21, 2)).cuda()
         self.kpts_3d_leap = torch.zeros((21, 3)).cuda()
 
         ################# Initial pose for banana seq 0000.png
-        self.xy_root = nn.Parameter(torch.tensor([-12.4073,   3.1963], dtype=torch.float32).cuda().repeat(self.batch_size, 1))
-        self.z_root = nn.Parameter(torch.tensor([60], dtype=torch.float32).cuda().repeat(self.batch_size, 1))
+        self.xy_root = nn.Parameter(torch.tensor([9.8692, -2.4945], dtype=torch.float32).cuda().repeat(self.batch_size, 1))
+        self.z_root = nn.Parameter(torch.tensor([55], dtype=torch.float32).cuda().repeat(self.batch_size, 1))
 
 
         self.is_rot_only = False
@@ -63,7 +73,7 @@ class Model(nn.Module):
         self.shape_adjusted = NIA_utils.clip_mano_hand_shape(self.input_shape)
 
         self.camera_position = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
-        self.ups = torch.tensor([0.0,1.0,1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
+        self.ups = torch.tensor([0.0,-1.0,-1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
         self.ats = torch.tensor([0.0,0.0,-1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
 
         self.image_render_rgb = None
@@ -76,13 +86,17 @@ class Model(nn.Module):
         self.set_up_camera()    # camera for projecting mano model joints, different with camera for rendering mesh
 
         ################# Initial pose for banana seq 0000.png
-        self.input_rot += torch.tensor([[-0.6088, -1.6533,  1.3092]]).cuda()
-        self.input_pose += torch.tensor([[0.0210, -0.2398,  0.0709,  0.0000,  0.0000,
-         -0.8925,  0.0000,  0.0000,  1.0710, -0.0203, -0.0811,  0.1465,  0.0000,
-          0.0000, -0.2645,  0.0000,  0.0000,  0.5199, -0.0339,  0.0897, -0.6323,
-          0.0808,  0.0000,  0.7545,  0.0000,  0.0000,  0.4001, -0.0178, -0.1825,
-          0.0236,  0.0000,  0.0000, -0.1004,  0.0000,  0.0000,  0.5962, -0.5000,
-          0.5000,  0.2785,  0.0000, -0.9423,  0.0000,  0.0000, -0.1429, -0.5000]]).cuda()
+        self.input_rot += torch.tensor([[2.8380e+00, -3.1890e+00,  5.0351e-01]]).cuda()
+        self.input_pose += torch.tensor([[3.3100e-02, -3.0461e-01,
+         -9.8433e-01,  0.0000e+00,  0.0000e+00, -9.2932e-01,  0.0000e+00,
+          0.0000e+00,  1.0254e+00,  1.2304e-03, -1.8089e-01, -8.8209e-01,
+          0.0000e+00,  0.0000e+00, -4.7442e-01,  0.0000e+00,  0.0000e+00,
+          7.1177e-01, -1.1519e-02,  3.7421e-02, -1.2500e+00,  9.0822e-02,
+          0.0000e+00, -6.4365e-01,  0.0000e+00,  0.0000e+00,  1.5000e+00,
+         -2.6237e-03, -3.4252e-01, -1.0000e+00,  0.0000e+00,  0.0000e+00,
+         -2.7805e-01,  0.0000e+00,  0.0000e+00,  7.6250e-01, -5.0000e-01,
+         -2.6040e-01,  1.1759e-01,  0.0000e+00, -9.1029e-02,  0.0000e+00,
+          0.0000e+00, -5.8370e-02, -5.0000e-01]]).cuda()
 
         # Inital set up
         self.pose_reg_tensor, self.pose_mean_tensor = NIA_utils.get_pose_constraint_tensor()
@@ -96,6 +110,7 @@ class Model(nn.Module):
 
         self.init_loss_mode()
 
+        self.h = torch.tensor([[0, 0, 0, 1]]).cuda()
     """
     def set_kpts_3d_glob_leap(self, data):
         self.kpts_3d_glob_leap = torch.from_numpy(data).cuda()[1:, :].reshape((21, 3)) # ignore palm joint
@@ -184,17 +199,29 @@ class Model(nn.Module):
         self.is_rot_only = False
         self.is_root_only = False
 
-    def set_cam_params(self, intrinsic, extrinsic):
-        self.K = torch.tensor(intrinsic, dtype=torch.float32).cuda()
+    def set_cam_params(self, intrinsic, extrinsic, flag_main=False):
 
-        self.R = torch.unsqueeze(torch.FloatTensor(extrinsic[:, :-1]), 0).cuda()
-        self.R[0, 0, 0] *= -1.0
-        self.R[0, 1, 1] *= -1.0
+        K = torch.tensor(intrinsic, dtype=torch.float32).cuda()
 
-        self.T = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), 0).cuda()
-        # self.T[0, 0] *= -1.0
-        # self.T[0, 1] *= -1.0
-        # self.T[0, 2] /= 10.0
+        Rot = torch.FloatTensor(extrinsic[:, :-1]).cuda()
+        Trans = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), -1).cuda()
+
+
+
+        ext = torch.cat([Rot, Trans], axis=-1)
+        Rot = torch.unsqueeze(Rot, 0)
+        Trans = Trans.T
+
+        if flag_main:
+            self.K_main = K
+            self.R_main = Rot
+            self.T_main = Trans
+            self.extrinsic_main = ext
+        else:
+            self.K = K
+            self.R = Rot
+            self.T = Trans
+            self.extrinsic = ext
 
     def set_up_camera(self):
         self.R = look_at_rotation(self.camera_position, at=self.ats, up=self.ups, device=self.device)
@@ -231,20 +258,20 @@ class Model(nn.Module):
     def compute_normalized_scale(self, hand_joints):
         return (torch.sum((hand_joints[0, self.mcp_idx] - hand_joints[0, self.wrist_idx])**2)**0.5)/self.key_bone_len
 
-    def transformMesh(self, xyz3D):
+    def mano3DToCam3D(self, xyz3D):
         xyz3D = torch.squeeze(xyz3D)
-        xyz4D = torch.concatenate([xyz3D, torch.ones((21, 1)).cuda()], axis=1)
 
-        Rot = torch.squeeze(self.R)
-        Trans = torch.squeeze(self.T)
-        K = torch.squeeze(self.K)
-        t = torch.unsqueeze(-1.0 * Rot @ Trans.T, -1)  # (3, 1)
-        Rt = torch.cat([Rot, t], dim=-1)
-        KRt = K @ Rt
+        ones = torch.ones((xyz3D.shape[0], 1)).cuda()
 
-        xyz4D_ = KRt @ xyz4D.T
+        # mano to world
+        xyz4Dcam = torch.concatenate([xyz3D, ones], axis=1)
+        projMat = torch.concatenate((self.extrinsic_main, self.h), 0)
+        xyz4Dworld = (torch.linalg.inv(projMat) @ xyz4Dcam.T).T
 
-        return xyz4D_.T
+        # world to target cam
+        xyz3Dcam2 = xyz4Dworld @ self.extrinsic.T  # [:, :3]
+
+        return xyz3Dcam2
 
 
     def forward_basic(self):
@@ -262,12 +289,17 @@ class Model(nn.Module):
         self.verts = hand_verts/(self.scale)
         self.verts += self.xyz_root[:,None,:]
 
-        # hand_joints = self.transformMesh(hand_joints)
-        # self.verts = self.transformMesh(self.verts)
+        coordChangeMat_py3D = torch.tensor([[-1., 0., 0.], [0, -1., 0.], [0., 0., 1.]], dtype=torch.float32).cuda()
+        hand_joints = hand_joints @ coordChangeMat_py3D.T
+        self.verts = self.verts @ coordChangeMat_py3D.T
 
-        self.kpts_3d = hand_joints
+        # including extrinsic transformation
+        self.verts = torch.unsqueeze(self.mano3DToCam3D(self.verts), axis=0)
+        hand_joints = torch.unsqueeze(self.mano3DToCam3D(hand_joints), axis=0)      # to (1080, 1920) size uv (same as renderer)
 
+        # self.kpts_3d = hand_joints
         uv_mano_full = projectPoints(hand_joints, self.K)
+
         uv_mano_full[torch.isnan(uv_mano_full)] = 0.0
         self.kpts_2d = uv_mano_full.clone().detach()
         
@@ -275,6 +307,7 @@ class Model(nn.Module):
 
     def forward(self):      # self.kpts_3d : mano 3D kpts , kpts_3d_leap : predicted 3D kpts
         hand_joints, uv_mano_full = self.forward_basic()
+
 
         if self.is_rendering or self.is_loss_seg or self.is_loss_depth:
             faces = self.mano_layer.th_faces.repeat(self.batch_size, 1, 1)
@@ -285,8 +318,16 @@ class Model(nn.Module):
                 faces=faces,
                 textures=textures
             )
-            self.image_render_rgb = self.renderer_col(meshes_world=hand_mesh, R=self.R, T=self.T)
-            self.image_render_d = self.renderer_d(meshes_world=hand_mesh, R=self.R, T=self.T).zbuf
+            # self.image_render_rgb = self.renderer_col(meshes_world=hand_mesh, R=self.R, T=self.T)
+            # self.image_render_d = self.renderer_d(meshes_world=hand_mesh, R=self.R, T=self.T).zbuf
+
+            # we use different cameras (K), so need to set different renderer(already include R, T)
+            self.image_render_rgb = self.renderer_col(meshes_world=hand_mesh)  # , R=self.R, T=self.T)
+            self.image_render_d = self.renderer_d(meshes_world=hand_mesh).zbuf  # , R=self.R, T=self.T).zbuf
+
+            # don't know why, rendered image is fliped x, y axis. 2dKpts & verts has same coordinate. only projection/rendered coord is different.
+            self.image_render_rgb = torch.flip(self.image_render_rgb, [1, 2])
+            self.image_render_d = torch.flip(self.image_render_d, [1, 2])
 
             # Calculate the silhouette loss
         if self.is_loss_seg:
@@ -296,13 +337,12 @@ class Model(nn.Module):
 
         # Calculate the 2D loss
         if self.is_loss_2d:
-            uv_mano = uv_mano_full
             if not self.is_root_only:
                 # MSE
-                loss_2d = torch.sum(((uv_mano - self.kpts_2d_ref) ** 2).reshape(self.batch_size, -1), -1)
+                loss_2d = torch.sum(((uv_mano_full - self.kpts_2d_ref) ** 2).reshape(self.batch_size, -1), -1)
             else:
                 # MSE
-                loss_2d = torch.sum(((uv_mano[:, [0], :] - self.kpts_2d_ref[:, [0], :]) ** 2).\
+                loss_2d = torch.sum(((uv_mano_full[:, [0], :] - self.kpts_2d_ref[:, [0], :]) ** 2).\
                     view(self.batch_size, -1), -1)
         else:
             loss_2d = torch.tensor(0.0)
@@ -340,3 +380,4 @@ class Model(nn.Module):
 
 
         return loss_seg, loss_2d, loss_reg, loss_dep, self.image_render_d, self.image_render_rgb, hand_joints
+
