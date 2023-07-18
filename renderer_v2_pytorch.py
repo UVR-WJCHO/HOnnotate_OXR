@@ -169,7 +169,7 @@ class manoFitter(object):
 
     def fit_multi2d_pose(self, camSet, rgbSet, depthSet, metas, iter=300):
 
-        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=True)
+        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=False)
         optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
 
         self.fit_mano_multiview(camSet, rgbSet, depthSet, metas, optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
@@ -306,8 +306,8 @@ class manoFitter(object):
             loss_dep_sum = 0
 
             for camIdx, camID in enumerate(self.camIDset):
-                if not camIdx == DEBUG_IDX:
-                    continue
+                # if not camIdx == DEBUG_IDX:
+                #     continue
                 intrinsic, extrinsic = camSet[camIdx]
                 self.mano_model.set_cam_params(intrinsic, extrinsic)
                 # self.mano_model.set_renderer(self.renderer_depth_list[camIdx], self.renderer_col_list[camIdx])
@@ -563,8 +563,8 @@ class optimizer_torch():
 
         # visualization of each cam results
         for idx, (rgb, depth, meta) in enumerate(zip(rgbSet, depthSet, metas)):
-            if not idx == DEBUG_IDX:
-                continue
+            # if not idx == DEBUG_IDX:
+            #     continue
             bbox = np.copy(meta['bb'])
             img2bb = np.copy(meta['img2bb'])
             kpts_2d_gt = np.copy(meta['kpts'])[:, :2]
