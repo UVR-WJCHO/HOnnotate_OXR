@@ -11,7 +11,8 @@ from utils import inferenceUtils as infUti
 from HOdatasets.mypaths import *
 from utils.predictSegHandObject import getNetSess
 from onlineAug.commonAug import networkData
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 import time
 import multiprocessing as mlp
 import warnings
@@ -25,7 +26,7 @@ FLAGS = flags.FLAGS
 # flags.DEFINE_string('camID', '0', 'Cam ID') # name ,default, help
 # flags.DEFINE_integer('start', 0, 'Cam ID') # name ,default, help
 # flags.DEFINE_integer('end', 2300, 'Cam ID') # name ,default, help
-flags.DEFINE_string('db', '230104', 'target db Name') # name ,default, help
+flags.DEFINE_string('db', '230612', 'target db Name') # name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 # flags.DEFINE_string('camID', 'mas', 'target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -153,9 +154,6 @@ def main(argv):
     rootDir = os.path.join(baseDir, FLAGS.db)
     total_seq = len(os.listdir(rootDir))
     for seqIdx, seq in enumerate(sorted(os.listdir(rootDir))):
-        
-        if seqIdx < 6:
-            continue
         
         d = os.path.join(rootDir, seq)
         if os.path.isdir(d):            

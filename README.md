@@ -1,95 +1,50 @@
 # Dataset acquisition system for Hand and Object pose
 ## Introduction
-
-
-## Structure
-
-```
-            - HOnnotate_refine
-                - inference_seg.py
-                - ...
-            - modules
-                - calib.py
-                - preprocess_db.py
-                - utils
-```
-
-need to prepare dataset as below
-```
-            - dataset
-                - 230104
-                    - calibration
-                        - cam_mas_intrinsics.txt
-                        - cam_mas_depth_scale.txt
-                        - ...
-                    - rgb_orig
-                    - depth_orig
-
-                - 230104_hand
-                    - hand_result
-                        - bowl_18_00
-                        - ...
-```
+TBD
 
 
 ## Installation
 
-Follow procedures in [HOnnotate](https://github.com/shreyashampali/HOnnotate?)
-
-[Note]
-- Environment
+- Create a conda environment and install the following main packages
 
 ```
-    - Ubuntu 18.04, GTX1080 ti, CUDA 9.0
-    - python 3.6.13, tensorflow-gpu 1.12, gcc 6, g++ 6, tensorflow_probability 0.5.0, PyOpenGL-accelerate
-```
-
-- For dirt, install in development mode
-```
-    cd dirt
-    mkdir build ; cd build
-    cmake ../csrc -DCMAKE_CUDA_ARCHITECTURES=61
-    make
-    cd ..
-    pip install -e .
-    ...
+    - Ubuntu 22.04, RTX3090, CUDA 11.8
+    - python 3.9.16, torch 2.0.0
+    - mediapipe, chumpy, cython, matplotlib, numpy, opencv-python, pillow, scikit-image, scipy, tqdm
 ```
 
 
 
+## Setup
+
+- Clone the repository and checkout the develop branch
+- Download all resources in the link [Dropbox](https://www.dropbox.com/scl/fo/un34gknh23o8sr559j2d3/h?dl=0&rlkey=6ds7v183pp4htjy8hp1kq6wlh)
+- Set the dataset structure as below. 
+- Make sure both the image folder and the hand result folder have the same sequence name.
 
 
-
-## Usage
-
-- Set recorded dataset as following format. For example, if target db is "230104", which includes sequences "bowl_18_00", "bowl_18_01", "apple_28_00", ...
 ```
-	dataset/230104
-		bowl_18_00
-		bowl_18_01
-		apple_28_00
-		...
-	dataset/230104_calibration
-		cam_mas_depth_scale.txt
-		cam_mas_intrinsics.txt
-		...
-	dataset/230104_hand
-		hand_result
-		mas_intrinsic.json
-		...
-``` 
-
-
-- run
-```
-    modules/preprocess_db.py
-    HOnnotate_refine/inference_seg.py
-    HOnnotate_refine/optimization/handPoseMultiview.py
-
-
-    ...
+    - HOnnotate_refine
+        - checkpoints
+        - models
+        - objCorners
+    	- ...
+    - dataset
+        - 230612
+        - 230612_cam
+	- 230612_hand
+    - modules
+    - README.md
+    - ...
 ```
 
+
+
+- run (TBD)
+```
+	main_preprocess.py
+	main_optim_v2.py
+```
 
 
 ## Acknowledgement

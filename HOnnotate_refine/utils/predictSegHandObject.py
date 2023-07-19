@@ -1,22 +1,20 @@
 import numpy as np
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import models.deeplab.common as common
 from models.deeplab import model
 from onlineAug.commonAug  import networkData
+import tf_slim as slim
 
 common.SEMANTIC = 'semantic'
 common.DATASET_NAME = 'datasetName'
 
 
-slim = tf.contrib.slim
 
 flags = tf.app.flags
 
 FLAGS = flags.FLAGS
 
 # Settings for log directories.
-
-flags.DEFINE_string('checkpoint_dir', 'checkpoints/Deeplab_seg', 'Directory of model checkpoints.')
 
 
 flags.DEFINE_multi_integer('vis_crop_size', [480, 640],#[480, 640],
@@ -41,7 +39,7 @@ common.SEMANTIC = 'semantic'
 common.DATASET_NAME = 'datasetName'
 
 
-def getNetSess(data, imgH, imgW, g=None):
+def getNetSess(data, imgH, imgW, g=None, ckptDir=None):
 
   assert isinstance(data, networkData)
 
@@ -100,7 +98,7 @@ def getNetSess(data, imgH, imgW, g=None):
     last_checkpoint = None
 
     last_checkpoint = slim.evaluation.wait_for_new_checkpoint(
-                        FLAGS.checkpoint_dir, last_checkpoint)
+                        ckptDir, last_checkpoint)
 
   tf.reset_default_graph()
   tf_config = tf.ConfigProto()
