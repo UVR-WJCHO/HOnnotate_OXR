@@ -45,7 +45,7 @@ def init_pytorch3d(device=None, camParam=None):
 
     raster_settings = RasterizationSettings(
         image_size=(cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH),
-        blur_radius=np.log(1. / 1e-4 - 1.) * blend_params.sigma,
+        # blur_radius=np.log(1. / 1e-4 - 1.) * blend_params.sigma,
         faces_per_pixel=1,
         bin_size = None,
         max_faces_per_bin = None
@@ -108,7 +108,7 @@ class manoFitter(object):
 
         else:
             for camID in camIDset:
-                camParam = [self.intrinsicSet[camID], self.extrinsicSet[camID]]
+                camParam = [self.intrinsicSet[camID], self.extrinsicSet['mas']]
 
                 _, _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
                 self.renderer_depth_list.append(renderer_depth)
@@ -128,7 +128,7 @@ class manoFitter(object):
 
     def change_renderer_cam(self, idx):
         camID = self.camIDset[idx]
-        self.mano_model.set_renderer(self.renderer_depth_list[0], self.renderer_col_list[0])
+        self.mano_model.set_renderer(self.renderer_depth_list[idx], self.renderer_col_list[idx])
         # self.mano_model.set_cam_params(self.intrinsicSet['mas'], self.extrinsicSet['mas'])
         self.mano_model.set_cam_params(self.intrinsicSet[camID], self.extrinsicSet[camID])
 
@@ -620,8 +620,8 @@ class optimizer_torch():
             imgName_GT = "GT_rgb_" + str(self.camIDset[idx])
             imgName_depth = "Pred_depth_" + str(self.camIDset[idx])
             cv2.imshow(imgName_blend, rgb_blend)
-            cv2.imshow(imgName_GT, rgb_GT)
-            cv2.imshow(imgName_depth, depth_mano)
+            # cv2.imshow(imgName_GT, rgb_GT)
+            # cv2.imshow(imgName_depth, depth_mano)
             cv2.waitKey(0)
 
 

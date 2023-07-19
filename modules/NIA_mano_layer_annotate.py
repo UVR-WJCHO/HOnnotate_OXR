@@ -321,9 +321,8 @@ class Model(nn.Module):
             # self.image_render_rgb = self.renderer_col(meshes_world=hand_mesh, R=self.R, T=self.T)
             # self.image_render_d = self.renderer_d(meshes_world=hand_mesh, R=self.R, T=self.T).zbuf
 
-            # we use different cameras (K), so need to set different renderer(already include R, T)
-            self.image_render_rgb = self.renderer_col(meshes_world=hand_mesh)  # , R=self.R, T=self.T)
-            self.image_render_d = self.renderer_d(meshes_world=hand_mesh).zbuf  # , R=self.R, T=self.T).zbuf
+            self.image_render_rgb = self.renderer_col(meshes_world=hand_mesh)
+            self.image_render_d = self.renderer_d(meshes_world=hand_mesh).zbuf
 
             # don't know why, rendered image is fliped x, y axis. 2dKpts & verts has same coordinate. only projection/rendered coord is different.
             self.image_render_rgb = torch.flip(self.image_render_rgb, [1, 2])
