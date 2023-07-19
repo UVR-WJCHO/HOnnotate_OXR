@@ -14,23 +14,6 @@ import modules.NIA_utils as NIA_utils
 import cv2
 
 
-def torchProjectPoints(pts3D, camMat):
-    '''
-    TF function for projecting 3d points to 2d using CV2
-    :param camProp:
-    :param pts3D:
-    :param isOpenGLCoords:
-    :return:
-    '''
-    pts3D = torch.squeeze(pts3D)
-
-    projPts = pts3D @ camMat.T
-    projPts = torch.stack([projPts[:,0]/projPts[:,2], projPts[:,1]/projPts[:,2]],axis=1)
-
-    assert len(projPts.shape) == 2
-
-    return torch.unsqueeze(projPts, axis=0)
-
 
 def projectPoints(xyz, K):
     """ Project 3D coordinates into image space. """
@@ -56,7 +39,6 @@ class Model(nn.Module):
         self.root_idx = root_idx
 
         self.key_bone_len = 10.0
-
 
         self.mano_layer = ManoLayer(center_idx = self.root_idx, flat_hand_mean=False,
             side="right", mano_root=mano_path, ncomps=45, use_pca=False, root_rot_mode="axisang",
@@ -90,7 +72,7 @@ class Model(nn.Module):
         self.shape_adjusted = NIA_utils.clip_mano_hand_shape(self.input_shape)
 
         self.camera_position = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
-        self.ups = torch.tensor([0.0,-1.0,-1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
+        self.ups = torch.tensor([0.0,1.0,1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
         self.ats = torch.tensor([0.0,0.0,-1.0], dtype=torch.float32).cuda().repeat(self.batch_size, 1)
 
         self.image_render_rgb = None
@@ -103,17 +85,17 @@ class Model(nn.Module):
         self.set_up_camera()    # camera for projecting mano model joints, different with camera for rendering mesh
 
         ################# Initial pose for banana seq 0000.png
-        self.input_rot += torch.tensor([[2.8380e+00, -3.1890e+00,  5.0351e-01]]).cuda()
-        self.input_pose += torch.tensor([[3.3100e-02, -3.0461e-01,
-         -9.8433e-01,  0.0000e+00,  0.0000e+00, -9.2932e-01,  0.0000e+00,
-          0.0000e+00,  1.0254e+00,  1.2304e-03, -1.8089e-01, -8.8209e-01,
-          0.0000e+00,  0.0000e+00, -4.7442e-01,  0.0000e+00,  0.0000e+00,
-          7.1177e-01, -1.1519e-02,  3.7421e-02, -1.2500e+00,  9.0822e-02,
-          0.0000e+00, -6.4365e-01,  0.0000e+00,  0.0000e+00,  1.5000e+00,
-         -2.6237e-03, -3.4252e-01, -1.0000e+00,  0.0000e+00,  0.0000e+00,
-         -2.7805e-01,  0.0000e+00,  0.0000e+00,  7.6250e-01, -5.0000e-01,
-         -2.6040e-01,  1.1759e-01,  0.0000e+00, -9.1029e-02,  0.0000e+00,
-          0.0000e+00, -5.8370e-02, -5.0000e-01]]).cuda()
+        # self.input_rot += torch.tensor([[2.8380e+00, -3.1890e+00,  5.0351e-01]]).cuda()
+        # self.input_pose += torch.tensor([[3.3100e-02, -3.0461e-01,
+        #  -9.8433e-01,  0.0000e+00,  0.0000e+00, -9.2932e-01,  0.0000e+00,
+        #   0.0000e+00,  1.0254e+00,  1.2304e-03, -1.8089e-01, -8.8209e-01,
+        #   0.0000e+00,  0.0000e+00, -4.7442e-01,  0.0000e+00,  0.0000e+00,
+        #   7.1177e-01, -1.1519e-02,  3.7421e-02, -1.2500e+00,  9.0822e-02,
+        #   0.0000e+00, -6.4365e-01,  0.0000e+00,  0.0000e+00,  1.5000e+00,
+        #  -2.6237e-03, -3.4252e-01, -1.0000e+00,  0.0000e+00,  0.0000e+00,
+        #  -2.7805e-01,  0.0000e+00,  0.0000e+00,  7.6250e-01, -5.0000e-01,
+        #  -2.6040e-01,  1.1759e-01,  0.0000e+00, -9.1029e-02,  0.0000e+00,
+        #   0.0000e+00, -5.8370e-02, -5.0000e-01]]).cuda()
 
         # Inital set up
         self.pose_reg_tensor, self.pose_mean_tensor = NIA_utils.get_pose_constraint_tensor()
@@ -141,15 +123,24 @@ class Model(nn.Module):
             self.kpts_3d_glob_leap = self.kpts_3d_glob_leap + torch.cat((self.xy_root, self.z_root), -1)
     
     """
-    def set_segmentmap(self, image_seg_gt):
-        self.image_seg, _ = torch.max(torch.tensor(image_seg_gt[None,...] > 128, dtype=torch.float32).cuda(), -1)
 
-    def set_depthmap(self, image_depth_gt):
-        self.image_depth = torch.tensor(image_depth_gt, dtype=torch.float32).cuda()
+    def set_seg_gt(self, seg_gt):
+        # obtain hand foreground mask
+        self.seg_ref = (seg_gt == 2).astype(int)
+        self.seg_ref = torch.tensor(self.seg_ref).cuda()
+
+    def set_depth_gt(self, depth_gt):
+        # clean depth map following HOnnotate
+        self.depth_ref = torch.tensor(depth_gt).cuda()
+        self.depth_bg = self.depth_ref > 700
+        self.depth_ref[self.depth_bg] = 0
+        self.depth_ref[self.seg_ref == 0] = 0
+
+        if self.seg_ref is not None:
+            self.seg_ref[self.depth_bg] = 0
 
     def set_bbox(self, bbox):
-        self.bbox = bbox
-
+        self.bbox = bbox.astype(int)
 
     def set_renderer(self, renderer_d, renderer_col):
         self.renderer_d = renderer_d
@@ -314,7 +305,6 @@ class Model(nn.Module):
 
         # self.kpts_3d = hand_joints
         uv_mano_full = projectPoints(hand_joints, self.K)
-        # uv_mano_full = torchProjectPoints(hand_joints, self.K)
 
         uv_vertex_full = projectPoints(self.verts.clone().detach(), self.K)
         self.verts_2d = uv_vertex_full
@@ -326,7 +316,6 @@ class Model(nn.Module):
 
     def forward(self):      # self.kpts_3d : mano 3D kpts , kpts_3d_leap : predicted 3D kpts
         hand_joints, uv_mano_full = self.forward_basic()
-
 
         if self.is_rendering or self.is_loss_seg or self.is_loss_depth:
             faces = self.mano_layer.th_faces.repeat(self.batch_size, 1, 1)
@@ -343,15 +332,55 @@ class Model(nn.Module):
             self.image_render_rgb = self.renderer_col(meshes_world=hand_mesh)
             self.image_render_d = self.renderer_d(meshes_world=hand_mesh).zbuf
 
+            ### flip with ppx, ppy?
             # don't know why, rendered image is fliped x, y axis. 2dKpts & verts has same coordinate. only projection/rendered coord is different.
             self.image_render_rgb = torch.flip(self.image_render_rgb, [1, 2])
             self.image_render_d = torch.flip(self.image_render_d, [1, 2])
 
             # Calculate the silhouette loss
         if self.is_loss_seg:
-            loss_seg = torch.sum(((self.image_render_d[..., 3] - self.image_seg) ** 2).view(self.batch_size, -1), -1)
+            seg_rendered = torch.clone(self.image_render_d[0, self.bbox[1]:self.bbox[1] + self.bbox[3],
+                                       self.bbox[0]:self.bbox[0] + self.bbox[2], 0])
+
+            seg_rendered[seg_rendered > 0] = 1
+            seg_rendered[seg_rendered < 0] = 0
+
+            '''
+            # code for debugging
+            import cv2
+            print(self.seg_ref.shape, seg_rendered.shape)
+            print(self.seg_ref.min(), self.seg_ref.max())
+            print(seg_rendered.min(), seg_rendered.max())
+            cv2.imwrite('debug/seg_ref.png', self.seg_ref.detach().cpu().numpy()*250) 
+            cv2.imwrite('debug/seg_pred.png', seg_rendered.detach().cpu().numpy()*250) 
+            '''
+            loss_seg = torch.sum(((seg_rendered - self.seg_ref) ** 2).view(self.batch_size, -1), -1)
+            loss_seg = torch.clamp(loss_seg, min=0, max=2000)  # loss clipping following HOnnotate
         else:
             loss_seg = torch.tensor(0.0)
+
+        if self.is_loss_depth:
+            depth_rendered = self.image_render_d[0, self.bbox[1]:self.bbox[1] + self.bbox[3],
+                             self.bbox[0]:self.bbox[0] + self.bbox[2], 0]
+            depth_rendered[depth_rendered == -1] = 0.
+
+            '''
+            # code for debugging
+            import cv2
+            print(depth_rendered.shape)
+            print(depth_rendered.min(), depth_rendered.max())
+            print(self.depth_ref.shape)
+            print((self.depth_ref/self.scale).min(), (self.depth_ref/self.scale).max())
+            cv2.imwrite('debug/_depth_render.png', depth_rendered.detach().cpu().numpy()) 
+            cv2.imwrite('debug/_depth_gt.png', self.depth_ref.detach().cpu().numpy() / self.scale.detach().cpu().numpy()) 
+            '''
+
+            loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
+                                   -1) * 0.00012498664727900177  # depth scale used in HOnnotate
+            loss_depth = torch.clamp(loss_depth, min=0, max=2000)  # loss clipping used in HOnnotate
+
+        else:
+            loss_depth = torch.tensor(0.0)
 
         # Calculate the 2D loss
         if self.is_loss_2d:
@@ -367,35 +396,13 @@ class Model(nn.Module):
 
         # compute regularization loss       -- self.pose_adjusted value 변하는지 check.
         if self.is_loss_reg:
-            loss_reg = compute_reg_loss(self.pose_adjusted, self.pose_mean_tensor, self.pose_reg_tensor)
+            pose_reg = compute_reg_loss(self.pose_adjusted, self.pose_mean_tensor, self.pose_reg_tensor)
+            shape_reg = torch.sum(
+                ((self.shape_adjusted - torch.zeros_like(self.shape_adjusted)) ** 2).view(self.batch_size, -1), -1)
+            loss_reg = pose_reg + shape_reg
         else:
             loss_reg = torch.tensor(0.0)
 
-        if self.is_loss_depth:
-            bb = self.bbox.astype(int)
-            image_render_d = self.image_render_d[:, bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2], :]
-            image_render_d = torch.squeeze(image_render_d)
 
-            depth_mask = image_render_d != -1.0
-            loss_dep = -torch.sum((torch.abs(image_render_d[depth_mask] - self.image_depth[depth_mask])).reshape(self.batch_size, -1), -1) / 10000.0
-
-            # print("loss_d = ", loss_dep)
-            loss_dep = torch.tensor(0.0)
-
-            # debug
-            pred_rgb = self.image_render_rgb.cpu().data.numpy()[0]
-            pred_d = image_render_d.cpu().data.numpy()
-            gt_d = self.image_depth.clone().detach().cpu().data.numpy()
-
-            cv2.imshow("pred_rgb", pred_rgb)
-            cv2.imshow("pred", pred_d)
-            cv2.imshow("gt_d", gt_d)
-            cv2.waitKey(1)
-        else:
-            loss_dep = torch.tensor(0.0)
-
-
-
-
-        return loss_seg, loss_2d, loss_reg, loss_dep, self.image_render_d, self.image_render_rgb, hand_joints
+        return loss_seg, loss_2d, loss_reg, loss_depth, self.image_render_d, self.image_render_rgb, hand_joints
 

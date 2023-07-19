@@ -102,6 +102,7 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
     for metas, imgs in zip(metaList, imgList):
         rgbSet = []
         depthSet = []
+        segSet = []
         camSet = []
         for name in imgs:
             camID = name[:-5]
@@ -110,18 +111,17 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
             seg = os.path.join(rootDir, seqName, 'segmentation', camID, 'raw_seg_results', name+'.png')
 
             rgb = np.asarray(cv2.imread(rgb))
-            depth = np.asarray(cv2.imread(depth, -1))
-
-            # masking depth
-            depth[depth>700] = 0
+            depth = np.asarray(cv2.imread(depth, cv2.IMREAD_UNCHANGED)).astype(float)
+            seg = np.asarray(cv2.imread(seg, cv2.IMREAD_UNCHANGED))
 
             rgbSet.append(rgb)
             depthSet.append(depth)
+            segSet.append(seg)
 
         for camID in camIDset:
             camSet.append([intrinsics[camID], extrinsics[camID]])
 
-        data = [camSet, rgbSet, depthSet, metas]
+        data = [camSet, rgbSet, depthSet, segSet, metas]
 
         if not flag_multi:
             optm.run(data)
@@ -229,7 +229,7 @@ def main(argv):
                 imgs.append(imgsperFrame)
 
             # 현재 sequence 별로 초기화 진행. 낭비. 이후에 db 별로 초기화하도록 변경.
-            handOptim(seqName, camParamList, metas, imgs, flag_multi=True)
+            handOptim(seqName, camParamList, metas, imgs, flag_multi=False)
 
     ### Multi-frame pose refinement ###
     '''
