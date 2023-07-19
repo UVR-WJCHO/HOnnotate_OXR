@@ -14,6 +14,23 @@ import modules.NIA_utils as NIA_utils
 import cv2
 
 
+def torchProjectPoints(pts3D, camMat):
+    '''
+    TF function for projecting 3d points to 2d using CV2
+    :param camProp:
+    :param pts3D:
+    :param isOpenGLCoords:
+    :return:
+    '''
+    pts3D = torch.squeeze(pts3D)
+
+    projPts = pts3D @ camMat.T
+    projPts = torch.stack([projPts[:,0]/projPts[:,2], projPts[:,1]/projPts[:,2]],axis=1)
+
+    assert len(projPts.shape) == 2
+
+    return torch.unsqueeze(projPts, axis=0)
+
 
 def projectPoints(xyz, K):
     """ Project 3D coordinates into image space. """
@@ -206,8 +223,6 @@ class Model(nn.Module):
         Rot = torch.FloatTensor(extrinsic[:, :-1]).cuda()
         Trans = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), -1).cuda()
 
-
-
         ext = torch.cat([Rot, Trans], axis=-1)
         Rot = torch.unsqueeze(Rot, 0)
         Trans = Trans.T
@@ -299,6 +314,10 @@ class Model(nn.Module):
 
         # self.kpts_3d = hand_joints
         uv_mano_full = projectPoints(hand_joints, self.K)
+        # uv_mano_full = torchProjectPoints(hand_joints, self.K)
+
+        uv_vertex_full = projectPoints(self.verts.clone().detach(), self.K)
+        self.verts_2d = uv_vertex_full
 
         uv_mano_full[torch.isnan(uv_mano_full)] = 0.0
         self.kpts_2d = uv_mano_full.clone().detach()

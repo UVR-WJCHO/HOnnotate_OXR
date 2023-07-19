@@ -83,6 +83,7 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
 
     intrinsics, extrinsics, distCoeffs = camParamList
 
+    extrinsic_mas = np.copy(extrinsics['mas'])
     for camID in camIDset:
         # mano world is cm? scale translation value
         extrinsics[camID][:, -1] = np.copy(extrinsics[camID][:, -1]) / 10.0

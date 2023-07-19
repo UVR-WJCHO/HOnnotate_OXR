@@ -36,16 +36,18 @@ def init_pytorch3d(device=None, camParam=None):
     R = torch.unsqueeze(torch.FloatTensor(extrinsic[:, :-1]), 0)
     T = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), 0)
 
+    K = np.eye(4)
+    K[:3, :3] = intrinsic
+    K = torch.unsqueeze(torch.FloatTensor(K), 0)
+
     cameras = PerspectiveCameras(device=device, image_size=(image_size,), focal_length=(focal_l,),
                                  principal_point=(principal_p,), R=R, T=T, in_ndc=False)
+    # cameras = PerspectiveCameras(device=device, image_size=(image_size,), K=K, R=R, T=T, in_ndc=False)
 
-    # Set blend params
-    blend_params = BlendParams(sigma=1e-4, gamma=1e-4)
     # Define the settings for rasterization and shading.
 
     raster_settings = RasterizationSettings(
         image_size=(cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH),
-        # blur_radius=np.log(1. / 1e-4 - 1.) * blend_params.sigma,
         faces_per_pixel=1,
         bin_size = None,
         max_faces_per_bin = None
@@ -73,7 +75,7 @@ def init_pytorch3d(device=None, camParam=None):
     #     shader=SoftSilhouetteShader(blend_params=blend_params)
     # )
 
-    return cameras, blend_params, raster_settings, lights, rasterizer_depth, renderer_rgb
+    return cameras, raster_settings, lights, rasterizer_depth, renderer_rgb
 
 
 class manoFitter(object):
@@ -102,7 +104,7 @@ class manoFitter(object):
         if not flag_multi:
             camParam = [self.intrinsicSet['mas'], self.extrinsicSet['mas']]
 
-            _, _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
+            _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
             self.renderer_depth_list.append(renderer_depth)
             self.renderer_col_list.append(renderer_col)
 
@@ -110,7 +112,7 @@ class manoFitter(object):
             for camID in camIDset:
                 camParam = [self.intrinsicSet[camID], self.extrinsicSet['mas']]
 
-                _, _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
+                _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
                 self.renderer_depth_list.append(renderer_depth)
                 self.renderer_col_list.append(renderer_col)
 
@@ -615,6 +617,22 @@ class optimizer_torch():
             uv1 = np.concatenate((kpts_2d_gt, np.ones_like(kpts_2d_gt[:, :1])), 1)
             kpts_2d_gt = (img2bb @ uv1.T).T
             rgb_GT = NIA_utils.paint_kpts(None, np.copy(rgb), kpts_2d_gt)
+
+            # Pred 2D verts
+            verts_2d = self.mano_fit_tool.mano_model.verts_2d.cpu().numpy()[0]
+            uv1 = np.concatenate((verts_2d, np.ones_like(verts_2d[:, :1])), 1)
+            verts_2d = (img2bb @ uv1.T).T
+            # convert axis
+            verts_2d = verts_2d[:, [1, 0]]
+
+            im_vert = rgb.copy()
+            # draw points
+            for k, kpt in enumerate(verts_2d):
+                row = int(kpt[0])
+                col = int(kpt[1])
+                r = 1
+                cv2.circle(im_vert, (col, row), radius=r, thickness=-1, color=(0, 0, 255))
+            cv2.imshow("verts", im_vert)
 
             imgName_blend = "Pred_rgb_" + str(self.camIDset[idx])
             imgName_GT = "GT_rgb_" + str(self.camIDset[idx])
