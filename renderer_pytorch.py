@@ -163,10 +163,10 @@ class torchRenderer():
         self.Trans = torch.unsqueeze(torch.zeros(3), 0)
 
 
-            self.Trans[:, 0] = -0.8
-            self.Trans[:, 1] = -0.8
-            self.Trans[:, 2] = 1.0
-            self.camera = PerspectiveCameras(device=self.device, R=self.Rot, T=self.Trans, K=self.K)
+        self.Trans[:, 0] = -0.8
+        self.Trans[:, 1] = -0.8
+        self.Trans[:, 2] = 1.0
+        self.camera = PerspectiveCameras(device=self.device, R=self.Rot, T=self.Trans, K=self.K)
 
 
 

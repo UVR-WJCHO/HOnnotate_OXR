@@ -23,6 +23,25 @@ import numpy as np
 from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
 from renderer_v2_pytorch import optimizer_torch
 
+
+###ADDED LIBRARY MINJAE####
+##########MINJAE###########
+import matplotlib.pyplot as plt
+from pytorch3d.io import load_obj
+from pytorch3d.structures import Meshes
+import modules.config as cfg
+import torch
+from pytorch3d.renderer import (
+    PerspectiveCameras, FoVPerspectiveCameras, look_at_view_transform, look_at_rotation,
+    RasterizationSettings, MeshRenderer, MeshRasterizer, BlendParams,
+    SoftSilhouetteShader, HardPhongShader, SoftPhongShader, PointLights, TexturesVertex,
+)
+import matplotlib.image as mpimg
+import math
+###########################
+###########END#############
+
+
 # others
 import cv2
 import time
@@ -32,7 +51,8 @@ import pickle
 import cop
 import tqdm
 
-
+import pyrender
+import trimesh
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -88,6 +108,7 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
     # run each frame with set of metas/images
     for metas, imgs in zip(metaList, imgList):
         rgbSet = []
+        segSet = []
         depthSet = []
         camSet = []
         for name in imgs:
@@ -96,14 +117,16 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
             depth = os.path.join(rootDir, seqName, 'depth_crop', camID, name+'.png')
             seg = os.path.join(rootDir, seqName, 'segmentation', camID, 'raw_seg_results', name+'.png')
             rgbSet.append(rgb)
+            segSet.append(seg)
             depthSet.append(depth)
 
         for camID in camIDset:
             camSet.append([intrinsics[camID], extrinsics[camID]])
 
-        data = [camSet, rgbSet, depthSet, metas]
+        data = [camSet, rgbSet, segSet, depthSet, metas]
 
         if not flag_multi:
+            # this is executed now
             optm.run(data)
         else:
             optm.run_multiview(data)
@@ -150,6 +173,179 @@ def getMeta(files, seq):
 
     return finalPklDataList
 
+def read_file(file_path):
+    lines = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            # Remove newline character at the end of each line
+            line = line.strip()
+            lines.append(line)
+    return lines
+
+def read_obj(file_path):
+    verts = []
+    faces = []
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            if line.startswith('v '):
+                # Parse vertex coordinates
+                vertex = line[2:].split()
+                vertex = [float(coord) for coord in vertex]
+                verts.append(vertex)
+            elif line.startswith('f '):
+                # Parse face indices
+                face = line[2:].split()
+                face = [int(index.split('/')[0]) - 1 for index in face]
+                faces.append(face)
+
+    obj_data = {'verts': verts, 'faces': faces}
+    return obj_data
+
+def apply_transform(matrix, points):
+    # Append 1 to each coordinate to convert them to homogeneous coordinates
+    homogeneous_points = np.hstack((points, np.ones((points.shape[0], 1))))
+
+    # Apply matrix multiplication
+    transformed_points = np.dot(matrix, homogeneous_points.T).T
+
+    # Convert back to Cartesian coordinates
+    transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
+
+    return transformed_points_cartesian
+
+##### 중요! Tracking 할때 Camera Extrinsic 고려하지 않고 labeling ##########
+
+def display_Obj_scene(idx, mesh_path, intrinsic, extrinsics, pose, img_path):
+
+    # 
+    # Load the mesh from an OBJ file
+    # Camera extrinsic 적용 X -> camera 좌표가 0,0,0
+
+    verts, faces, _ = load_obj(mesh_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    pose = np.array(pose)
+
+    pose[0] *= -1
+    pose[1] *= -1
+
+    #pose = np.linalg.inv(pose)
+
+    verts = verts.view( -1 , 3)
+    verts = verts.numpy()
+    
+    ### MANUAL INITIAL REFINEMENT CODES ####
+
+    # cam_rot = [25,60,30]
+
+    # cam_rot_rad = [math.radians(rot_deg) for rot_deg in cam_rot]
+
+    # x_rad = cam_rot_rad[0]
+    # y_rad = cam_rot_rad[1]
+    # z_rad = cam_rot_rad[2]
+
+    # rot_z = np.identity(4)
+
+    # rot_z[0,0] = math.cos(z_rad)
+    # rot_z[0,1] = -math.sin(z_rad)
+    # rot_z[1,0] = math.sin(z_rad)
+    # rot_z[1,1] = math.cos(z_rad)
+
+    # rot_x = np.identity(4)
+
+    # rot_x[1,1] = math.cos(x_rad)
+    # rot_x[1,2] = -math.sin(x_rad)
+    # rot_x[2,1] = math.sin(x_rad)
+    # rot_x[2,2] = math.cos(x_rad)
+
+    # rot_y = np.identity(4)
+
+    # rot_y[0,0] = math.cos(y_rad)
+    # rot_y[0,2] = math.sin(y_rad)
+    # rot_y[2,0] = -math.sin(y_rad)
+    # rot_y[2,2] = math.cos(y_rad)
+
+    # # xform = rot_y*rot_x*rot_z
+    # xform = np.dot(rot_y, np.dot(rot_x, rot_z))
+
+    # xform[0,3] = 0
+    # xform[1,3] = 0.1
+    # xform[2,3] = 0
+
+    # #verts = apply_transform(xform,verts)
+    # #verts = apply_transform(pose,verts)
+
+    # xform2 = np.identity(4)
+    # xform2[0,3] = -0.07
+    # xform2[1,3] = 0.045
+    # xform2[2,3] = 0
+    # #verts = apply_transform(xform2,verts)
+
+    #pose_matrix = np.dot(xform2, np.dot(pose, xform))
+
+    verts = apply_transform(pose,verts)
+    verts = torch.FloatTensor(verts)
+
+    verts_rgb = torch.ones_like(verts)[None]  # (1, V, 3)
+    textures = TexturesVertex(verts_features=verts_rgb.to(device))
+
+    meshes = Meshes(verts=[verts], faces=[faces.verts_idx],textures=textures).to(device)
+
+    intrinsic = np.array(intrinsic)
+    
+    image_size = (cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH)
+
+    focal_l = (intrinsic[0, 0], intrinsic[1, 1])
+    principal_p = (intrinsic[0, -1], intrinsic[1, -1])
+
+    cameras = PerspectiveCameras(device=device, image_size=(image_size,), focal_length=(focal_l,),
+                                 principal_point=(principal_p,), in_ndc=False)
+    
+    # Set blend params
+    blend_params = BlendParams(sigma=1e-4, gamma=1e-4)
+
+    # Create a point light source
+    #lights = PointLights(device=device, location=((2.0, 2.0, -2.0),))
+
+    # Create a rasterization settings object
+    raster_settings = RasterizationSettings(
+        image_size=(cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH),
+        blur_radius=0, #np.log(1. / 1e-4 - 1.) * blend_params.sigma,
+        faces_per_pixel=1,
+        bin_size = -1,
+        max_faces_per_bin = None
+    )
+
+    # Create a mesh renderer with a soft Phong shader
+    renderer_rgb = MeshRenderer(
+        rasterizer=MeshRasterizer(
+            cameras=cameras,
+            raster_settings=raster_settings
+        ),
+        shader=SoftPhongShader(
+            device=device,
+            cameras=cameras,
+        )
+    )
+
+    rasterizer_depth = MeshRasterizer(
+        cameras=cameras,
+        raster_settings=raster_settings
+    )
+    
+    # Render the mesh
+    images = renderer_rgb(meshes)
+
+    # Convert the rendered image to a numpy array
+    image_np = images[0, ..., :3].detach().cpu().numpy()
+
+    # Display the rendered image
+    img_rgb = mpimg.imread(img_path)[:,:,:3]
+
+    plt.imsave('./vis/output'+str(idx)+'.png', (image_np + img_rgb) / 2 )
+
+
 
 def main(argv):
     ### Setup ###
@@ -162,6 +358,7 @@ def main(argv):
         - compute depth map error, silhouette error for each view
         - optimize object initial pose per frame (torch-based)
     '''
+
     if flag_MVobj:
         print("TODO")
 
@@ -210,6 +407,57 @@ def main(argv):
 
                 metas.append(metasperFrame)
                 imgs.append(imgsperFrame)
+            
+
+            ######### #Single-View / Mocap 사용 / Object pose Rendering with pytorch3D #########
+            if seqName == '230612_mustard' :
+                
+                img_dir = '/minjay/HOnnotate_OXR/dataset/230612/'
+
+                cam_idx = {'mas':0,'sub1':1,'sub2':2,'sub3':3}
+                obj_Name = seqName.split('_')[1]
+
+                print(obj_Name)
+                
+                scene = pyrender.Scene(bg_color=np.array([0.0, 0.0, 0.0, 0.0]),
+                         ambient_light=np.array([1.0, 1.0, 1.0]))
+
+                intrinsics, extrinsics, distCoeffs = camParamList
+                
+                pose_file_path = '/minjay/HOnnotate_OXR/ObjPose/' + seqName + '.txt'
+                lines = read_file(pose_file_path)
+
+                view_point_cam = lines[0]
+
+                view_point_cam = intrinsics[view_point_cam]
+                
+                obj_file_path = '/minjay/HOnnotate_OXR/ObjTemplate/' + obj_Name + '.obj'
+                obj_data = read_obj(obj_file_path)
+                
+                for idx, img in enumerate(imgs) :
+                    #img_path = os.path.join(img_dir,seqName,'rgb_crop',lines[0],img[cam_idx[lines[0]]]+'.png')
+                    #/minjay/HOnnotate_OXR/dataset/230612/230612_baseball/rgb/mas_1.png
+                    img_path = os.path.join(img_dir,seqName,'rgb',lines[0]+'_'+str(idx)+'.png')
+
+                    if idx < 1 :
+                        # pose 가 2번째 frame 부터 시작 함
+                        continue 
+
+                    else :
+                        print('idx',idx)
+                        pose = lines[idx*2].split(',')
+                        pose = [ float(x) for x in pose ] 
+                        pose_4_4 = [ pose[x:x+4] for x in range(0, len(pose), 4) ] 
+                        extrinsics_ = extrinsics[lines[0]]
+                        
+                        display_Obj_scene(idx, obj_file_path, view_point_cam, extrinsics_, pose_4_4, img_path)
+                                         #(idx, mesh_path, intrinsic, extrinsics, pose, img_path):
+                
+            else :
+                continue
+            
+            ######### #Single-View / Mocap 사용 / Object pose Rendering with pytorch3D #########
+
 
             handOptim(seqName, camParamList, metas, imgs, flag_multi=False)
 

@@ -149,6 +149,11 @@ def main(argv):
     ### Setup ###
 
     ### Multi-view object pose optimization ###
+
+    #Single-View / Mocap 사용 / Object pose Rendering with pytorch3D
+    camParamList = getCam()
+    print(camParamList)
+    exit(0)
     '''
     [TODO]
         - Load object pose & mesh (currently ICG)

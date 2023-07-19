@@ -1,0 +1,57 @@
+%YAML:1.2
+load_directory: '/data/minjay/230612/230612_10mug_0/rgb/'
+#"/data/minjay/230612/230612_5banana_0/rgb/"
+
+intrinsics:
+   f_u: 913.63287354
+   f_v: 913.30273438
+   pp_x: 954.39550781
+   pp_y: 555.45367432
+   width: 1920
+   height: 1080
+camera2world_pose: !!opencv-matrix
+   rows: 4
+   cols: 4
+   dt: f
+   data: [ 1., 0., 0., 0.,
+            0., 1., 0., 0.,
+            0., 0., 1., 0.,
+            0., 0., 0., 1. ]
+#depth_scale: 0.001    # only for depth camera
+image_name_pre: "sub3_"
+load_index: 0
+n_leading_zeros: 0
+image_name_post: ""
+load_image_type: "png"
+
+# %YAML:1.2
+# load_directory: "/home/minjay/3DObjectTracking/ICG/examples/Test"
+# intrinsics:
+#    f_u: 605.783
+#    f_v: 605.566
+#    pp_x: 642.864
+#    pp_y: 641.593
+#    width: 1080
+#    height: 720
+# camera2world_pose: !!opencv-matrix
+#    rows: 4
+#    cols: 4
+#    dt: f
+#    data: [ 1., 0., 0., 0.,
+#             0., 1., 0., 0.,
+#             0., 0., 1., 0.,
+#             0., 0., 0., 1. ]
+# #depth_scale: 0.001    # only for depth camera
+# image_name_pre: ""
+# load_index: 1
+# n_leading_zeros: 4
+# image_name_post: ""
+# load_image_type: "jpg"
+
+
+# # f_u: 605.783
+# # f_v: 605.566
+# # pp_x: 642.864
+# # pp_y: 641.593
+# # width: 1280
+# # height: 720
