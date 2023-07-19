@@ -88,6 +88,7 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
     # run each frame with set of metas/images
     for metas, imgs in zip(metaList, imgList):
         rgbSet = []
+        segSet = []
         depthSet = []
         camSet = []
         for name in imgs:
@@ -96,14 +97,16 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
             depth = os.path.join(rootDir, seqName, 'depth_crop', camID, name+'.png')
             seg = os.path.join(rootDir, seqName, 'segmentation', camID, 'raw_seg_results', name+'.png')
             rgbSet.append(rgb)
+            segSet.append(seg)
             depthSet.append(depth)
 
         for camID in camIDset:
             camSet.append([intrinsics[camID], extrinsics[camID]])
 
-        data = [camSet, rgbSet, depthSet, metas]
+        data = [camSet, rgbSet, segSet, depthSet, metas]
 
         if not flag_multi:
+            # this is executed now
             optm.run(data)
         else:
             optm.run_multiview(data)

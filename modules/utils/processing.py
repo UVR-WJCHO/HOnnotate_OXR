@@ -275,6 +275,8 @@ def generate_patch_image(cvimg, bbox, scale, rot, transl, do_flip, out_shape):
                                         inv=True)
     trans_joint = gen_trans_from_patch_cv(bb_c_x, bb_c_y, bb_width, bb_height, out_shape[1], out_shape[0], 1.0, 0.0, transl)
 
+    print(trans)
+
     return img_patch, trans, inv_trans, trans_joint
 
 def rotate_2d(pt_2d, rot_rad):
