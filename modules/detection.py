@@ -20,9 +20,9 @@ distCoeffs["sub1"] = LoadDistortionParam("/hdd1/donghwan/OXR/dataset/230612/resu
 distCoeffs["sub2"] = LoadDistortionParam("/hdd1/donghwan/OXR/dataset/230612/results/sub2_intrinsic.json")
 distCoeffs["sub3"] = LoadDistortionParam("/hdd1/donghwan/OXR/dataset/230612/results/sub3_intrinsic.json")
 
-imageDir = "/hdd1/donghwan/OXR/dataset/230612/230612_21baseball_0/rgb"
-depthDir = "/hdd1/donghwan/OXR/dataset/230612/230612_21baseball_0/depth"
-resultDir = "/hdd1/donghwan/OXR/dataset/230612/230612_21baseball_0"
+imageDir = "/hdd1/donghwan/OXR/dataset/230612/230612_3mustard_0/rgb"
+depthDir = "/hdd1/donghwan/OXR/dataset/230612/230612_3mustard_0/depth"
+resultDir = "/hdd1/donghwan/OXR/dataset/230612/230612_3mustard_0"
 numHandJoints = 21
 confidenceThreshold = 0.5
 h = np.array([[0,0,0,1]])
@@ -30,6 +30,8 @@ numCameras = len(cameras)
 numImages = min(math.ceil(len(glob.glob(os.path.join(depthDir, f"{camera}_*.png")))) for camera in cameras)
 
 os.makedirs(resultDir, exist_ok=True)
+os.makedirs(os.path.join(resultDir, "segmentation"), exist_ok=True)
+
 if DEBUG:
     os.makedirs(os.path.join(resultDir,"hand"), exist_ok=True)
     os.makedirs(os.path.join(resultDir,"reprojected"), exist_ok=True)
@@ -135,6 +137,20 @@ for idx in tqdm(range(numImages)):
                 distortedHandDetection[k, 1] = handLandmarks.landmark[k].y * (yRange[1] - yRange[0]) + yRange[0]
                 mediapipeDepth[k] = handLandmarks.landmark[k].z * (xRange[1] - xRange[0])
 
+            # segmentation mask with cv2.GrapCut
+            seg_image = imageList[i].copy()
+            mask = np.ones(seg_image.shape[:2],np.uint8) * 2
+            for lineIndex in lineIndices:
+                for j in range(len(lineIndex)-1):
+                    point1 = np.int32(distortedHandDetection[lineIndex[j]])
+                    point2 = np.int32(distortedHandDetection[lineIndex[j+1]])
+                    cv2.line(mask, point1, point2, 1, 1)
+            bgdModel = np.zeros((1,65),np.float64)
+            fgdModel = np.zeros((1,65),np.float64)
+            mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
+            mask = np.where((mask==2)|(mask==0),0,1).astype('uint8') * 255
+            cv2.imwrite(os.path.join(resultDir, "segmentation", f"{camera}_{idx}.png"), mask)
+
             # undistort normalized hand pose estimation points
             normalizedPoints = cv2.undistortPoints(distortedHandDetection, intrinsicMatrices[camera], distCoeffs[camera])
             normalizedPoints = normalizedPoints.squeeze().transpose()
@@ -168,7 +184,7 @@ for idx in tqdm(range(numImages)):
                     imageMerged2 = np.concatenate((imageCroppedList[2], imageCroppedList[3]), axis=1)
                     imageMerged = np.concatenate((imageMerged1, imageMerged2), axis=0)
                     if DEBUG:
-                        cv2.imwrite(os.path.join(resultDir, f"reprojected/{camera}_{idx}.png"), imageMerged)
+                        cv2.imwrite(os.path.join(resultDir, "reprojected", f"{camera}_{idx}.png"), imageMerged)
             else:
                 # depth value of wrist joint from kinect
                 wristDepth = np.dot(weight4pt,value4pt)
@@ -232,7 +248,7 @@ for idx in tqdm(range(numImages)):
                     imageMerged2 = np.concatenate((imageReprojectedList[2], imageReprojectedList[3]), axis=1)
                     imageMerged = np.concatenate((imageMerged1, imageMerged2), axis=0)
                     if DEBUG:
-                        cv2.imwrite(os.path.join(resultDir, f"reprojected/{camera}_{idx}.png"), imageMerged)
+                        cv2.imwrite(os.path.join(resultDir, "reprojected", f"{camera}_{idx}.png"), imageMerged)
                 
         imageDetectedList.append(annotatedImage)
     if len(cameras) == 4:
