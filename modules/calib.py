@@ -1,7 +1,6 @@
 import os
 import glob
-from absl import flags
-from absl import app
+import argparse
 import json
 import numpy as np
 import math
@@ -9,39 +8,62 @@ from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
 from utils.bundleAdjustment import BundleAdjustment
 from utils.calibration import StereoCalibrate
 
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    '--db',
+    type=str,
+    default='230612',
+    help='target db Name'
+)
+parser.add_argument(
+    '--seq1',
+    type=str,
+    default='230612_mas_sub1',
+    help='Sequence Name for Master and Sub1'
+)
+parser.add_argument(
+    '--seq2',
+    type=str,
+    default='230612_sub1_sub2',
+    help='Sequence Name for Sub1 and Sub2'
+)
+parser.add_argument(
+    '--seq3',
+    type=str,
+    default='230612_sub2_sub3',
+    help='Sequence Name for Sub2 and Sub3'
+)
+parser.add_argument(
+    '--res',
+    type=str,
+    default='results',
+    help='Directory to save result'
+)
+opt = parser.parse_args()
 
-FLAGS = flags.FLAGS
-
-flags.DEFINE_string('db', '221215_calib', 'target db Name') # name ,default, help
-flags.DEFINE_string('seq1', '221115_01', 'Sequence Name for Master and Sub1')
-flags.DEFINE_string('seq2', '221115_02', 'Sequence Name for Sub1 and Sub2')
-flags.DEFINE_string('seq3', '221115_03', 'Sequence Name for Sub2 and Sub3')
-flags.DEFINE_string('res' '221215_sample_hand', 'Directory to save result')
-
-
-baseDir = '/home/uvr-1080ti/projects/HOnnotate_OXR/dataset/'
+baseDir = '/hdd1/donghwan/OXR/dataset'
 h = np.array([[0,0,0,1]]) # array for homogeneous coordinates
 
 
 class Calibration():
     def __init__(self):
         self.imgDirList = []
-        self.imgDirList.append(os.path.join(baseDir, FLAGS.db, FLAGS.seq1))
-        self.imgDirList.append(os.path.join(baseDir, FLAGS.db, FLAGS.seq2))
-        self.imgDirList.append(os.path.join(baseDir, FLAGS.db, FLAGS.seq3))
+        self.imgDirList.append(os.path.join(baseDir, opt.db, opt.seq1))
+        self.imgDirList.append(os.path.join(baseDir, opt.db, opt.seq2))
+        self.imgDirList.append(os.path.join(baseDir, opt.db, opt.seq3))
 
-        self.resultDir = os.path.join(baseDir, FLAGS.db, FLAGS.res)
+        self.resultDir = os.path.join(baseDir, opt.db, opt.res)
 
         # stereo calibration will be executed in (0-th, 1-th), (1-th, 2-th), (2-th, 3-th), ...
         self.cameras = ["mas", "sub1", "sub2", "sub3"]
 
-        assert os.path.exists(os.path.join(self.resultDir, "220809_cameraInfo.txt")), 'cameraInfo.txt does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "230612_cameraInfo.txt")), 'cameraInfo.txt does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "mas_intrinsic.json")), 'mas_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub1_intrinsic.json")), 'sub1_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub2_intrinsic.json")), 'sub2_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub3_intrinsic.json")), 'sub3_intrinsic.json does not exist'
 
-        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, "220809_cameraInfo.txt"))
+        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, "230612_cameraInfo.txt"))
         self.distCoeffs = {}
         self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(self.resultDir, "mas_intrinsic.json"))
         self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(self.resultDir, "sub1_intrinsic.json"))
@@ -49,7 +71,7 @@ class Calibration():
         self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(self.resultDir, "sub3_intrinsic.json"))
     
         self.nSize = (6, 5) # the number of checkers
-        self.imgInt = 10
+        self.imgInt = 15
         self.minSize = 30
         self.numCameras = len(self.cameras)
 
@@ -57,7 +79,7 @@ class Calibration():
         self.imgPointsRight = []
         self.objPoints = []
 
-        self.cameraParams = np.zeros(self.numCameras, 12) # flattened extrinsic paramters
+        self.cameraParams = np.zeros((self.numCameras, 12)) # flattened extrinsic paramters
         self.cameraParams[0] = np.eye(4)[:3].ravel() # master camera's coordinate is equal to world coordinate.
 
     
@@ -98,7 +120,7 @@ class Calibration():
             json.dump(cameraParamsBA, fp, sort_keys=True, indent=4)
 
 
-def main(argv):
+def main():
     calib = Calibration()
 
     calib.Calibrate()
@@ -107,4 +129,4 @@ def main(argv):
 
 
 if __name__ == '__main__':
-    app.run(main)
+    main()
