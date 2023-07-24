@@ -1,7 +1,8 @@
 import os
 import numpy as np
 
-MANO_ROOT = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'manopth/mano/models/')
+# MANO_ROOT = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'manopth/mano/models/')
+MANO_ROOT = os.path.join("/home/workplace/HOnnotate_OXR/models")
 
 ORIGIN_WIDTH = 1920
 ORIGIN_HEIGHT = 1080

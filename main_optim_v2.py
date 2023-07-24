@@ -221,7 +221,7 @@ def main(argv):
                 imgs.append(imgsperFrame)
 
             # 현재 sequence 별로 초기화 진행. 낭비. 이후에 db 별로 초기화하도록 변경.
-            handOptim(seqName, camParamList, metas, imgs, flag_multi=True)
+            handOptim(seqName, camParamList, metas, imgs, flag_multi=False)
 
     ### Multi-frame pose refinement ###
     '''
