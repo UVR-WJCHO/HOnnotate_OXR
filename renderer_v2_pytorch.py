@@ -21,11 +21,11 @@ from mano.webuser.smpl_handpca_wrapper_HAND_only import load_model as load_mano_
 import pickle
 
 import modules.config as cfg
-from modules.NIA_mano_layer_annotate import Model
+from modules.NIA_mano_layer_annotate import Model, changeCoordtopytorch3D
 import modules.NIA_utils as NIA_utils
 
 
-# DEBUG_IDX = 3
+DEBUG_IDX = 0
 
 def init_pytorch3d(device=None, camParam=None):
     intrinsic, extrinsic = camParam
@@ -33,8 +33,12 @@ def init_pytorch3d(device=None, camParam=None):
 
     focal_l = (intrinsic[0, 0], intrinsic[1, 1])
     principal_p = (intrinsic[0, -1], intrinsic[1, -1])
-    R = torch.unsqueeze(torch.FloatTensor(extrinsic[:, :-1]), 0)
-    T = torch.unsqueeze(torch.FloatTensor(extrinsic[:, -1]), 0)
+
+    # to pytorch3D coordinate ( x * -1, y * -1)
+    extrinsic_py = changeCoordtopytorch3D(extrinsic)
+
+    R = torch.unsqueeze(torch.FloatTensor(extrinsic_py[:, :-1]), 0)
+    T = torch.unsqueeze(torch.FloatTensor(extrinsic_py[:, -1]), 0)
 
     K = np.eye(4)
     K[:3, :3] = intrinsic
@@ -83,7 +87,7 @@ class manoFitter(object):
     def __init__(self, camIDset, camParams, flag_multi=False):
         self.lr_rot_init = 1.0
         self.lr_pose_init = 0.2
-        self.lr_xyz_root_init = 1.0
+        self.lr_xyz_root_init = 2.0
         self.lr_all_init = 0.4
         self.loss_rot_best = float('inf')
         self.loss_pose_best = float('inf')
@@ -111,7 +115,7 @@ class manoFitter(object):
 
         else:
             for camID in camIDset:
-                camParam = [self.intrinsicSet[camID], self.extrinsicSet['mas']]
+                camParam = [self.intrinsicSet[camID], self.extrinsicSet[camID]]
 
                 _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
                 self.renderer_depth_list.append(renderer_depth)
@@ -189,12 +193,12 @@ class manoFitter(object):
             is_loss_reg=True, is_debugging=True)
         self.reset_mano_optimization_var()
 
-    def fit_multi2d_pose(self, camSet, rgbSet, depthSet, metas, iter=300):
+    def fit_multi2d_pose(self, camSet, rgbSet, depthSet, segSet, metas, iter=300):
 
         self.mano_model.change_grads(root=True, rot=True, pose=True, shape=False)
-        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
+        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('all')
 
-        self.fit_mano_multiview(camSet, rgbSet, depthSet, metas, optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
+        self.fit_mano_multiview(camSet, rgbSet, depthSet, segSet, metas, optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
             is_loss_reg=True, is_loss_depth=False, is_debugging=True)
 
         self.reset_mano_optimization_var()
@@ -202,7 +206,7 @@ class manoFitter(object):
     def fit_multi2d_all(self, camSet, rgbSet, depthSet, segSet, metas, iter=300):
 
         self.mano_model.change_grads(root=True, rot=True, pose=True, shape=True)
-        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose')
+        optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('all')
 
         self.fit_mano_multiview(camSet, rgbSet, depthSet, segSet, metas, optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
             is_loss_reg=True, is_loss_seg=True, is_loss_depth=True, is_debugging=True)
@@ -316,6 +320,8 @@ class manoFitter(object):
         self.mano_model.set_loss_mode(is_loss_seg, is_loss_2d, is_loss_reg, is_loss_depth)
         self.mano_model.change_render_setting(False)
 
+        self.mano_model.change_render_setting(True)
+
         if is_debugging:
             print("Fitting {}".format(mode))
         iter_count = 0
@@ -363,31 +369,49 @@ class manoFitter(object):
                 # param_xy = self.mano_model.xy_root.clone().detach()
                 # param_z = self.mano_model.z_root.clone().detach()
 
-                # kpts_2d_pred = np.squeeze(self.mano_model.kpts_2d.cpu().numpy())
-                # rgb = rgbSet[camIdx]
-                # img2bb = np.copy(meta['img2bb'])
-                #
-                # uv1 = np.concatenate((kpts_2d_gt, np.ones_like(kpts_2d_gt[:, :1])), 1)
-                # kpts_2d_gt = (img2bb @ uv1.T).T
-                # rgb_2d_gt = NIA_utils.paint_kpts(None, rgb, kpts_2d_gt)
-                #
-                # uv1 = np.concatenate((kpts_2d_pred, np.ones_like(kpts_2d_pred[:, :1])), 1)
-                # kpts_2d_pred = (img2bb @ uv1.T).T
-                # rgb_2d_pred = NIA_utils.paint_kpts(None, rgb, kpts_2d_pred)
-                #
+                kpts_2d_pred = np.squeeze(self.mano_model.kpts_2d.cpu().numpy())
+                rgb = rgbSet[camIdx]
+                img2bb = np.copy(meta['img2bb'])
+
+                uv1 = np.concatenate((kpts_2d_gt, np.ones_like(kpts_2d_gt[:, :1])), 1)
+                kpts_2d_gt = (img2bb @ uv1.T).T
+                rgb_2d_gt = NIA_utils.paint_kpts(None, rgb, kpts_2d_gt)
+
+                uv1 = np.concatenate((kpts_2d_pred, np.ones_like(kpts_2d_pred[:, :1])), 1)
+                kpts_2d_pred = (img2bb @ uv1.T).T
+                rgb_2d_pred = NIA_utils.paint_kpts(None, rgb, kpts_2d_pred)
+
                 # cv2.imshow("gt", rgb_2d_gt)
                 # cv2.imshow("pred", rgb_2d_pred)
-                #
-                # _, _, _, _, _, img_render, _ = self.mano_model()
-                #
-                # img_render = (img_render.cpu().data.numpy()[0][:, :, :3] * 255.0).astype(np.uint8)
-                # bbox = bbox.astype(int)
-                # img_render = img_render[bbox[1]:bbox[1] + bbox[3], bbox[0]:bbox[0] + bbox[2], :]
-                #
-                # rgb_blend = cv2.addWeighted(img_render, 0.5, rgb_2d_pred, 0.7, 0)
-                # cv2.imshow("blend", rgb_blend)
-                # cv2.waitKey(0)
 
+                _, _, _, _, _, img_render, _ = self.mano_model()
+
+                img_render = (img_render.cpu().data.numpy()[0][:, :, :3] * 255.0).astype(np.uint8)
+                bbox = bbox.astype(int)
+                img_render = img_render[bbox[1]:bbox[1] + bbox[3], bbox[0]:bbox[0] + bbox[2], :]
+
+                rgb_blend = cv2.addWeighted(img_render, 0.5, rgb_2d_pred, 0.7, 0)
+                cv2.imshow(camID, rgb_blend)
+
+
+                # Pred 2D verts
+                verts_2d = self.mano_model.verts_2d.cpu().numpy()[0]
+                uv1 = np.concatenate((verts_2d, np.ones_like(verts_2d[:, :1])), 1)
+                verts_2d = (img2bb @ uv1.T).T
+                # convert axis
+                verts_2d = verts_2d[:, [1, 0]]
+
+                im_vert = rgb.copy()
+                # draw points
+                for k, kpt in enumerate(verts_2d):
+                    row = int(kpt[0])
+                    col = int(kpt[1])
+                    r = 1
+                    cv2.circle(im_vert, (col, row), radius=r, thickness=-1, color=(0, 0, 255))
+                vert_name = "verts_" + camID
+                cv2.imshow(vert_name, im_vert)
+
+                cv2.waitKey(1)
 
                 if is_loss_seg:
                     loss_seg_sum = torch.sum(loss_seg_batch)
@@ -623,19 +647,19 @@ class optimizer_torch():
             out_img = np.concatenate([rgb_GT, rgb_blend, depth_mano], axis=1)
 
             cv2.imshow("out", out_img)
+            cv2.waitKey(0)
 
     def run_multiview(self, data):
         camSet, rgbSet, depthSet, segSet, metas = data
 
         # fitting mesh
-        # self.mano_fit_tool.fit_multi2d_pose(camSet, rgbSet, depthSet, metas, iter=500)
-        self.mano_fit_tool.fit_multi2d_all(camSet, rgbSet, depthSet, segSet, metas, iter=500)
-
+        self.mano_fit_tool.fit_multi2d_pose(camSet, rgbSet, depthSet, segSet, metas, iter=500)
+        # self.mano_fit_tool.fit_multi2d_all(camSet, rgbSet, depthSet, segSet, metas, iter=500)
 
         # visualization of each cam results
         for idx, (rgb, depth, meta) in enumerate(zip(rgbSet, depthSet, metas)):
-            # if not idx == DEBUG_IDX:
-            #     continue
+            if not idx == DEBUG_IDX:
+                continue
             bbox = np.copy(meta['bb'])
             img2bb = np.copy(meta['img2bb'])
             kpts_2d_gt = np.copy(meta['kpts'])[:, :2]
