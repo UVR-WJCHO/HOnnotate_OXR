@@ -349,11 +349,6 @@ class manoFitter(object):
 
                 loss_seg_batch, loss_2d_batch, loss_reg_batch, loss_dep_batch, _, _, _ = self.mano_model()
 
-                ### debug
-                # param_pose = self.mano_model.pose_adjusted_all.clone().detach()
-                # param_xy = self.mano_model.xy_root.clone().detach()
-                # param_z = self.mano_model.z_root.clone().detach()
-
                 kpts_2d_pred = np.squeeze(self.mano_model.kpts_2d.cpu().numpy())
                 rgb = rgbSet[camIdx]
                 img2bb = np.copy(meta['img2bb'])
@@ -378,25 +373,22 @@ class manoFitter(object):
                 rgb_blend = cv2.addWeighted(img_render, 0.5, rgb_2d_pred, 0.7, 0)
                 cv2.imshow(camID, rgb_blend)
 
-
-                # Pred 2D verts
-                verts_2d = self.mano_model.verts_2d.cpu().numpy()[0]
-                uv1 = np.concatenate((verts_2d, np.ones_like(verts_2d[:, :1])), 1)
-                verts_2d = (img2bb @ uv1.T).T
-                # convert axis
-                verts_2d = verts_2d[:, [1, 0]]
-
-                im_vert = rgb.copy()
-                # draw points
-                for k, kpt in enumerate(verts_2d):
-                    row = int(kpt[0])
-                    col = int(kpt[1])
-                    r = 1
-                    cv2.circle(im_vert, (col, row), radius=r, thickness=-1, color=(0, 0, 255))
-                vert_name = "verts_" + camID
-                cv2.imshow(vert_name, im_vert)
-
-                cv2.waitKey(1)
+                # Debug predicted 2D verts
+                # verts_2d = self.mano_model.verts_2d.cpu().numpy()[0]
+                # uv1 = np.concatenate((verts_2d, np.ones_like(verts_2d[:, :1])), 1)
+                # verts_2d = (img2bb @ uv1.T).T
+                # # convert axis
+                # verts_2d = verts_2d[:, [1, 0]]
+                # im_vert = rgb.copy()
+                # # draw points
+                # for k, kpt in enumerate(verts_2d):
+                #     row = int(kpt[0])
+                #     col = int(kpt[1])
+                #     r = 1
+                #     cv2.circle(im_vert, (col, row), radius=r, thickness=-1, color=(0, 0, 255))
+                # vert_name = "verts_" + camID
+                # cv2.imshow(vert_name, im_vert)
+                # cv2.waitKey(1)
 
                 if is_loss_seg:
                     loss_seg_sum = torch.sum(loss_seg_batch)
@@ -638,8 +630,8 @@ class optimizer_torch():
         camSet, rgbSet, depthSet, segSet, metas = data
 
         # fitting mesh
-        self.mano_fit_tool.fit_multi2d_pose(camSet, rgbSet, depthSet, segSet, metas, iter=500)
-        # self.mano_fit_tool.fit_multi2d_all(camSet, rgbSet, depthSet, segSet, metas, iter=500)
+        # self.mano_fit_tool.fit_multi2d_pose(camSet, rgbSet, depthSet, segSet, metas, iter=500)
+        self.mano_fit_tool.fit_multi2d_all(camSet, rgbSet, depthSet, segSet, metas, iter=500)
 
         # visualization of each cam results
         for idx, (rgb, depth, meta) in enumerate(zip(rgbSet, depthSet, metas)):

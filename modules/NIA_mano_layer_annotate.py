@@ -319,15 +319,17 @@ class Model(nn.Module):
             seg_rendered[seg_rendered > 0] = 1
             seg_rendered[seg_rendered < 0] = 0
 
-            '''
             # code for debugging
-            import cv2
-            print(self.seg_ref.shape, seg_rendered.shape)
-            print(self.seg_ref.min(), self.seg_ref.max())
-            print(seg_rendered.min(), seg_rendered.max())
-            cv2.imwrite('debug/seg_ref.png', self.seg_ref.detach().cpu().numpy()*250) 
-            cv2.imwrite('debug/seg_pred.png', seg_rendered.detach().cpu().numpy()*250) 
-            '''
+            # import cv2
+            # print(self.seg_ref.shape, seg_rendered.shape)
+            # print(self.seg_ref.min(), self.seg_ref.max())
+            # print(seg_rendered.min(), seg_rendered.max())
+            # seg_ref = self.seg_ref.detach().cpu().numpy() * 255
+            # seg_pred = seg_rendered.detach().cpu().numpy() * 255
+            # cv2.imshow("seg_ref", np.asarray(seg_ref, dtype=np.uint8))
+            # cv2.imshow("seg_pred", np.asarray(seg_pred, dtype=np.uint8))
+            # cv2.waitKey(1)
+
             loss_seg = torch.sum(((seg_rendered - self.seg_ref) ** 2).view(self.batch_size, -1), -1)
             loss_seg = torch.clamp(loss_seg, min=0, max=2000)  # loss clipping following HOnnotate
         else:
@@ -338,16 +340,18 @@ class Model(nn.Module):
                              self.bbox[0]:self.bbox[0] + self.bbox[2], 0]
             depth_rendered[depth_rendered == -1] = 0.
 
-            '''
+
             # code for debugging
             import cv2
             print(depth_rendered.shape)
             print(depth_rendered.min(), depth_rendered.max())
             print(self.depth_ref.shape)
             print((self.depth_ref/self.scale).min(), (self.depth_ref/self.scale).max())
-            cv2.imwrite('debug/_depth_render.png', depth_rendered.detach().cpu().numpy()) 
-            cv2.imwrite('debug/_depth_gt.png', self.depth_ref.detach().cpu().numpy() / self.scale.detach().cpu().numpy()) 
-            '''
+            depth_render = depth_rendered.detach().cpu().numpy()
+            depth_gt = self.depth_ref.detach().cpu().numpy() / self.scale.detach().cpu().numpy()
+            cv2.imshow("depth_render", np.asarray(depth_render, dtype=np.uint8))
+            cv2.imshow("depth_gt", np.asarray(depth_gt, dtype=np.uint8))
+            cv2.waitKey(1)
 
             loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
                                    -1) * 0.00012498664727900177  # depth scale used in HOnnotate
