@@ -25,7 +25,7 @@ from modules.NIA_mano_layer_annotate import Model, changeCoordtopytorch3D
 import modules.NIA_utils as NIA_utils
 
 
-DEBUG_IDX = 0
+# DEBUG_IDX = 0
 
 def init_pytorch3d(device=None, camParam=None):
     intrinsic, extrinsic = camParam
@@ -34,22 +34,16 @@ def init_pytorch3d(device=None, camParam=None):
     focal_l = (intrinsic[0, 0], intrinsic[1, 1])
     principal_p = (intrinsic[0, -1], intrinsic[1, -1])
 
-    # to pytorch3D coordinate ( x * -1, y * -1)
+    # to pytorch3D coordinate (rotate 180 degree with z axis)
     extrinsic_py = changeCoordtopytorch3D(extrinsic)
 
     R = torch.unsqueeze(torch.FloatTensor(extrinsic_py[:, :-1]), 0)
     T = torch.unsqueeze(torch.FloatTensor(extrinsic_py[:, -1]), 0)
 
-    K = np.eye(4)
-    K[:3, :3] = intrinsic
-    K = torch.unsqueeze(torch.FloatTensor(K), 0)
-
     cameras = PerspectiveCameras(device=device, image_size=(image_size,), focal_length=(focal_l,),
                                  principal_point=(principal_p,), R=R, T=T, in_ndc=False)
-    # cameras = PerspectiveCameras(device=device, image_size=(image_size,), K=K, R=R, T=T, in_ndc=False)
 
     # Define the settings for rasterization and shading.
-
     raster_settings = RasterizationSettings(
         image_size=(cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH),
         blur_radius=0,
@@ -71,14 +65,6 @@ def init_pytorch3d(device=None, camParam=None):
         cameras=cameras,
         raster_settings=raster_settings
     )
-
-    # silhouette_renderer = MeshRenderer(
-    #     rasterizer=MeshRasterizer(
-    #         cameras=cameras,
-    #         raster_settings=raster_settings
-    #     ),
-    #     shader=SoftSilhouetteShader(blend_params=blend_params)
-    # )
 
     return cameras, raster_settings, lights, rasterizer_depth, renderer_rgb
 
@@ -115,7 +101,7 @@ class manoFitter(object):
 
         else:
             for camID in camIDset:
-                camParam = [self.intrinsicSet[camID], self.extrinsicSet[camID]]
+                camParam = [self.intrinsicSet[camID], self.extrinsicSet['mas']]
 
                 _, _, _, renderer_depth, renderer_col = init_pytorch3d(self.device, camParam)
                 self.renderer_depth_list.append(renderer_depth)
@@ -141,7 +127,6 @@ class manoFitter(object):
     def get_rendered_img(self, img2bb=None, bbox=None):
         self.mano_model.change_render_setting(True)
         _, _, _, _, depth_rendered, img_rendered, hand_joints = self.mano_model()
-
         # mano_3Djoint = hand_joints.cpu().data.numpy()[0]
 
         # transfer to cpu
@@ -658,8 +643,8 @@ class optimizer_torch():
 
         # visualization of each cam results
         for idx, (rgb, depth, meta) in enumerate(zip(rgbSet, depthSet, metas)):
-            if not idx == DEBUG_IDX:
-                continue
+            # if not idx == DEBUG_IDX:
+            #     continue
             bbox = np.copy(meta['bb'])
             img2bb = np.copy(meta['img2bb'])
             kpts_2d_gt = np.copy(meta['kpts'])[:, :2]

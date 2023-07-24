@@ -88,14 +88,6 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
         # mano world is cm? scale translation value
         extrinsics[camID][:, -1] = np.copy(extrinsics[camID][:, -1]) / 10.0
 
-        # extrinsics[camID][0, 0] = extrinsics[camID][0, 0] * -1.0
-        # extrinsics[camID][1, 1] = extrinsics[camID][1, 1] * -1.0
-        # extrinsics[camID][2, -1] = extrinsics[camID][2, -1] * -1.0
-
-        # extrinsics[camID][0, :] = extrinsics[camID][0, :] * -1.0
-        # extrinsics[camID][1, :] = extrinsics[camID][1, :] * -1.0
-        # extrinsics[camID][:, 2] = extrinsics[camID][:, 2] * -1.0
-
     optm = optimizer_torch(camIDset, [intrinsics, extrinsics], flag_multi=flag_multi)
 
     # run each frame with set of metas/images
