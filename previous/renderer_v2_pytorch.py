@@ -167,20 +167,20 @@ class manoFitter(object):
         self.mano_model.set_depth_gt(depth_gt)
         self.mano_model.set_bbox(bbox)
 
-        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=False)
+        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=True)
         optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('pose') # vs. all? lr difference
 
 
         intrinsic, extrinsic = camParam
         self.mano_model.set_cam_params(intrinsic, extrinsic, flag_main=True)
 
-        self.fit_mano(optimizer_adam_mano_fit, "all", iter, is_loss_seg=False, is_loss_depth=False, is_loss_2d_glob=True, \
+        self.fit_mano(optimizer_adam_mano_fit, "all", iter, is_loss_seg=True, is_loss_depth=True, is_loss_2d_glob=True, \
             is_loss_reg=True, is_debugging=True)
         self.reset_mano_optimization_var()
 
     def fit_multi2d_pose(self, camSet, rgbSet, depthSet, segSet, metas, iter=300):
 
-        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=True)
+        self.mano_model.change_grads(root=True, rot=True, pose=True, shape=False)
         optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('all')
 
         self.fit_mano_multiview(camSet, rgbSet, depthSet, segSet, metas, optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
@@ -376,8 +376,7 @@ class manoFitter(object):
                 img_render = img_render[bbox[1]:bbox[1] + bbox[3], bbox[0]:bbox[0] + bbox[2], :]
 
                 rgb_blend = cv2.addWeighted(img_render, 0.5, rgb_2d_pred, 0.7, 0)
-                # cv2.imshow(camID, rgb_blend)
-                cv2.imwrite("/home/workplace/HOnnotate_OXR/output/{}.png".format(camID), rgb_blend)
+                cv2.imshow(camID, rgb_blend)
 
 
                 # Pred 2D verts
@@ -395,9 +394,9 @@ class manoFitter(object):
                     r = 1
                     cv2.circle(im_vert, (col, row), radius=r, thickness=-1, color=(0, 0, 255))
                 vert_name = "verts_" + camID
-                # cv2.imshow(vert_name, im_vert)
-                # cv2.waitKey(1)
-                cv2.imwrite("/home/workplace/HOnnotate_OXR/output/{}.png".format(vert_name), im_vert)
+                cv2.imshow(vert_name, im_vert)
+
+                cv2.waitKey(1)
 
                 if is_loss_seg:
                     loss_seg_sum = torch.sum(loss_seg_batch)
@@ -632,9 +631,8 @@ class optimizer_torch():
 
             out_img = np.concatenate([rgb_GT, rgb_blend, depth_mano], axis=1)
 
-            # cv2.imshow("out", out_img)
-            # cv2.waitKey(0)
-            cv2.imwrite("/home/workplace/HOnnotate_OXR/output/{}.png".format(cam), out_img)
+            cv2.imshow("out", out_img)
+            cv2.waitKey(0)
 
     def run_multiview(self, data):
         camSet, rgbSet, depthSet, segSet, metas = data
@@ -683,20 +681,15 @@ class optimizer_torch():
                 col = int(kpt[1])
                 r = 1
                 cv2.circle(im_vert, (col, row), radius=r, thickness=-1, color=(0, 0, 255))
-            # cv2.imshow("verts", im_vert)
-            cv2.imwrite("/home/workplace/HOnnotate_OXR/output/{}.png".format("verts"), im_vert)
+            cv2.imshow("verts", im_vert)
 
             imgName_blend = "Pred_rgb_" + str(self.camIDset[idx])
             imgName_GT = "GT_rgb_" + str(self.camIDset[idx])
             imgName_depth = "Pred_depth_" + str(self.camIDset[idx])
-            # cv2.imshow(imgName_blend, rgb_blend)
-            # # cv2.imshow(imgName_GT, rgb_GT)
-            # # cv2.imshow(imgName_depth, depth_mano)
-            # cv2.waitKey(0)
-            cv2.imwrite("/home/workplace/HOnnotate_OXR/output/{}.png".format(imgName_blend), rgb_blend)
+            cv2.imshow(imgName_blend, rgb_blend)
+            # cv2.imshow(imgName_GT, rgb_GT)
+            # cv2.imshow(imgName_depth, depth_mano)
+            cv2.waitKey(0)
 
 
 
-
-if __name__ == '__main__':
-   print("l")
