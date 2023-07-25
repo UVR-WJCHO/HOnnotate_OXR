@@ -59,6 +59,9 @@ lenDBTotal = len(os.listdir(rootDir))
 """
 camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
 
+objResultDir = os.path.join(baseDir, FLAGS.db) + '_obj'
+objTemplateDir = os.path.join(baseDir, 'ObjTemplate')
+
 
 SEG_CKPT_DIR = 'HOnnotate_refine/checkpoints/Deeplab_seg'
 YCB_MODELS_DIR = './HOnnotate_OXR/HOnnotate_refine/YCB_Models/models/'
@@ -79,7 +82,7 @@ flag_MVobj = True
 flag_MVboth = True
 
 
-def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
+def handOptim(seqName, camParamList, metaList, imgList, objData, flag_multi=False):
 
     intrinsics, extrinsics, distCoeffs = camParamList
 
@@ -90,7 +93,11 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
     optm = optimizer_torch(camIDset, [intrinsics, extrinsics], flag_multi=flag_multi)
 
     # run each frame with set of metas/images
-    for metas, imgs in zip(metaList, imgList):
+    for idx, (metas, imgs) in enumerate(zip(metaList, imgList)):
+        # For debugging object pose
+        if idx < 1:
+            continue
+
         rgbSet = []
         depthSet = []
         segSet = []
@@ -112,7 +119,15 @@ def handOptim(seqName, camParamList, metaList, imgList, flag_multi=False):
         for camID in camIDset:
             camSet.append([intrinsics[camID], extrinsics[camID]])
 
-        data = [camSet, rgbSet, depthSet, segSet, metas]
+        objPoseData, objMeshData = objData
+        objPose = objPoseData[idx * 2].split(',')
+        objPose = [float(x) for x in objPose]
+        objPose = [objPose[x:x + 4] for x in range(0, len(objPose), 4)]
+        # change it to ndarray format
+
+        objData = [objPose, objMeshData]
+
+        data = [camSet, rgbSet, depthSet, segSet, metas, objData]
 
         if not flag_multi:
             optm.run(data)
@@ -158,6 +173,36 @@ def getMeta(files, seq):
 
     return finalPklDataList
 
+def read_file(file_path):
+    lines = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            # Remove newline character at the end of each line
+            line = line.strip()
+            lines.append(line)
+    return lines
+
+
+def read_obj(file_path):
+    verts = []
+    faces = []
+
+    with open(file_path, 'r') as file:
+        for line in file:
+            line = line.strip()
+            if line.startswith('v '):
+                # Parse vertex coordinates
+                vertex = line[2:].split()
+                vertex = [float(coord) for coord in vertex]
+                verts.append(vertex)
+            elif line.startswith('f '):
+                # Parse face indices
+                face = line[2:].split()
+                face = [int(index.split('/')[0]) - 1 for index in face]
+                faces.append(face)
+
+    obj_data = {'verts': verts, 'faces': faces}
+    return obj_data
 
 def main(argv):
     ### Setup ###
@@ -190,8 +235,11 @@ def main(argv):
         # load camera param
         camParamList = getCam()     # intrinsicMatrices, cameraParams(R, T), distCoeffs
 
-        # load meta data(hand results)
+        # load meta data
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+            if not seqName == '230612_mug':
+                continue
+
             pklDataperCam = []      # [[mas_pkl_list], [sub1_pkl_list], ...]
             imgNameperCam = []
             for camID in camIDset:
@@ -219,8 +267,20 @@ def main(argv):
                 metas.append(metasperFrame)
                 imgs.append(imgsperFrame)
 
+
+            # load object data
+            objFilePath = os.path.join(objResultDir, seqName) + '.txt'
+            objPoseData = read_file(objFilePath)
+            targetView = objPoseData[0]
+
+            objName = seqName.split('_')[1]
+            objMeshPath = os.path.join(objTemplateDir, objName) + '.obj'
+            objMeshData = read_obj(objMeshPath)
+
+            objData = [objPoseData, objMeshData]
+
             # 현재 sequence 별로 초기화 진행. 낭비. 이후에 db 별로 초기화하도록 변경.
-            handOptim(seqName, camParamList, metas, imgs, flag_multi=True)
+            handOptim(seqName, camParamList, metas, imgs, objData, flag_multi=True)
 
     ### Multi-frame pose refinement ###
     '''

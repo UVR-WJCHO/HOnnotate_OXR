@@ -27,6 +27,18 @@ import modules.NIA_utils as NIA_utils
 
 # DEBUG_IDX = 0
 
+def apply_transform(matrix, points):
+    # Append 1 to each coordinate to convert them to homogeneous coordinates
+    homogeneous_points = np.hstack((points, np.ones((points.shape[0], 1))))
+
+    # Apply matrix multiplication
+    transformed_points = np.dot(matrix, homogeneous_points.T).T
+
+    # Convert back to Cartesian coordinates
+    transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
+
+    return transformed_points_cartesian
+
 def init_pytorch3d(device=None, camParam=None):
     intrinsic, extrinsic = camParam
     image_size = (cfg.ORIGIN_HEIGHT, cfg.ORIGIN_WIDTH)
@@ -188,12 +200,12 @@ class manoFitter(object):
 
         self.reset_mano_optimization_var()
 
-    def fit_multi2d_all(self, camSet, rgbSet, depthSet, segSet, metas, iter=300):
+    def fit_multi2d_all(self, camSet, rgbSet, depthSet, segSet, metas, objData, iter=300):
 
         self.mano_model.change_grads(root=True, rot=True, pose=True, shape=True)
         optimizer_adam_mano_fit, lr_scheduler = self.reset_mano_optimizer('all')
 
-        self.fit_mano_multiview(camSet, rgbSet, depthSet, segSet, metas, optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
+        self.fit_mano_multiview(camSet, rgbSet, depthSet, segSet, metas, objData, optimizer_adam_mano_fit, "all", iter, is_loss_2d=True, \
             is_loss_reg=True, is_loss_seg=True, is_loss_depth=True, is_debugging=True)
 
         self.reset_mano_optimization_var()
@@ -299,12 +311,13 @@ class manoFitter(object):
         else:
             self.mano_model()
 
-    def fit_mano_multiview(self, camSet, rgbSet, depthSet, segSet, metas, optimizer, mode, iter_fit, is_loss_seg=False, \
+    def fit_mano_multiview(self, camSet, rgbSet, depthSet, segSet, metas, objData, optimizer, mode, iter_fit, is_loss_seg=False, \
                  is_loss_2d=False, is_loss_reg=False, is_loss_depth=True, is_debugging=True, is_visualizing=False, show_progress=False):
 
         self.mano_model.set_loss_mode(is_loss_seg, is_loss_2d, is_loss_reg, is_loss_depth)
         self.mano_model.change_render_setting(False)
 
+        # for debug
         self.mano_model.change_render_setting(True)
 
         if is_debugging:
@@ -403,6 +416,7 @@ class manoFitter(object):
                     loss_dep_sum = torch.sum(loss_dep_batch)
                     loss_total += loss_dep_sum
 
+
             if loss_total == 0:
                 print("No valid kpts in current sample")
                 break
@@ -438,6 +452,45 @@ class manoFitter(object):
             # with torch.no_grad():
             #     self.mano_model.input_pose[0, cfg.fin4_ver_fix_idx - 3] = \
             #         -self.mano_model.input_pose[0, cfg.fin4_ver_idx2 - 3]
+
+            for camIdx, camID in enumerate(self.camIDset):
+                self.change_renderer_cam(camIdx)
+
+                ### Debug object rendering ###
+                intrinsic_obj, extrinsic_obj = camSet[2]
+                self.mano_model.set_cam_params(intrinsic_obj, extrinsic_obj, flag_main=True)
+
+                objPose, objMeshData = objData
+                verts, faces = objMeshData['verts'], objMeshData['faces']
+                faces = np.asarray(faces)
+                faces = torch.unsqueeze(torch.FloatTensor(faces), axis=0).cuda()
+
+                verts = np.asarray(verts)[:, :3]
+                verts = apply_transform(objPose, verts) * 100.0
+                verts = torch.FloatTensor(verts).cuda()
+
+                verts_cam = torch.unsqueeze(self.mano_model.mano3DToCam3D(verts), axis=0)
+                verts_rgb = torch.ones_like(verts_cam)
+                textures = TexturesVertex(verts_features=verts_rgb)
+                obj_mesh = Meshes(
+                    verts=verts_cam,
+                    faces=faces,
+                    textures=textures
+                )
+                image_obj_rgb = self.mano_model.renderer_col(meshes_world=obj_mesh)
+                image_obj_d = self.mano_model.renderer_d(meshes_world=obj_mesh).zbuf
+
+                image_obj_rgb = (image_obj_rgb.cpu().data.numpy()[0][:, :, :3] * 255.0).astype(np.uint8)
+
+                temp = '/home/uvrlab/projects/HOnnotate_OXR/dataset/230612/230612_mug/rgb/'
+                temp = temp + camID + '_0.png'
+                rgb_full = np.asarray(cv2.imread(temp))
+                rgb_obj_blend = cv2.addWeighted(rgb_full, 0.5, image_obj_rgb, 0.7, 0)
+                rgb_obj_blend = cv2.resize(rgb_obj_blend, dsize=(640, 480), interpolation=cv2.INTER_LINEAR)
+                name = "image_obj_" + camID
+                cv2.imshow(name, rgb_obj_blend)
+                cv2.waitKey(0)
+
 
         if is_debugging:
             print("Optimization stopped. Iter = {}".format(iter_count))
@@ -627,11 +680,12 @@ class optimizer_torch():
             cv2.waitKey(0)
 
     def run_multiview(self, data):
-        camSet, rgbSet, depthSet, segSet, metas = data
+        camSet, rgbSet, depthSet, segSet, metas, objData = data
 
         # fitting mesh
         # self.mano_fit_tool.fit_multi2d_pose(camSet, rgbSet, depthSet, segSet, metas, iter=500)
-        self.mano_fit_tool.fit_multi2d_all(camSet, rgbSet, depthSet, segSet, metas, iter=500)
+        self.mano_fit_tool.fit_multi2d_all(camSet, rgbSet, depthSet, segSet, metas, objData, iter=500)
+
 
         # visualization of each cam results
         for idx, (rgb, depth, meta) in enumerate(zip(rgbSet, depthSet, metas)):
