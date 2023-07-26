@@ -25,19 +25,32 @@ from pytorch3d.renderer import (
     PerspectiveCameras
 )
 import transforms3d as t3d
+from scipy.spatial.transform import Rotation as R
+
+def changeCoordtopytorch3D(extrinsic):
+    extrinsic_py = np.copy(extrinsic)
+
+    # axis flip rotation value
+    r = R.from_euler('z', [180], degrees=True)
+    r = np.squeeze(r.as_matrix())
+    extrinsic_py = r @ extrinsic_py
+
+    return extrinsic_py
+
 
 class Renderer():
-    def __init__(self, device='cpu', bs=1):
+    def __init__(self, device='cpu', bs=1, extrinsic=None, intrinsic=None, image_size=None, light_loaction=((2.0, 2.0, -2.0),)):
+        '''
+            R : numpy array [3, 3]
+            T : numpy array [3]
+            Ext : numpy array [4, 4] or [3, 4]
+            intrinsics : [3, 3]
+        '''
         self.device = device
         self.bs = bs
 
-    def set_renderer(self, R=None, T=None, Ext=None, intrinsics=None, image_size = (256, 256) , light_loaction = [[0.0, 0.0, 3.0]]):
-        '''
-        R : numpy array [3, 3]
-        T : numpy array [3]
-        Ext : numpy array [4, 4] or [3, 4]
-        intrinsics : [3, 3]
-        '''
+        ### HTW version
+        """
         if R is None and T is None and Ext is None:
             M_corr = np.eye(4)
             M_corr[:3, :3] = t3d.euler.euler2mat(0.0, .0, np.pi)
@@ -64,11 +77,26 @@ class Renderer():
             focal_length = (intrinsics[0, 0], intrinsics[1, 1])
             principal_point = (intrinsics[0, 2], intrinsics[1, 2])
             cameras = PerspectiveCameras(device=self.device, R=camera_R, T=camera_T, focal_length=(focal_length, ), principal_point=(principal_point, ), in_ndc=False, image_size=(image_size, ))
+        """
+
+        ### WJ version
+        focal_l = (intrinsic[0, 0], intrinsic[1, 1])
+        principal_p = (intrinsic[0, -1], intrinsic[1, -1])
+
+        extrinsic_py3D = changeCoordtopytorch3D(extrinsic)
+
+        R = torch.unsqueeze(torch.FloatTensor(extrinsic_py3D[:, :-1]), 0)
+        T = torch.unsqueeze(torch.FloatTensor(extrinsic_py3D[:, -1]), 0)
+
+        cameras = PerspectiveCameras(device=self.device, image_size=(image_size,), focal_length=(focal_l,),
+                                     principal_point=(principal_p,), R=R, T=T, in_ndc=False)
 
         raster_settings = RasterizationSettings(
             image_size=image_size,
             blur_radius=0.0,
             faces_per_pixel=1,
+            bin_size = None,
+            max_faces_per_bin = None
         )
 
         lights = PointLights(device=self.device, location=light_loaction)
@@ -101,7 +129,7 @@ class Renderer():
         seg = torch.where(rgb[..., 3] != 0, 1, 0)
         depth = self.rasterizer_depth(meshes).zbuf
 
-        return {"image":rgb[..., :3], "seg":seg, "depth":depth[..., 0]} 
+        return {"rgb":rgb[..., :3], "seg":seg, "depth":depth[..., 0]}
 
 
 

@@ -9,23 +9,22 @@ import math
 from utils import params
 
 
-def mano3DToCam3D(xyz3D, ext, mas_ext):
-        xyz3D = torch.squeeze(xyz3D)
-        device = xyz3D.device
-        h = torch.tensor([[0, 0, 0, 1]]).to(device)
-        ext = ext.to(device)
-        mas_ext = mas_ext.to(device)
-        ones = torch.ones((xyz3D.shape[0], 1)).to(device)
+def mano3DToCam3D(xyz3D, ext, main_ext):
+    device = xyz3D.device
+    h = torch.tensor([[0, 0, 0, 1]]).to(device)
 
-        # mano to world
-        xyz4Dcam = torch.concatenate([xyz3D, ones], axis=1)
-        projMat = torch.concatenate((mas_ext, h), 0)
-        xyz4Dworld = (torch.linalg.inv(projMat) @ xyz4Dcam.T).T
+    xyz3D = torch.squeeze(xyz3D)
+    ones = torch.ones((xyz3D.shape[0], 1)).to(device)
 
-        # world to target cam
-        xyz3Dcam2 = xyz4Dworld @ ext.T  # [:, :3]
+    # mano to world
+    xyz4Dcam = torch.concatenate([xyz3D, ones], axis=1)
+    projMat = torch.concatenate((main_ext, h), 0)
+    xyz4Dworld = (torch.linalg.inv(projMat) @ xyz4Dcam.T).T
 
-        return xyz3Dcam2
+    # world to target cam
+    xyz3Dcam2 = xyz4Dworld @ ext.T  # [:, :3]
+
+    return xyz3Dcam2
 
 def projectPoints(xyz, K):
     """ Project 3D coordinates into image space. """

@@ -5,6 +5,7 @@ sys.path.insert(0,os.path.join(os.getcwd()))
 import torch
 from utils import params
 
+
 def clip_mano_hand_rot(rot_tensor):
     rot_min_tensor = torch.tensor([
         -10.0, -10.0, -10.0

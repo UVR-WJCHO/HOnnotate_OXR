@@ -51,8 +51,10 @@ class DataLoader:
         self.cam = cam
         self.data_date = data_date
         self.data_type = data_type
-        self.img_base_path = os.path.join(base_path, data_date, data_date + '_' + data_type)
-        self.rgb_path = os.path.join(self.img_base_path, 'rgb_crop')
+        self.img_base_path = os.path.join(base_path, data_date, data_date+'_'+data_type)
+        self.rgb_raw_path = os.path.join(self.img_base_path, 'rgb')
+        self.depth_raw_path = os.path.join(self.img_base_path, 'depth')
+
         self.rgb_path = os.path.join(self.img_base_path, 'rgb_crop')
         self.depth_path = os.path.join(self.img_base_path, 'depth_crop')
         self.seg_path = os.path.join(self.img_base_path, 'segmentation')
@@ -62,34 +64,47 @@ class DataLoader:
 
         self.hand_path = os.path.join(base_path, data_date+"_"+'hand', data_date+"_"+data_type)
 
+        self.obj_data_path = os.path.join(base_path, data_date+'_'+'obj') + '/'+data_date+'_'+data_type+'.txt'
+
         # #Get data from files
-        # self.get_cam_parameters()
+        self.cam_parameter = self.load_cam_parameters()
 
     def get_sample(self, index):
         sample = {}
-        # sample['Ks'] = self.camera_intrinsics[self.cam] # [3, 3]
-        # sample['Ms'] = self.camera_extrinsics[self.cam] # [3, 4]
-        # sample['Ds'] = self.dist_coeffs[self.cam] # [1, 8]
+
         #get imgs
-        sample['rgb'], sample['depth'], sample['seg'] = self.get_img(index)
+        sample['rgb'], depth, sample['seg'], rgb_raw, depth_raw = self.get_img(index)
+
+        depth_bg = depth > 700
+        depth[depth_bg] = 0
+        depth[depth == 0] = 0
+        sample['depth'] = depth
+
         #get meta data
         meta = self.get_meta(index)
 
         sample['bb'] = meta['bb']
         sample['img2bb'] = meta['img2bb']
+
         sample['kpts3d'] = meta['kpts']
         sample['kpts2d'] = meta['kpts'][:, :2]
 
+        # check img
+        # rgb_crop = np.copy(rgb_raw)
+        # bb = np.asarray(meta['bb']).astype(int)
+        # rgb_crop = rgb_crop[bb[1]:bb[1]+bb[3], bb[0]:bb[0]+bb[2], :]
+        # cv2.imshow("crop", rgb_crop)
+        # cv2.waitKey(0)
+
         return sample
 
-    def get_cam_parameters(self):
+    def load_cam_parameters(self):
         with open(os.path.join(self.cam_path, "cameraParamsBA.json")) as json_file:
             camera_extrinsics = json.load(json_file)
-            # self.camera_extrinsics = {k: np.array(v).reshape(3, 4) for k, v in camera_extrinsics.items()}
             camera_extrinsics = np.array((camera_extrinsics[self.cam])).reshape(3, 4)
+            # scale z axis value as mm to cm
             camera_extrinsics[:, -1] = camera_extrinsics[:, -1] / 10.0
-        
-        # self.camera_intrinsics = LoadCameraMatrix(os.path.join(self.cam_path, self.data_date + '_cameraInfo.txt'))
+
         camera_intrinsics = LoadCameraMatrix(os.path.join(self.cam_path, self.data_date + '_cameraInfo.txt'))
         camera_intrinsics = camera_intrinsics[self.cam]
         # self.dist_coeffs = {}
@@ -99,20 +114,25 @@ class DataLoader:
         # self.dist_coeffs["sub3"] = LoadDistortionParam(os.path.join(self.cam_path, "sub3_intrinsic.json"))  
         dist_coeffs = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json"%self.cam))       
 
-        return {"Ks":camera_intrinsics, "Ms":camera_extrinsics, "Ds":dist_coeffs}
+        return [camera_intrinsics, camera_extrinsics, dist_coeffs]
 
     def get_img(self, idx):
+        rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam + '_%01d.png' % idx)
+        depth_raw_path = os.path.join(self.depth_raw_path, self.cam + '_%01d.png' % idx)
+
         rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.png'%idx)
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
         seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.png'%idx)
-        
-        rgb = np.asarray(cv2.cvtColor(cv2.imread(rgb_path), cv2.COLOR_BGR2RGB))
-        depth = np.asarray(cv2.imread(depth_path, -1))
-        seg = np.asarray(cv2.imread(seg_path, -1))
-        seg = np.where(seg>1, 1, 0)
-        depth[depth>700] = 0
 
-        return rgb, depth, seg
+        rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
+        depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
+
+        rgb = np.asarray(cv2.imread(rgb_path))
+        depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
+        seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED))
+        seg = np.where(seg>1, 1, 0)
+
+        return rgb, depth, seg, rgb_raw, depth_raw
     
     def get_meta(self, idx):
         meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)
