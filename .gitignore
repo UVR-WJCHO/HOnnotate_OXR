@@ -133,4 +133,5 @@ HOnnotate_refine/models
 HOnnotate_refine/checkpoints
 HOnnotate_refine/objCorners
 dataset
-modules/HandsForAll/models_saved
+backup/HandsForAll/models_saved
+backup/HandsForAll/models

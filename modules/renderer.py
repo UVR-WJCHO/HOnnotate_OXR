@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append("/mnt/workplace/HOnnotate/optimization")
+sys.path.insert(0,os.path.join(os.getcwd(), '../HOnnotate_refine/optimization'))
 
 import numpy as np
 import torch

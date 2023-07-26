@@ -1,7 +1,7 @@
 import os
 from shutil import ExecError
 import sys
-sys.path.insert(0,os.path.join(os.getcwd(), 'utils'))
+sys.path.insert(0,os.path.join(os.getcwd(), '../', 'utils'))
 from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
 import numpy as np
 import cv2

@@ -7,10 +7,10 @@ import torch.nn as nn
 import numpy as np
 import cv2
 
-from dataloader import DataLoader
-from renderer import Renderer
-from handModel import HandModel
-from lossFunc import MultiViewLossFunc
+from modules.dataloader import DataLoader
+from modules.renderer import Renderer
+from modules.handModel import HandModel
+from modules.lossFunc import MultiViewLossFunc
 from utils import *
 from utils import params
 
@@ -32,10 +32,10 @@ get config from file(yaml, json, etc.)
 ## Config
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 CFG_LR_INIT = 0.4
-CFG_NUM_ITER = 300
+CFG_NUM_ITER = 100
 CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
-CFG_MANO_PATH = os.path.join(os.getcwd(), 'models')
+CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 
 CFG_LOSS_DICT = ['kpts2d']#, 'depth', 'seg', 'reg']
 CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')
@@ -119,8 +119,8 @@ def main(argv):
         for iter in range(CFG_NUM_ITER):
             loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0}
             for camIdx, camID in enumerate(CFG_CAMID_SET):
-                # if not camIdx == 1:
-                #     continue
+                if not camIdx == 1:
+                    continue
                 cam_params = dataloader_set[camIdx].cam_parameter
                 cam_sample = dataloader_set[camIdx][frame]
                 # skip non-detected camera
