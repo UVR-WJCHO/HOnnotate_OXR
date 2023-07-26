@@ -10,6 +10,9 @@ import pickle
 import torch
 import torch.nn as nn
 from glob import glob
+from config import *
+from tqdm import tqdm
+
 
 '''
 데이터셋 구조를 다음과 같이 세팅.(임시)
@@ -51,14 +54,18 @@ class DataLoader:
         self.cam = cam
         self.data_date = data_date
         self.data_type = data_type
-        self.img_base_path = os.path.join(base_path, data_date, data_date+'_'+data_type)
-        self.rgb_raw_path = os.path.join(self.img_base_path, 'rgb')
-        self.depth_raw_path = os.path.join(self.img_base_path, 'depth')
+        self.base_path = os.path.join(base_path, data_date, data_date+'_'+data_type)
+        self.rgb_raw_path = os.path.join(self.base_path, 'rgb')
+        self.depth_raw_path = os.path.join(self.base_path, 'depth')
 
-        self.rgb_path = os.path.join(self.img_base_path, 'rgb_crop')
-        self.depth_path = os.path.join(self.img_base_path, 'depth_crop')
-        self.seg_path = os.path.join(self.img_base_path, 'segmentation')
-        self.meta_base_path = os.path.join(self.img_base_path, 'meta')
+        self.rgb_path = os.path.join(self.base_path, 'rgb_crop')
+        self.depth_path = os.path.join(self.base_path, 'depth_crop')
+
+        # currently use temporal path from DH.K grabcut results
+        # self.seg_path = os.path.join(self.base_path, 'segmentation')
+        self.seg_path = os.path.join(self.base_path, 'seg_temp')
+
+        self.meta_base_path = os.path.join(self.base_path, 'meta')
 
         self.cam_path = os.path.join(base_path, data_date+"_"+'cam')
 
@@ -69,32 +76,47 @@ class DataLoader:
         # #Get data from files
         self.cam_parameter = self.load_cam_parameters()
 
+        self.db_len = len(glob(os.path.join(self.rgb_path, self.cam, '*.png')))
+
+        self.sample_dict = {}
+        sample_pkl_path = self.base_path + '/sample_'+ cam + '.pickle'
+        if os.path.exists(sample_pkl_path):
+            print("found pre-loaded pickle of %s" % cam)
+            with open(sample_pkl_path, 'rb') as handle:
+                self.sample_dict = pickle.load(handle)
+        else:
+            for frame in tqdm(range(self.db_len)):
+                sample = self.load_sample(frame)
+                self.sample_dict[frame] = sample
+            print("saving pickle of %s" % cam)
+            with open(sample_pkl_path, 'wb') as handle:
+                pickle.dump(self.sample_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
     def get_sample(self, index):
+        return self.sample_dict[index]
+
+    def load_sample(self, index):
         sample = {}
 
-        #get imgs
-        sample['rgb'], depth, sample['seg'], rgb_raw, depth_raw = self.get_img(index)
-
-        depth_bg = depth > 700
-        depth[depth_bg] = 0
-        depth[depth == 0] = 0
-        sample['depth'] = depth
-
-        #get meta data
+        # get meta data
         meta = self.get_meta(index)
 
-        sample['bb'] = meta['bb']
+        bb = np.asarray(meta['bb']).astype(int)
+        sample['bb'] = np.copy(bb)
         sample['img2bb'] = meta['img2bb']
-
         sample['kpts3d'] = meta['kpts']
         sample['kpts2d'] = meta['kpts'][:, :2]
 
-        # check img
-        # rgb_crop = np.copy(rgb_raw)
-        # bb = np.asarray(meta['bb']).astype(int)
-        # rgb_crop = rgb_crop[bb[1]:bb[1]+bb[3], bb[0]:bb[0]+bb[2], :]
-        # cv2.imshow("crop", rgb_crop)
-        # cv2.waitKey(0)
+        #get imgs
+        sample['rgb'], depth, seg, rgb_raw, depth_raw = self.get_img(index)
+
+        # masking depth, need to modify
+        depth_bg = depth_raw > 800
+        depth_raw[depth_bg] = 0
+        depth_raw[seg == 0] = 0
+
+        sample['depth'] = depth_raw[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
+        sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
 
         return sample
 
@@ -122,14 +144,25 @@ class DataLoader:
 
         rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.png'%idx)
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
-        seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.png'%idx)
+
+        # currently use temporal segmentation folder
+        # seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.png'%idx)
+        seg_path = os.path.join(self.seg_path, self.cam + '_%01d.png' % idx)
 
         rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
         depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
 
+        assert os.path.exists(rgb_path)
+        assert os.path.exists(depth_path)
+
         rgb = np.asarray(cv2.imread(rgb_path))
         depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
-        seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED))
+
+        # there are skipped frame for segmentation
+        if os.path.exists(seg_path):
+            seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED))
+        else:
+            seg = np.zeros((CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
         seg = np.where(seg>1, 1, 0)
 
         return rgb, depth, seg, rgb_raw, depth_raw
@@ -149,7 +182,7 @@ class DataLoader:
         return sample
     
     def __len__(self):
-        return len(glob(os.path.join(self.rgb_path, self.cam, '*.png')))
+        return self.db_len
 
 if __name__ == "__main__":
     mas_dataloader = DataLoader("/home/workplace/HOnnotate_OXR/dataset", "230612", "bare", "mas")

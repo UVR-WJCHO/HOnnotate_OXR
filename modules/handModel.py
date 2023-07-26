@@ -36,7 +36,6 @@ class HandModel(nn.Module):
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
         self.input_pose = nn.Parameter(initial_pose.to(device))
         self.input_shape = nn.Parameter(initial_shape.repeat(self.batch_size, 1).to(device))
-        self.shape_adjusted = clip_mano_hand_shape(self.input_shape)
 
         # Inital set up
         self.pose_all = torch.cat((self.input_rot, self.input_pose), 1)
@@ -59,7 +58,10 @@ class HandModel(nn.Module):
     def forward(self):
         self.pose_ = self.input_pose
         self.shape_ = self.input_shape
-        self.pose_.data = clip_mano_hand_pose(self.input_pose)
+
+        # need clipping?
+        # self.pose_.data = clip_mano_hand_pose(self.input_pose)
+        self.pose_.data = self.input_pose
         mano_param = torch.cat([self.input_rot, self.pose_], dim=1)
 
         hand_verts, hand_joints = self.mano_layer(mano_param, self.shape_)

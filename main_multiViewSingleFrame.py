@@ -18,6 +18,8 @@ from absl import flags
 from absl import app
 from absl import logging
 
+from config import *
+import time
 
 ## FLAGS
 FLAGS = flags.FLAGS
@@ -25,29 +27,10 @@ flags.DEFINE_string('db', '230612', 'target db name')   ## name ,default, help
 flags.DEFINE_string('type', 'bare', 'target sequence name')
 FLAGS(sys.argv)
 
-'''
-TODO
-get config from file(yaml, json, etc.)
-'''
-## Config
-CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
-CFG_LR_INIT = 0.4
-CFG_NUM_ITER = 100
-CFG_DEVICE = 'cuda'
-CFG_BATCH_SIZE = 1
-CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
-
-CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth', 'seg']
-CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')
-CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
-
-CFG_IMG_WIDTH = 1920
-CFG_IMG_HEIGHT = 1080
-CFG_CROP_IMG_WIDTH = 640
-CFG_CROP_IMG_HEIGHT = 480
 
 def main(argv):
-    ## Load data of each camera
+    ## Load data of each camera, save pkl file for second run.
+    print("loading data... %s %s " % (FLAGS.db, FLAGS.type))
     mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'mas')
     sub1_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'sub1')
     sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'sub2')
@@ -117,23 +100,26 @@ def main(argv):
 
         for iter in range(CFG_NUM_ITER):
             loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0}
+
             for camIdx, camID in enumerate(CFG_CAMID_SET):
-                # if not camIdx == 1:
-                #     continue
+                t1 = time.time()
                 cam_params = dataloader_set[camIdx].cam_parameter
                 cam_sample = dataloader_set[camIdx][frame]
                 # skip non-detected camera
                 if np.isnan(cam_sample['kpts3d']).any():
                     continue
+
+                t2 = time.time()
                 loss_func.set_gt(cam_sample, cam_params, renderer_set[camIdx], CFG_LOSS_DICT, main_cam_params)
 
+                t3 = time.time()
                 hand_param = model()
-                losses = loss_func(hand_param, render=flag_render)
+                t4 = time.time()
+                losses = loss_func(hand_param, render=flag_render)      # 42ms
                 for k in CFG_LOSS_DICT:
                     loss_all[k] += losses[k]
 
-                if flag_render:
-                    loss_func.visualize(CFG_SAVE_PATH, camID)
+                # loss_func.visualize(CFG_SAVE_PATH, camID)
 
             total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT)
             logs = ["Iter: {}, Loss: {}".format(iter, total_loss.data)]

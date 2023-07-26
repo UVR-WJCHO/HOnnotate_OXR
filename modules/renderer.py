@@ -129,6 +129,14 @@ class Renderer():
         seg = torch.where(rgb[..., 3] != 0, 1, 0)
         depth = self.rasterizer_depth(meshes).zbuf
 
+
+        # depth map process
+        depth[depth == -1] = 0.
+        depth = depth * 10.0
+
+        # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
+        #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
+
         return {"rgb":rgb[..., :3], "seg":seg, "depth":depth[..., 0]}
 
 
