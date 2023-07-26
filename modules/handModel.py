@@ -36,11 +36,12 @@ class HandModel(nn.Module):
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
         self.input_pose = nn.Parameter(initial_pose.to(device))
         self.input_shape = nn.Parameter(initial_shape.repeat(self.batch_size, 1).to(device))
+        self.shape_adjusted = clip_mano_hand_shape(self.input_shape)
 
         # Inital set up
-        self.pose_adjusted_all = torch.cat((self.input_rot, self.input_pose), 1)
+        self.pose_all = torch.cat((self.input_rot, self.input_pose), 1)
         # normalize scale
-        hand_verts, hand_joints = self.mano_layer(self.pose_adjusted_all, self.input_shape)
+        hand_verts, hand_joints = self.mano_layer(self.pose_all, self.input_shape)
         self.scale = torch.tensor([[self.compute_normalized_scale(hand_joints)]]).to(device)
 
 
@@ -59,17 +60,17 @@ class HandModel(nn.Module):
         self.pose_ = self.input_pose
         self.shape_ = self.input_shape
         self.pose_.data = clip_mano_hand_pose(self.input_pose)
-        self.shape_.data = clip_mano_hand_shape(self.input_shape)
         mano_param = torch.cat([self.input_rot, self.pose_], dim=1)
 
         hand_verts, hand_joints = self.mano_layer(mano_param, self.shape_)
-        hand_faces = self.mano_layer.th_faces.repeat(self.batch_size, 1, 1)
 
         xyz_root = torch.cat([self.xy_root, self.z_root], dim=-1)
         hand_verts = hand_verts / self.scale
         hand_verts = hand_verts + xyz_root[:, None, :]
         hand_joints = hand_joints / self.scale
         hand_joints = hand_joints + xyz_root[:, None, :]
+
+        hand_faces = self.mano_layer.th_faces.repeat(self.batch_size, 1, 1)
 
         return {'verts':hand_verts, 'faces':hand_faces, 'joints':hand_joints, 'xyz_root':xyz_root, 'scale':self.scale, 'rot':self.input_rot, 'pose':self.pose_, 'shape':self.shape_}
 

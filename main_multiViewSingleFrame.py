@@ -22,7 +22,7 @@ from absl import logging
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230612', 'target db name')   ## name ,default, help
-flags.DEFINE_string('type', 'banana', 'target sequence name')
+flags.DEFINE_string('type', 'bare', 'target sequence name')
 FLAGS(sys.argv)
 
 '''
@@ -74,7 +74,7 @@ def main(argv):
 
     ## Initialize hand model
     model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE)
-    model.change_grads(root=True, rot=True, pose=True, shape=False)
+    model.change_grads(root=True, rot=True, pose=True, shape=True)
     model_params = model.parameters()
 
     flag_render = False
@@ -82,8 +82,8 @@ def main(argv):
         flag_render = True
 
     for frame in range(len(mas_dataloader)):
-        # frame 0 is often errorneous
-        if frame == 0:
+        # initial frames are often errorneous (banana sub2 0000~0002 is error, ...)
+        if frame < 5:
             continue
 
         ## Initialize optimizer
@@ -109,7 +109,7 @@ def main(argv):
                         {'params': lr_rot, 'lr': 0.05},
                         {'params': lr_pose, 'lr': 0.05}]
         # skipped shape paramter lr
-        optimizer = torch.optim.Adam(model_params, lr=CFG_LR_INIT)
+        optimizer = torch.optim.Adam(model_params, lr=lr_init)
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
 
         ## Set main cam of calibration process
@@ -132,7 +132,8 @@ def main(argv):
                 for k in CFG_LOSS_DICT:
                     loss_all[k] += losses[k]
 
-                # loss_func.visualize(CFG_SAVE_PATH, camID)
+                if flag_render:
+                    loss_func.visualize(CFG_SAVE_PATH, camID)
 
             total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT)
             logs = ["Iter: {}, Loss: {}".format(iter, total_loss.data)]
