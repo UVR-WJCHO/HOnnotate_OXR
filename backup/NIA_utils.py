@@ -3,7 +3,7 @@ import cv2
 import math
 import torch
 import numpy as np
-import modules.HandsForAll.params as params
+import backup.HandsForAll.params as params
 
 def load_img_mano(img_path):
     img_orig = cv2.imread(img_path)

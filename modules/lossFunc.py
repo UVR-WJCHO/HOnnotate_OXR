@@ -30,13 +30,13 @@ class MultiViewLossFunc(nn.Module):
 
     def compute_reg_loss(self, mano_tensor, pose_mean_tensor, pose_reg_tensor):
         reg_loss = ((mano_tensor - pose_mean_tensor) ** 2) * pose_reg_tensor
-        return reg_loss
+        return torch.sum(reg_loss, -1)
 
     def set_gt(self, gt_sample, cam_params, cam_renderer, loss_dict, main_cam_params):
         self.bb = np.asarray(gt_sample['bb']).astype(int)
         self.img2bb = gt_sample['img2bb']
-        self.gt_kpts2d = torch.FloatTensor(gt_sample['kpts2d'])
-        self.gt_kpts3d = torch.FloatTensor(gt_sample['kpts3d'])
+        self.gt_kpts2d = torch.unsqueeze(torch.FloatTensor(gt_sample['kpts2d']), 0).to(self.device)
+        self.gt_kpts3d = torch.unsqueeze(torch.FloatTensor(gt_sample['kpts3d']), 0).to(self.device)
 
         self.gt_rgb = torch.FloatTensor(gt_sample['rgb']).to(self.device)
         self.gt_depth = torch.FloatTensor(gt_sample['depth']).to(self.device)
@@ -57,14 +57,13 @@ class MultiViewLossFunc(nn.Module):
         verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms, self.main_Ms), 0)
         joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms, self.main_Ms), 0)
 
-
         loss = {}
         if 'kpts2d' in self.loss_dict:
             pred_kpts2d = projectPoints(joints_cam, self.Ks)
             self.pred_kpts2d = pred_kpts2d.clone().detach()
 
             # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d.repeat(self.bs, 1, 1).to(self.device))
-            loss_kpts2d = torch.sum((pred_kpts2d - self.gt_kpts2d.repeat(self.bs, 1, 1).to(self.device)) ** 2)
+            loss_kpts2d = torch.sum(((pred_kpts2d - self.gt_kpts2d) ** 2).reshape(self.bs, -1), -1)
             loss['kpts2d'] = loss_kpts2d
 
         if 'reg' in self.loss_dict:

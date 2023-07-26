@@ -37,7 +37,7 @@ CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 
-CFG_LOSS_DICT = ['kpts2d']#, 'depth', 'seg', 'reg']
+CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth', 'seg']
 CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 
@@ -110,8 +110,7 @@ def main(argv):
                         {'params': lr_pose, 'lr': 0.05}]
         # skipped shape paramter lr
         optimizer = torch.optim.Adam(model_params, lr=CFG_LR_INIT)
-
-        # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
 
         ## Set main cam of calibration process
         main_cam_params = mas_dataloader.cam_parameter
@@ -119,8 +118,8 @@ def main(argv):
         for iter in range(CFG_NUM_ITER):
             loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0}
             for camIdx, camID in enumerate(CFG_CAMID_SET):
-                if not camIdx == 1:
-                    continue
+                # if not camIdx == 1:
+                #     continue
                 cam_params = dataloader_set[camIdx].cam_parameter
                 cam_sample = dataloader_set[camIdx][frame]
                 # skip non-detected camera
@@ -136,7 +135,7 @@ def main(argv):
                 # loss_func.visualize(CFG_SAVE_PATH, camID)
 
             total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT)
-            logs = ["Iter: {}, Loss: {}".format(iter, total_loss)]
+            logs = ["Iter: {}, Loss: {}".format(iter, total_loss.data)]
             logs += ['[%s:%.4f]' % (key, loss_all[key]) for key in loss_all.keys() if key in CFG_LOSS_DICT]
             logging.info(''.join(logs))
 
@@ -144,6 +143,7 @@ def main(argv):
             total_loss.backward(retain_graph=True)
             optimizer.step()
 
+        # visualization results of frame
         for camIdx, camID in enumerate(CFG_CAMID_SET):
             cam_params = dataloader_set[camIdx].cam_parameter
             cam_sample = dataloader_set[camIdx][frame]

@@ -342,16 +342,16 @@ class Model(nn.Module):
 
 
             # code for debugging
-            import cv2
-            print(depth_rendered.shape)
-            print(depth_rendered.min(), depth_rendered.max())
-            print(self.depth_ref.shape)
-            print((self.depth_ref/self.scale).min(), (self.depth_ref/self.scale).max())
-            depth_render = depth_rendered.detach().cpu().numpy()
-            depth_gt = self.depth_ref.detach().cpu().numpy() / self.scale.detach().cpu().numpy()
-            cv2.imshow("depth_render", np.asarray(depth_render, dtype=np.uint8))
-            cv2.imshow("depth_gt", np.asarray(depth_gt, dtype=np.uint8))
-            cv2.waitKey(1)
+            # import cv2
+            # print(depth_rendered.shape)
+            # print(depth_rendered.min(), depth_rendered.max())
+            # print(self.depth_ref.shape)
+            # print((self.depth_ref/self.scale).min(), (self.depth_ref/self.scale).max())
+            # depth_render = depth_rendered.detach().cpu().numpy()
+            # depth_gt = self.depth_ref.detach().cpu().numpy() / self.scale.detach().cpu().numpy()
+            # cv2.imshow("depth_render", np.asarray(depth_render, dtype=np.uint8))
+            # cv2.imshow("depth_gt", np.asarray(depth_gt, dtype=np.uint8))
+            # cv2.waitKey(1)
 
             loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
                                    -1) * 0.00012498664727900177  # depth scale used in HOnnotate
