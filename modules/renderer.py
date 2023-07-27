@@ -27,6 +27,7 @@ from pytorch3d.renderer import (
 import transforms3d as t3d
 from scipy.spatial.transform import Rotation as R
 
+
 def changeCoordtopytorch3D(extrinsic):
     extrinsic_py = np.copy(extrinsic)
 
@@ -113,7 +114,8 @@ class Renderer():
         cameras=cameras,
         raster_settings=raster_settings
         )
-        
+
+
     def render(self, verts, faces):
         '''
         verts : [bs, V, 3]
@@ -128,7 +130,6 @@ class Renderer():
         rgb = self.renderer_rgb(meshes)
         seg = torch.where(rgb[..., 3] != 0, 1, 0)
         depth = self.rasterizer_depth(meshes).zbuf
-
 
         # depth map process
         depth[depth == -1] = 0.

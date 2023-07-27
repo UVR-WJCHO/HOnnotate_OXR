@@ -120,6 +120,10 @@ class DataLoader:
 
         return sample
 
+    def load_raw_image(self, index):
+        _, _, _, rgb_raw, depth_raw = self.get_img(index)
+        return rgb_raw, depth_raw
+
     def load_cam_parameters(self):
         with open(os.path.join(self.cam_path, "cameraParamsBA.json")) as json_file:
             camera_extrinsics = json.load(json_file)
@@ -183,6 +187,68 @@ class DataLoader:
     
     def __len__(self):
         return self.db_len
+
+
+class ObjectLoader:
+    def __init__(self, base_path:str, data_date:str, data_type:str,):
+        self.obj_result_dir = os.path.join(base_path, data_date) + '_obj'
+        self.obj_template_dir = os.path.join(base_path, 'ObjTemplate')
+
+        # load object data
+        seq_name = data_date + '_' + data_type
+
+        obj_mesh_path = os.path.join(self.obj_template_dir, data_type) + '.obj'
+        self.obj_mesh_data = self.read_obj(obj_mesh_path)
+
+        obj_file_path = os.path.join(self.obj_result_dir, seq_name) + '.txt'
+        self.obj_pose_data = self.read_file(obj_file_path)
+        # ICG has own main viewpoint
+        self.obj_view = self.obj_pose_data[0]
+
+        self.db_len = int((len(self.obj_pose_data) - 1) / 2)
+
+    def read_file(self, file_path):
+        lines = []
+        with open(file_path, 'r') as file:
+            for line in file:
+                # Remove newline character at the end of each line
+                line = line.strip()
+                lines.append(line)
+        return lines
+
+    def read_obj(self, file_path):
+        verts = []
+        faces = []
+
+        with open(file_path, 'r') as file:
+            for line in file:
+                line = line.strip()
+                if line.startswith('v '):
+                    # Parse vertex coordinates
+                    vertex = line[2:].split()
+                    vertex = [float(coord) for coord in vertex]
+                    verts.append(vertex)
+                elif line.startswith('f '):
+                    # Parse face indices
+                    face = line[2:].split()
+                    face = [int(index.split('/')[0]) - 1 for index in face]
+                    faces.append(face)
+
+        obj_data = {'verts': verts, 'faces': faces}
+        return obj_data
+
+    def __getitem__(self, index: int):
+        try:
+            sample = self.obj_pose_data[index * 2 + 2].split(',')
+            sample = [float(x) for x in sample]
+            sample = np.asarray([sample[x:x + 4] for x in range(0, len(sample), 4)])
+        except ExecError:
+            raise "Error at load object index {}".format(index)
+        return sample
+
+    def __len__(self):
+        return self.db_len
+
 
 if __name__ == "__main__":
     mas_dataloader = DataLoader("/home/workplace/HOnnotate_OXR/dataset", "230612", "bare", "mas")

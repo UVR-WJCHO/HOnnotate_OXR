@@ -13,7 +13,7 @@ from utils.modelUtils import *
 
 
 class MultiViewLossFunc(nn.Module):
-    def __init__(self, device='cpu', bs=1):
+    def __init__(self, device='cpu', bs=1, dataloaders=None, renderers=None):
         super(MultiViewLossFunc, self).__init__()
         self.device = device
         self.bs = bs
@@ -22,6 +22,14 @@ class MultiViewLossFunc(nn.Module):
         self.smooth_l1_loss = nn.SmoothL1Loss()
 
         self.pose_reg_tensor, self.pose_mean_tensor = self.get_pose_constraint_tensor()
+
+        self.dataloaders = dataloaders
+        self.renderers = renderers
+
+
+    def set_object_main_extrinsic(self, obj_main_cam_idx):
+        cam_params = self.dataloaders[obj_main_cam_idx].cam_parameter
+        self.main_Ms_obj = torch.FloatTensor(cam_params[1]).to(self.device)
 
     def get_pose_constraint_tensor(self):
         pose_mean_tensor = torch.tensor(params.pose_mean_list).cuda()
@@ -32,7 +40,12 @@ class MultiViewLossFunc(nn.Module):
         reg_loss = ((mano_tensor - pose_mean_tensor) ** 2) * pose_reg_tensor
         return torch.sum(reg_loss, -1)
 
-    def set_gt(self, gt_sample, cam_params, cam_renderer, loss_dict, main_cam_params):
+    def set_gt(self, camIdx, frame, loss_dict, main_cam_idx=0):
+        gt_sample = self.dataloaders[camIdx][frame]
+        cam_params = self.dataloaders[camIdx].cam_parameter
+        cam_renderer = self.renderers[camIdx]
+        main_cam_params = self.dataloaders[main_cam_idx].cam_parameter
+
         self.bb = np.asarray(gt_sample['bb']).astype(int)
         self.img2bb = gt_sample['img2bb']
         self.gt_kpts2d = torch.unsqueeze(torch.FloatTensor(gt_sample['kpts2d']), 0).to(self.device)
@@ -53,7 +66,8 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ks = torch.FloatTensor(main_Ks).to(self.device)
         self.main_Ms = torch.FloatTensor(main_Ms).to(self.device)
 
-    def forward(self, pred, render=False):
+
+    def forward(self, pred, pred_obj=None, render=False):
         verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms, self.main_Ms), 0)
         joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms, self.main_Ms), 0)
 
@@ -76,6 +90,11 @@ class MultiViewLossFunc(nn.Module):
         if render:
             self.pred_rendered = self.cam_renderer.render(verts_cam, pred['faces'])
 
+            # TODO : need to combine both verts of hand/object
+            if pred_obj is not None:
+                verts_obj_cam = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms, self.main_Ms_obj), 0)
+                self.obj_rendered = self.cam_renderer.render(verts_obj_cam, pred_obj['faces'])
+
             if 'seg' in self.loss_dict:
                 pred_seg = self.pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 seg_gap = (pred_seg - self.gt_seg) ** 2.
@@ -97,122 +116,71 @@ class MultiViewLossFunc(nn.Module):
                 loss_depth = torch.clamp(loss_depth, min=0, max=5000)  # loss clipping used in HOnnotate
                 loss['depth'] = loss_depth
 
-
         return loss
 
-    def visualize(self, save_path, camID):
-        # input is cropped size (480, 640)
-        rgb_input = np.squeeze(self.gt_rgb.cpu().numpy()).astype(np.uint8)
-        depth_input = np.squeeze(self.gt_depth.cpu().numpy())
-        seg_input = np.squeeze(self.gt_seg.cpu().numpy())
+    def visualize(self, save_path, camID, frame=None, flag_obj=False):
+        if not flag_obj:
+            # input is cropped size (480, 640)
+            rgb_input = np.squeeze(self.gt_rgb.cpu().numpy()).astype(np.uint8)
+            depth_input = np.squeeze(self.gt_depth.cpu().numpy())
+            seg_input = np.squeeze(self.gt_seg.cpu().numpy())
 
-        # rendered image is original size (1080, 1920)
-        rgb_mesh = np.squeeze((self.pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-        depth_mesh = np.squeeze(self.pred_rendered['depth'][0].cpu().detach().numpy())
-        seg_mesh = np.squeeze(self.pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
+            # rendered image is original size (1080, 1920)
+            rgb_mesh = np.squeeze((self.pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+            depth_mesh = np.squeeze(self.pred_rendered['depth'][0].cpu().detach().numpy())
+            seg_mesh = np.squeeze(self.pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
 
-        rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
-        depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-        seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+            rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
+            depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+            seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
-        # draw kpts
-        gt_kpts2d = np.squeeze(self.gt_kpts2d.cpu().numpy())
-        pred_kpts2d = np.squeeze(self.pred_kpts2d.cpu().numpy())
+            # draw kpts
+            gt_kpts2d = np.squeeze(self.gt_kpts2d.cpu().numpy())
+            pred_kpts2d = np.squeeze(self.pred_kpts2d.cpu().numpy())
 
-        uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
-        gt_kpts2d_bb = (self.img2bb @ uv1.T).T
-        rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d_bb)
-        uv1 = np.concatenate((pred_kpts2d, np.ones_like(pred_kpts2d[:, :1])), 1)
-        pred_kpts2d_bb = (self.img2bb @ uv1.T).T
-        rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d_bb)
+            uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
+            gt_kpts2d_bb = (self.img2bb @ uv1.T).T
+            rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d_bb)
+            uv1 = np.concatenate((pred_kpts2d, np.ones_like(pred_kpts2d[:, :1])), 1)
+            pred_kpts2d_bb = (self.img2bb @ uv1.T).T
+            rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d_bb)
 
-        img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
-        img_blend_pred = cv2.addWeighted(rgb_input, 0.5, rgb_2d_pred, 0.7, 0)
+            img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
+            img_blend_pred = cv2.addWeighted(rgb_input, 0.5, rgb_2d_pred, 0.7, 0)
 
-        depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
-        seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
+            depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
+            seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
 
-        depth_gap *= seg_mesh
-        seg_gap = seg_gap * seg_mesh * 255
+            depth_gap *= seg_mesh
+            seg_gap = seg_gap * seg_mesh * 255
 
-        # blend_gt_name = "seg_mesh_" + camID
-        # cv2.imshow(blend_gt_name, seg_mesh*255)
+            # blend_gt_name = "seg_mesh_" + camID
+            # cv2.imshow(blend_gt_name, seg_mesh*255)
 
-        blend_gt_name = "blend_gt_" + camID
-        blend_pred_name = "blend_pred_" + camID
-        blend_depth_name = "blend_depth_" + camID
-        blend_seg_name = "blend_seg_" + camID
+            blend_gt_name = "blend_gt_" + camID
+            blend_pred_name = "blend_pred_" + camID
+            blend_depth_name = "blend_depth_" + camID
+            blend_seg_name = "blend_seg_" + camID
 
-        cv2.imshow(blend_gt_name, img_blend_gt)
-        cv2.imshow(blend_pred_name, img_blend_pred)
-        cv2.imshow(blend_depth_name, depth_gap)
-        # cv2.imshow(blend_seg_name, seg_gap)
-        cv2.waitKey(1)
+            cv2.imshow(blend_gt_name, img_blend_gt)
+            cv2.imshow(blend_pred_name, img_blend_pred)
+            cv2.imshow(blend_depth_name, depth_gap)
+            # cv2.imshow(blend_seg_name, seg_gap)
+            cv2.waitKey(1)
 
-        # cv2.imwrite(os.path.join(save_path, 'img_blend_gt.png'), img_blend_gt)
-        # cv2.imwrite(os.path.join(save_path, 'img_blend_pred.png'), img_blend_pred)
+            # cv2.imwrite(os.path.join(save_path, 'img_blend_gt.png'), img_blend_gt)
+            # cv2.imwrite(os.path.join(save_path, 'img_blend_pred.png'), img_blend_pred)
 
+        else:
+            rgb_raw, depth_raw = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
 
-class SingleViewLossFunc(nn.Module):
-    def __init__(self, device='cpu', bs=1):
-        super(SingleViewLossFunc, self).__init__()
-        self.device = device
-        self.bs = bs
-        self.mse_loss = nn.MSELoss()
-        self.l1_loss = nn.L1Loss()
-        self.smooth_l1_loss = nn.SmoothL1Loss()
+            # rendered image is original size (1080, 1920)
+            rgb_obj = np.squeeze((self.obj_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+            depth_obj = np.squeeze(self.obj_rendered['depth'][0].cpu().detach().numpy())
 
-    def set_gt(self, gt_sample, cam_params, cam_renderer, loss_dict):
-        self.bb = gt_sample['bb']
-        self.img2bb = gt_sample['img2bb']
-        self.gt_kpts2d = torch.FloatTensor(gt_sample['kpts2d'])
-        self.gt_seg = gt_sample['seg']
-        self.gt_rgb = gt_sample['rgb']
-        self.Ks = torch.FloatTensor(cam_params['Ks'])
-        self.Ms = torch.FloatTensor(cam_params['Ms'])
-        self.cam_renderer = cam_renderer
-
-        self.loss_dict = loss_dict
-        
-    def forward(self, pred):
-        verts_world = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms, self.Ms), 0)
-        joints_world = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms, self.Ms), 0)
-        self.pred_render_results = self.cam_renderer.render(verts_world, pred['faces'])
-        loss = {}
-        if 'kpts2d' in self.loss_dict:
-            pred_kpts2d = projectPoints(joints_world, self.Ks)
-            # pred_kpts2d[torch.isnan(pred_kpts2d)] = 0.0
-            self.pred_kpts2d = pred_kpts2d
-            # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d.repeat(self.bs, 1, 1).to(self.device))
-            loss_kpts2d = torch.sum((pred_kpts2d - self.gt_kpts2d.repeat(self.bs, 1, 1).to(self.device)) ** 2 )
-            loss['kpts2d'] = loss_kpts2d
-
-        if 'seg' in self.loss_dict:
-            pred_seg = self.pred_render_results['seg']
-            loss_seg = self.mse_loss(pred_seg, self.gt_seg)
-            loss['seg'] = loss_seg
-
-        if 'reg' in self.loss_dict:
-            pose_reg, pose_mean = get_pose_constraint_tensor()
-            loss_reg = self.mse_loss(pred['pose'], pose_mean) * pose_reg
-            loss_reg = torch.sum(((pred['pose'] - pose_mean) ** 2 ) * pose_reg) + torch.sum((pred['shape'] - torch.zeros_like(pred['shape'])) ** 2 )
-            loss['reg'] = torch.sum(loss_reg)
-
-        return loss
-    
-    def visualize(self, save_path):
-        """
-        TODO
-        """
-        cv2.imwrite(os.path.join(save_path, 'gt_seg.png'), self.pred_render_results['image'][0].cpu().detach().numpy()*255)
-        img_1 = (self.pred_render_results['image'][0].cpu().detach().numpy() * 255.0).astype(np.uint8)
-        img_1 = img_1[int(self.bb[1]):int(self.bb[1])+self.bb[3], int(self.bb[0]):int(self.bb[0])+self.bb[2], :]
-        img_2 = self.gt_rgb
-        img_3 = cv2.addWeighted(img_1, 0.5, img_2, 0.7, 0)
-        cv2.imwrite(os.path.join(save_path, 'debug.png'), img_3)
-
-        kpts2d_homo = torch.concat((self.pred_kpts2d, torch.ones_like(self.pred_kpts2d[:, :, :1])), 2)
-        uv = (self.img2bb @ kpts2d_homo[0].cpu().detach().numpy().T).T
-        img_4 = paint_kpts(None, img_3, uv)
-        cv2.imwrite(os.path.join(save_path, 'debug2.png'), img_4)
+            rgb_obj_blend = cv2.addWeighted(rgb_raw, 0.5, rgb_obj, 0.7, 0)
+            rgb_obj_blend = cv2.resize(rgb_obj_blend, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+            name = "image_obj_" + camID
+            cv2.imshow(name, rgb_obj_blend)
+            cv2.waitKey(1)
 

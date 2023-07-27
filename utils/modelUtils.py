@@ -4,7 +4,31 @@ sys.path.insert(0,os.path.join(os.getcwd()))
 
 import torch
 from utils import params
+from config import *
 
+def initialize_optimizer(model):
+    lr_xyz_root = []
+    lr_rot = []
+    lr_pose = []
+    lr_shape = []
+    params_dict = dict(model.named_parameters())
+    for key, value in params_dict.items():
+        if value.requires_grad:
+            if 'xy_root' in key:
+                lr_xyz_root.append(value)
+            elif 'z_root' in key:
+                lr_xyz_root.append(value)
+            elif 'input_rot' in key:
+                lr_rot.append(value)
+            elif 'input_pose' in key:
+                lr_pose.append(value)
+            elif 'input_shape' in key:
+                lr_shape.append(value)
+
+    model_params = [{'params': lr_xyz_root, 'lr': 0.5},
+                    {'params': lr_rot, 'lr': 0.05},
+                    {'params': lr_pose, 'lr': 0.05}]
+    return model_params
 
 def clip_mano_hand_rot(rot_tensor):
     rot_min_tensor = torch.tensor([

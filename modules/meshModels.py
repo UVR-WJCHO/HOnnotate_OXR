@@ -76,3 +76,47 @@ class HandModel(nn.Module):
 
         return {'verts':hand_verts, 'faces':hand_faces, 'joints':hand_joints, 'xyz_root':xyz_root, 'scale':self.scale, 'rot':self.input_rot, 'pose':self.pose_, 'shape':self.shape_}
 
+
+class ObjModel(nn.Module):
+    def __init__(self, device, batch_size, obj_template, obj_init_pose=np.eye(4)):
+        super(ObjModel, self).__init__()
+
+        self.device = device
+        self.batch_size = batch_size
+
+        template_verts,  template_faces = obj_template['verts'], obj_template['faces']
+        template_faces = np.asarray(template_faces)
+        self.template_faces = torch.unsqueeze(torch.FloatTensor(template_faces), axis=0).to(self.device)
+
+        template_verts = np.asarray(template_verts)[:, :3]
+        self.template_verts = torch.FloatTensor(template_verts).to(self.device)
+
+        # only obj_pose is trainable [bs, 4, 4]
+
+        self.obj_pose = nn.Parameter(torch.tensor(obj_init_pose, dtype=torch.float32).repeat(self.batch_size, 1).to(self.device))
+        self.obj_pose.requires_grad = True
+
+        # set initial obj mesh
+        self.obj_faces = self.template_faces
+        self.obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
+
+    def update_pose(self, pose):
+        self.obj_init_pose = pose
+
+    def apply_transform(self, obj_pose, obj_verts):
+        # Append 1 to each coordinate to convert them to homogeneous coordinates
+        h = torch.ones((obj_verts.shape[0], 1)).to(self.device)
+        homogeneous_points = torch.hstack((obj_verts, h))
+        # Apply matrix multiplication
+        transformed_points = (obj_pose @ homogeneous_points.T).T
+        # Convert back to Cartesian coordinates
+        transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
+
+        return transformed_points_cartesian * 100.0
+
+    def forward(self):
+        # self.obj_faces = self.template_faces
+        self.obj_verts = torch.unsqueeze(self.apply_transform(self.obj_pose, self.template_verts), 0)
+
+        return {'verts':self.obj_verts, 'faces':self.obj_faces, 'pose':self.obj_pose}
+

@@ -7,12 +7,12 @@ import torch.nn as nn
 import numpy as np
 import cv2
 
-from modules.dataloader import DataLoader
+from modules.dataloader import DataLoader, ObjectLoader
 from modules.renderer import Renderer
-from modules.handModel import HandModel
+from modules.meshModels import HandModel, ObjModel
 from modules.lossFunc import MultiViewLossFunc
 from utils import *
-from utils import params
+from utils.modelUtils import initialize_optimizer
 
 from absl import flags
 from absl import app
@@ -24,17 +24,27 @@ import time
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230612', 'target db name')   ## name ,default, help
-flags.DEFINE_string('type', 'bare', 'target sequence name')
+flags.DEFINE_string('type', 'mug', 'target sequence name')
 FLAGS(sys.argv)
 
 
 def main(argv):
+    flag_render = False
+    if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
+        flag_render = True
+
+    # TODO : [0727] check object rendered results then remove it
+    flag_debug_only_obj = True
+
     ## Load data of each camera, save pkl file for second run.
     print("loading data... %s %s " % (FLAGS.db, FLAGS.type))
     mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'mas')
     sub1_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'sub1')
     sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'sub2')
     sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'sub3')
+
+    if CFG_WITH_OBJ:
+        obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type)
 
     ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
     mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
@@ -50,7 +60,7 @@ def main(argv):
     renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
 
     ## Initialize loss function
-    loss_func = MultiViewLossFunc(device=CFG_DEVICE)
+    loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set)
 
     if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
         raise ValueError("The number of data is not same between cameras")
@@ -58,67 +68,57 @@ def main(argv):
     ## Initialize hand model
     model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE)
     model.change_grads(root=True, rot=True, pose=True, shape=True)
+    # TODO : duplicated define. check below
     model_params = model.parameters()
 
-    flag_render = False
-    if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
-        flag_render = True
+    if CFG_WITH_OBJ:
+        obj_init_pose = obj_dataloader[0]   # numpy (4, 4) format
+        obj_template_mesh = obj_dataloader.obj_mesh_data
+        model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh, obj_init_pose)
+        ## Set object's main camera extrinsic
+        obj_main_cam_idx = CFG_CAMID_SET.index(obj_dataloader.obj_view)
+        loss_func.set_object_main_extrinsic(obj_main_cam_idx)
 
     for frame in range(len(mas_dataloader)):
-        # initial frames are often errorneous (banana sub2 0000~0002 is error, ...)
+        ## initial frames are often errorneous (banana sub2 0000~0002 is error, ...)
         if frame < 5:
             continue
 
+        ## Set object ICG pose as init pose on every frame? or use previous pose?
+        if CFG_WITH_OBJ:
+            obj_pose = obj_dataloader[frame]
+            model_obj.update_pose(pose=obj_pose)
+
         ## Initialize optimizer
-        lr_init = CFG_LR_INIT
-        lr_xyz_root = []
-        lr_rot = []
-        lr_pose = []
-        lr_shape = []
-        params_dict = dict(model.named_parameters())
-        for key, value in params_dict.items():
-            if value.requires_grad:
-                if 'xy_root' in key:
-                    lr_xyz_root.append(value)
-                elif 'z_root' in key:
-                    lr_xyz_root.append(value)
-                elif 'input_rot' in key:
-                    lr_rot.append(value)
-                elif 'input_pose' in key:
-                    lr_pose.append(value)
-                elif 'input_shape' in key:
-                    lr_shape.append(value)
-        model_params = [{'params': lr_xyz_root, 'lr': 0.5},
-                        {'params': lr_rot, 'lr': 0.05},
-                        {'params': lr_pose, 'lr': 0.05}]
-        # skipped shape paramter lr
-        optimizer = torch.optim.Adam(model_params, lr=lr_init)
+        # TODO : skipped shape lr in model_params. check lr ratio with above definition
+        model_params = initialize_optimizer(model)
+        optimizer = torch.optim.Adam(model_params, lr=CFG_LR_INIT)
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
 
-        ## Set main cam of calibration process
-        main_cam_params = mas_dataloader.cam_parameter
-
         for iter in range(CFG_NUM_ITER):
-            loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0}
+            if flag_debug_only_obj:
+                break
+
+            loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'obj':0.0}
+            if CFG_WITH_OBJ:
+                obj_param = model_obj()
 
             for camIdx, camID in enumerate(CFG_CAMID_SET):
-                t1 = time.time()
-                cam_params = dataloader_set[camIdx].cam_parameter
-                cam_sample = dataloader_set[camIdx][frame]
                 # skip non-detected camera
-                if np.isnan(cam_sample['kpts3d']).any():
+                if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
                     continue
 
-                t2 = time.time()
-                loss_func.set_gt(cam_sample, cam_params, renderer_set[camIdx], CFG_LOSS_DICT, main_cam_params)
-
-                t3 = time.time()
+                loss_func.set_gt(camIdx, frame, CFG_LOSS_DICT, main_cam_idx=0)
                 hand_param = model()
-                t4 = time.time()
-                losses = loss_func(hand_param, render=flag_render)      # 42ms
+
+                if not CFG_WITH_OBJ:
+                    losses = loss_func(pred=hand_param, render=flag_render)
+                else:
+                    ## TODO
+                    losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render)
+
                 for k in CFG_LOSS_DICT:
                     loss_all[k] += losses[k]
-
                 # loss_func.visualize(CFG_SAVE_PATH, camID)
 
             total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT)
@@ -130,17 +130,28 @@ def main(argv):
             total_loss.backward(retain_graph=True)
             optimizer.step()
 
-        # visualization results of frame
+        ## visualization results of frame
         for camIdx, camID in enumerate(CFG_CAMID_SET):
-            cam_params = dataloader_set[camIdx].cam_parameter
-            cam_sample = dataloader_set[camIdx][frame]
+            if flag_debug_only_obj:
+                break
             # skip non-detected camera
-            if np.isnan(cam_sample['kpts3d']).any():
+            if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
                 continue
-            loss_func.set_gt(cam_sample, cam_params, renderer_set[camIdx], CFG_LOSS_DICT, main_cam_params)
+
+            loss_func.set_gt(camIdx, frame, CFG_LOSS_DICT, main_cam_idx=0)
             hand_param = model()
-            _ = loss_func(hand_param, render=True)
+            _ = loss_func(pred=hand_param, render=True)
             loss_func.visualize(CFG_SAVE_PATH, camID)
+
+        ## visualization of object(debug)
+        if CFG_WITH_OBJ:
+            for camIdx, camID in enumerate(CFG_CAMID_SET):
+                # ignore hand parameter
+                loss_func.set_gt(camIdx, frame, CFG_LOSS_DICT, main_cam_idx=0)
+                hand_param = model()
+                obj_param = model_obj()
+                _ = loss_func(pred=hand_param, pred_obj=obj_param, render=True)
+                loss_func.visualize(CFG_SAVE_PATH, camID, frame, flag_obj=True)
 
         print("end frame")
         cv2.waitKey(0)
