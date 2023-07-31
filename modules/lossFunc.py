@@ -112,8 +112,8 @@ class MultiViewLossFunc(nn.Module):
                 loss['seg'] = loss_seg
 
             if 'depth' in self.loss_dict:
-                pred_seg = self.pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                pred_depth = self.pred_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                pred_seg = pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                pred_depth = pred_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 depth_gap = torch.abs(pred_depth - self.gt_depth)
                 depth_gap *= pred_seg
 

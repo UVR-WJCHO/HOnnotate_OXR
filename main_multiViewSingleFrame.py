@@ -24,7 +24,7 @@ import time
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230612', 'target db name')   ## name ,default, help
-flags.DEFINE_string('type', 'mug', 'target sequence name')
+flags.DEFINE_string('type', 'mustard', 'target sequence name')
 FLAGS(sys.argv)
 
 
@@ -99,9 +99,12 @@ def main(argv):
             if CFG_WITH_OBJ:
                 obj_param = model_obj()
 
+            num_skip = 0
             for camIdx, camID in enumerate(CFG_CAMID_SET):
                 # skip non-detected camera
                 if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
+                    num_skip += 1
+                    print("skip cam ", camID)
                     continue
 
                 hand_param = model()
@@ -118,9 +121,10 @@ def main(argv):
                     loss_all[k] += losses[k]
                 # loss_func.visualize(CFG_SAVE_PATH, camID)
 
-            total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT)
+            num_done = len(CFG_CAMID_SET) - num_skip
+            total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT) / num_done
             logs = ["Iter: {}, Loss: {}".format(iter, total_loss.data)]
-            logs += ['[%s:%.4f]' % (key, loss_all[key]) for key in loss_all.keys() if key in CFG_LOSS_DICT]
+            logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
             logging.info(''.join(logs))
 
             optimizer.zero_grad()
@@ -129,18 +133,15 @@ def main(argv):
 
         ## visualization results of frame
         for camIdx, camID in enumerate(CFG_CAMID_SET):
-            # skip non-detected camera
-            # if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
-            #     continue
-
             hand_param = model()
+
             if not CFG_WITH_OBJ:
                 loss_func.visualize(pred=hand_param, pred_obj=None, camIdx=camIdx, frame=frame,
                                     save_path=CFG_SAVE_PATH, camID=camID, flag_obj=False, flag_crop=True)
             else:
                 obj_param = model_obj()
                 loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                                    save_path=CFG_SAVE_PATH, camID=camID, flag_obj=True, flag_crop=False)
+                                    save_path=CFG_SAVE_PATH, camID=camID, flag_obj=True, flag_crop=True)
 
         print("end frame")
         cv2.waitKey(0)
