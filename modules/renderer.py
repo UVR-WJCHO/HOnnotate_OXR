@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from manopth.manolayer import ManoLayer
-from pytorch3d.structures import Meshes
+from pytorch3d.structures import Meshes, join_meshes_as_scene
 from pytorch3d.renderer import (
     look_at_view_transform,
     FoVPerspectiveCameras, 
@@ -140,5 +140,32 @@ class Renderer():
 
         return {"rgb":rgb[..., :3], "seg":seg, "depth":depth[..., 0]}
 
+    def render_meshes(self, verts_list, faces_list):
+        '''
+        verts : [bs, V, 3]
+        faces : [bs, F, 3]
 
+        -> [bs, H, W, 3], [bs, H, W], [bs, H, W]
+        '''
+        mesh_list = list()
+        for verts, faces in zip(verts_list, faces_list):
+            verts_rgb = torch.ones_like(verts)
+            textures = TexturesVertex(verts_features=verts_rgb.to(self.device))
+            meshes = Meshes(verts=verts, faces=faces, textures=textures)
+            mesh_list.append(meshes)
+
+        mesh_joined = join_meshes_as_scene(mesh_list)
+
+        rgb = self.renderer_rgb(mesh_joined)
+        seg = torch.where(rgb[..., 3] != 0, 1, 0)
+        depth = self.rasterizer_depth(mesh_joined).zbuf
+
+        # depth map process
+        depth[depth == -1] = 0.
+        depth = depth * 10.0
+
+        # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
+        #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
+
+        return {"rgb": rgb[..., :3], "seg": seg, "depth": depth[..., 0]}
 
