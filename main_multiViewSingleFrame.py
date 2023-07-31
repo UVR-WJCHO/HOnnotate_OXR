@@ -33,9 +33,6 @@ def main(argv):
     if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
         flag_render = True
 
-    # TODO : [0727] check object rendered results then remove it
-    flag_debug_only_obj = True
-
     ## Load data of each camera, save pkl file for second run.
     print("loading data... %s %s " % (FLAGS.db, FLAGS.type))
     mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'mas')
@@ -60,7 +57,9 @@ def main(argv):
     renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
 
     ## Initialize loss function
-    loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set)
+    loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT)
+    loss_func.set_main_cam(main_cam_idx=0)
+
 
     if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
         raise ValueError("The number of data is not same between cameras")
@@ -96,9 +95,6 @@ def main(argv):
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
 
         for iter in range(CFG_NUM_ITER):
-            if flag_debug_only_obj:
-                break
-
             loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'obj':0.0}
             if CFG_WITH_OBJ:
                 obj_param = model_obj()
@@ -108,14 +104,15 @@ def main(argv):
                 if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
                     continue
 
-                loss_func.set_gt(camIdx, frame, CFG_LOSS_DICT, main_cam_idx=0)
                 hand_param = model()
 
                 if not CFG_WITH_OBJ:
-                    losses = loss_func(pred=hand_param, render=flag_render)
+                    losses = loss_func(pred=hand_param, pred_obj=None, render=flag_render,
+                                       camIdx=camIdx, frame=frame)
                 else:
                     ## TODO
-                    losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render)
+                    losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
+                                       camIdx=camIdx, frame=frame)
 
                 for k in CFG_LOSS_DICT:
                     loss_all[k] += losses[k]
@@ -132,26 +129,18 @@ def main(argv):
 
         ## visualization results of frame
         for camIdx, camID in enumerate(CFG_CAMID_SET):
-            if flag_debug_only_obj:
-                break
             # skip non-detected camera
-            if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
-                continue
+            # if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
+            #     continue
 
-            loss_func.set_gt(camIdx, frame, CFG_LOSS_DICT, main_cam_idx=0)
             hand_param = model()
-            _ = loss_func(pred=hand_param, render=True)
-            loss_func.visualize(CFG_SAVE_PATH, camID)
-
-        ## visualization of object(debug)
-        if CFG_WITH_OBJ:
-            for camIdx, camID in enumerate(CFG_CAMID_SET):
-                # ignore hand parameter
-                loss_func.set_gt(camIdx, frame, CFG_LOSS_DICT, main_cam_idx=0)
-                hand_param = model()
+            if not CFG_WITH_OBJ:
+                loss_func.visualize(pred=hand_param, pred_obj=None, camIdx=camIdx, frame=frame,
+                                    save_path=CFG_SAVE_PATH, camID=camID, flag_obj=False, flag_crop=True)
+            else:
                 obj_param = model_obj()
-                _ = loss_func(pred=hand_param, pred_obj=obj_param, render=True)
-                loss_func.visualize(CFG_SAVE_PATH, camID, frame, flag_obj=True)
+                loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
+                                    save_path=CFG_SAVE_PATH, camID=camID, flag_obj=True, flag_crop=False)
 
         print("end frame")
         cv2.waitKey(0)

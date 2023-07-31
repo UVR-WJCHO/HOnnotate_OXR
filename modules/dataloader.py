@@ -121,8 +121,8 @@ class DataLoader:
         return sample
 
     def load_raw_image(self, index):
-        _, _, _, rgb_raw, depth_raw = self.get_img(index)
-        return rgb_raw, depth_raw
+        _, _, seg, rgb_raw, depth_raw = self.get_img(index)
+        return rgb_raw, depth_raw, seg
 
     def load_cam_parameters(self):
         with open(os.path.join(self.cam_path, "cameraParamsBA.json")) as json_file:
