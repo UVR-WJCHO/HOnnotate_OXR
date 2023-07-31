@@ -1,5 +1,6 @@
 import json
 import numpy as np
+from config import *
 
 
 def LoadCameraMatrix(path):
@@ -30,6 +31,31 @@ def LoadCameraMatrix(path):
                     result[order[0]] = intrinsicMatrices
                 del order[0]
     
+    return result
+
+
+def LoadCameraMatrix_undistort(path):
+    result = {}
+    order = []
+
+    for camID in CFG_CAMID_SET:
+        order.append(str(camID))
+
+    with open(path, 'r') as f:
+        while True:
+            line = f.readline()
+            if (not line): break
+            if "[[" in line:
+                intrinsicMatrices = np.empty((3, 3))
+                for i in range(3):
+                    intrinsicMatrices[i, 0] = float(line[2:14])
+                    intrinsicMatrices[i, 1] = float(line[15:27])
+                    intrinsicMatrices[i, 2] = float(line[28:40])
+                    if (i != 2):
+                        line = f.readline()
+                    result[order[0]] = intrinsicMatrices
+                del order[0]
+
     return result
 
 

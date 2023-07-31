@@ -2,7 +2,7 @@ import os
 from shutil import ExecError
 import sys
 sys.path.insert(0,os.path.join(os.getcwd(), '../', 'utils'))
-from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
+from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraMatrix_undistort
 import numpy as np
 import cv2
 import json
@@ -131,7 +131,7 @@ class DataLoader:
             # scale z axis value as mm to cm
             camera_extrinsics[:, -1] = camera_extrinsics[:, -1] / 10.0
 
-        camera_intrinsics = LoadCameraMatrix(os.path.join(self.cam_path, self.data_date + '_cameraInfo.txt'))
+        camera_intrinsics = LoadCameraMatrix_undistort(os.path.join(self.cam_path, self.data_date + '_cameraInfo_undistort.txt'))
         camera_intrinsics = camera_intrinsics[self.cam]
         dist_coeffs = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json"%self.cam))       
 
