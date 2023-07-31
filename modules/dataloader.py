@@ -133,11 +133,6 @@ class DataLoader:
 
         camera_intrinsics = LoadCameraMatrix(os.path.join(self.cam_path, self.data_date + '_cameraInfo.txt'))
         camera_intrinsics = camera_intrinsics[self.cam]
-        # self.dist_coeffs = {}
-        # self.dist_coeffs["mas"] = LoadDistortionParam(os.path.join(self.cam_path, "mas_intrinsic.json"))
-        # self.dist_coeffs["sub1"] = LoadDistortionParam(os.path.join(self.cam_path, "sub1_intrinsic.json"))
-        # self.dist_coeffs["sub2"] = LoadDistortionParam(os.path.join(self.cam_path, "sub2_intrinsic.json"))
-        # self.dist_coeffs["sub3"] = LoadDistortionParam(os.path.join(self.cam_path, "sub3_intrinsic.json"))  
         dist_coeffs = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json"%self.cam))       
 
         return [camera_intrinsics, camera_extrinsics, dist_coeffs]

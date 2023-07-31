@@ -30,17 +30,17 @@ import tqdm
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230728', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230612', 'target db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
-camIDset = ['sub3',]
 FLAGS(sys.argv)
 
 
 ### Config ###
 baseDir = os.path.join(os.getcwd(), 'dataset')
 handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
+camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
 
 ## TODO
 """
@@ -49,7 +49,6 @@ handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
         - check HOnnotate_refine.HOdatasets.ho3d_multicamera.dataset.py
         - convert the process to utilize our format (230612_cameraInfo.txt)
 """
-camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
 
 
 mp_drawing = mp.solutions.drawing_utils
@@ -109,12 +108,24 @@ class loadDataset():
         self.bbox_width = 640
         self.bbox_height = 480
         self.prev_bbox = [0, 0, 640, 480]
-        self.intrinsics = LoadCameraMatrix(os.path.join(baseDir, db, "results", "230612_cameraInfo.txt"))
+        self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "230612_cameraInfo.txt"))
         self.distCoeffs = {}
-        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(baseDir, db, "results", "mas_intrinsic.json"))
-        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(baseDir, db, "results", "sub1_intrinsic.json"))
-        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(baseDir, db, "results", "sub2_intrinsic.json"))
-        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(baseDir, db, "results", "sub3_intrinsic.json"))
+        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_intrinsic.json"))
+        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_intrinsic.json"))
+        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_intrinsic.json"))
+        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_intrinsic.json"))
+
+        self.intrinsic_undistort = os.path.join(camResultDir, "230612_cameraInfo_undistort.txt")
+        self.prev_cam_check = None
+
+        if os.path.isfile(self.intrinsic_undistort):
+            self.flag_save = False
+        else:
+            self.flag_save = True
+            with open(self.intrinsic_undistort, "w") as f:
+                print("creating undistorted intrinsic of each cam")
+
+
 
     def __len__(self):
         return len(os.listdir(self.rgbDir))
@@ -147,15 +158,25 @@ class loadDataset():
 
         return (rgb, depth)
 
-    def undistort(self, images):
+    def undistort(self, images, camID):
         rgb, depth = images
         image_cols, image_rows = rgb.shape[:2]
         self.new_camera, _ = cv2.getOptimalNewCameraMatrix(self.K, self.dist, (image_rows, image_cols), 0)
         rgb = cv2.undistort(rgb, self.K, self.dist, None, self.new_camera)
         depth = cv2.undistort(depth, self.K, self.dist, None, self.new_camera)
 
-        print(self.new_camera)
-        exit(0)
+        # print(self.new_camera)
+        # exit(0)
+        if self.prev_cam_check != camID and self.flag_save:
+            self.prev_cam_check = camID
+
+            with open(self.intrinsic_undistort, "a") as f:
+                intrinsic_undistort = str(np.copy(self.new_camera))
+                f.write(intrinsic_undistort)
+                f.write("\n")
+
+            if camID == camIDset[-1]:
+                self.flag_save = False
 
         return (rgb, depth)
         
@@ -303,7 +324,7 @@ def main(argv):
                 for idx in pbar:
                     images = db.getItem(idx, camID=camID)
 
-                    images = db.undistort(images)
+                    images = db.undistort(images, camID)
 
                     bb, img2bb, bb2img, procImgSet, kps = db.procImg(images)
                     procKps = db.translateKpts(np.copy(kps), img2bb)
