@@ -113,7 +113,8 @@ class DataLoader:
         # masking depth, need to modify
         depth_bg = depth_raw > 800
         depth_raw[depth_bg] = 0
-        depth_raw[seg == 0] = 0
+        # currently segmap is often errorneous
+        # depth_raw[seg == 0] = 0
 
         sample['depth'] = depth_raw[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
         sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
