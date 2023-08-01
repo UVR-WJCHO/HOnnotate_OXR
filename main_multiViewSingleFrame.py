@@ -91,7 +91,8 @@ def main(argv):
         ## Initialize optimizer
         # TODO : skipped shape lr in model_params. check lr ratio with above definition
         model_params = initialize_optimizer(model)
-        optimizer = torch.optim.Adam(model_params, lr=CFG_LR_INIT)
+        # debug for different lr on params
+        optimizer = torch.optim.Adam(model.parameters(), lr=CFG_LR_INIT)
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
 
         for iter in range(CFG_NUM_ITER):

@@ -41,7 +41,7 @@ class HandModel(nn.Module):
         self.pose_all = torch.cat((self.input_rot, self.input_pose), 1)
         # normalize scale
         hand_verts, hand_joints = self.mano_layer(self.pose_all, self.input_shape)
-        self.scale = torch.tensor([[self.compute_normalized_scale(hand_joints)]]).to(device)
+        self.scale = nn.Parameter(torch.tensor([[self.compute_normalized_scale(hand_joints)]])).to(device)
 
 
     def compute_normalized_scale(self, hand_joints):
