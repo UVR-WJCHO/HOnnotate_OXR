@@ -41,6 +41,7 @@ FLAGS(sys.argv)
 baseDir = os.path.join(os.getcwd(), 'dataset')
 handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
 camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
+backGroundDir = os.path.join(baseDir, FLAGS.db) + '_background'
 
 ## TODO
 """
@@ -58,11 +59,11 @@ w = 640
 h = 480
 
 palmIndices = [0,5,9,13,17,0]
-thumbIndices = [0,1,2,3,4]
-indexIndices = [5,6,7,8]
-middleIndices = [9,10,11,12]
-ringIndices = [13,14,15,16]
-pinkyIndices = [17,18,19,20]
+thumbIndices = [0,1]#,2,3,4]
+indexIndices = [5,6]#,7,8]
+middleIndices = [9,10]#,11,12]
+ringIndices = [13,14]#,15,16]
+pinkyIndices = [17,18]#,19,20]
 lineIndices = [palmIndices, thumbIndices, indexIndices, middleIndices, ringIndices, pinkyIndices]
 
 
@@ -80,6 +81,7 @@ class loadDataset():
 
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
+
 
         if not os.path.exists(os.path.join(self.dbDir, 'rgb_crop')):
             os.mkdir(os.path.join(self.dbDir, 'rgb_crop'))
@@ -100,6 +102,7 @@ class loadDataset():
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'))
+                os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_bg_results'))
 
         self.rgbCropDir = None
         self.depthCropDir = None
@@ -137,11 +140,23 @@ class loadDataset():
         segDir = os.path.join(self.dbDir, 'segmentation', camID)
         self.segVisDir = os.path.join(segDir, 'visualization')
         self.segResDir = os.path.join(segDir, 'raw_seg_results')
+        self.segBGDir = os.path.join(segDir, 'raw_seg_bg_results')
         
         self.debugDir = os.path.join(self.dbDir, 'debug')
         self.mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=threshold) 
         self.K = self.intrinsics[camID]
         self.dist = self.distCoeffs[camID]
+
+    def getBGItem(self, camID):
+
+        imgName = str(camID) + '_' + str(2) + '.png'
+        bgRgbPath = os.path.join(backGroundDir, 'rgb', imgName)
+        bgDepthPath = os.path.join(backGroundDir, 'depth', imgName)
+
+        bgRgb = cv2.imread(bgRgbPath)
+        bgDepth = cv2.imread(bgDepthPath, cv2.IMREAD_ANYDEPTH)
+
+        return (bgRgb, bgDepth)
 
     def getItem(self, idx, camID='mas'):
         # camID : mas, sub1, sub2, sub3
@@ -155,6 +170,7 @@ class loadDataset():
 
         rgb = cv2.imread(rgbPath)
         depth = cv2.imread(depthPath, cv2.IMREAD_ANYDEPTH)
+
 
         return (rgb, depth)
 
@@ -264,11 +280,20 @@ class loadDataset():
 
         return kps
     
-    def segmenation(self, camID, idx, procImgSet, kps):
+    def segmenation(self, camID, idx, procImgSet, kps, bgDepth):
         if np.any(np.isnan(kps)):
             return
 
-        rgb, _ = procImgSet
+        rgb, depth = procImgSet
+
+        gap = abs(np.asarray(depth, dtype=float) - np.asarray(bgDepth, dtype=float))
+        gap[gap < 15] = 0
+        gap[gap != 0] = 255
+        # cv2.imshow("gap", gap)
+        # cv2.waitKey(0)
+        imgName = str(camID) + '_' + format(idx, '04') + '.png'
+        cv2.imwrite(os.path.join(self.segBGDir, imgName), gap.astype('uint8'))
+
         seg_image = np.uint8(rgb.copy())
         mask = np.ones(seg_image.shape[:2], np.uint8) * 2
         for lineIndex in lineIndices:
@@ -324,14 +349,23 @@ def main(argv):
                 for idx in pbar:
                     images = db.getItem(idx, camID=camID)
 
+
                     images = db.undistort(images, camID)
 
                     bb, img2bb, bb2img, procImgSet, kps = db.procImg(images)
                     procKps = db.translateKpts(np.copy(kps), img2bb)
 
+                    # get background and crop
+                    bgImages = db.getBGItem(camID)
+                    bgRGB, bgDepth = db.undistort(bgImages, camID)
+
+                    # bgRGBCrop, _, _, _, _, = augmentation_real(bgRGB, bb, flip=False)
+                    bgDepthCrop = bgDepth[int(bb[1]):int(bb[1] + bb[3]), int(bb[0]):int(bb[0] + bb[2])]
+                    # bg = (bgRGBCrop, bgDepthCrop)
+
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     if flag_segmentation:
-                        db.segmenation(camID, idx, procImgSet, procKps)
+                        db.segmenation(camID, idx, procImgSet, procKps, bgDepthCrop)
                     pbar.set_description("(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, lenDBTotal, camID, idx, seqName))
         print("---------------end preprocess---------------")
 
