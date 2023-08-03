@@ -2,7 +2,7 @@ import os
 from shutil import ExecError
 import sys
 sys.path.insert(0,os.path.join(os.getcwd(), '../', 'utils'))
-from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraMatrix_undistort
+from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraMatrix_undistort, LoadCameraParams
 import numpy as np
 import cv2
 import json
@@ -69,8 +69,6 @@ class DataLoader:
 
         self.cam_path = os.path.join(base_path, data_date+"_"+'cam')
 
-        self.hand_path = os.path.join(base_path, data_date+"_"+'hand', data_date+"_"+data_type)
-
         self.obj_data_path = os.path.join(base_path, data_date+'_'+'obj') + '/'+data_date+'_'+data_type+'.txt'
 
         # #Get data from files
@@ -126,17 +124,15 @@ class DataLoader:
         return rgb_raw, depth_raw, seg
 
     def load_cam_parameters(self):
-        with open(os.path.join(self.cam_path, "cameraParamsBA.json")) as json_file:
-            camera_extrinsics = json.load(json_file)
-            camera_extrinsics = np.array((camera_extrinsics[self.cam])).reshape(3, 4)
-            # scale z axis value as mm to cm
-            camera_extrinsics[:, -1] = camera_extrinsics[:, -1] / 10.0
+        intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
 
-        camera_intrinsics = LoadCameraMatrix_undistort(os.path.join(self.cam_path, self.data_date + '_cameraInfo_undistort.txt'))
-        camera_intrinsics = camera_intrinsics[self.cam]
-        dist_coeffs = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json"%self.cam))       
+        cam_intrinsic = intrinsics[self.cam]
+        dist_coeff = dist_coeffs[self.cam]
+        cam_extrinsic = extrinsics[self.cam].reshape(3, 4)
+        # scale z axis value as mm to cm
+        cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
 
-        return [camera_intrinsics, camera_extrinsics, dist_coeffs]
+        return [cam_intrinsic, cam_extrinsic, dist_coeff]
 
     def get_img(self, idx):
         rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam + '_%01d.png' % idx)

@@ -15,7 +15,7 @@ from absl import app
 import mediapipe as mp
 from modules.utils.processing import augmentation_real
 import numpy as np
-from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
+from modules.utils.loadParameters import LoadCameraParams
 
 
 # others
@@ -30,7 +30,7 @@ import tqdm
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230612', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230802', 'target db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -39,9 +39,8 @@ FLAGS(sys.argv)
 
 ### Config ###
 baseDir = os.path.join(os.getcwd(), 'dataset')
-handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
 camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
-backGroundDir = os.path.join(baseDir, FLAGS.db) + '_background'
+backGroundDir = os.path.join(baseDir, FLAGS.db, FLAGS.db +'_bg')
 
 ## TODO
 """
@@ -77,7 +76,6 @@ class loadDataset():
         self.seq = seq
 
         self.dbDir = os.path.join(baseDir, db, seq)
-        self.handDir = handResultDir
 
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
@@ -111,14 +109,9 @@ class loadDataset():
         self.bbox_width = 640
         self.bbox_height = 480
         self.prev_bbox = [0, 0, 640, 480]
-        self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "230612_cameraInfo.txt"))
-        self.distCoeffs = {}
-        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_intrinsic.json"))
-        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_intrinsic.json"))
-        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_intrinsic.json"))
-        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_intrinsic.json"))
+        self.intrinsics, self.distCoeffs, _ = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
 
-        self.intrinsic_undistort = os.path.join(camResultDir, "230612_cameraInfo_undistort.txt")
+        self.intrinsic_undistort = os.path.join(camResultDir, FLAGS.db + "_camIntrinsic_undistort.txt")
         self.prev_cam_check = None
 
         if os.path.isfile(self.intrinsic_undistort):
@@ -280,13 +273,12 @@ class loadDataset():
 
         return kps
     
-    def segmenation(self, camID, idx, procImgSet, kps, bgDepth):
+    def segmentation(self, camID, idx, procImgSet, kps, gap):
         if np.any(np.isnan(kps)):
             return
 
         rgb, depth = procImgSet
 
-        gap = abs(np.asarray(depth, dtype=float) - np.asarray(bgDepth, dtype=float))
         gap[gap < 15] = 0
         gap[gap != 0] = 255
         # cv2.imshow("gap", gap)
@@ -347,25 +339,26 @@ def main(argv):
                 db.init_cam(camID)
                 pbar = tqdm.tqdm(range(int(len(db) / 4)))
                 for idx in pbar:
-                    images = db.getItem(idx, camID=camID)
+                    rgb, depth = db.getItem(idx, camID=camID)
+                    bgRGB, bgDepth = db.getBGItem(camID)
+                    gap = abs(np.asarray(np.copy(depth), dtype=float) - np.asarray(bgDepth, dtype=float))
 
-
+                    images = (rgb, depth)
                     images = db.undistort(images, camID)
-
                     bb, img2bb, bb2img, procImgSet, kps = db.procImg(images)
                     procKps = db.translateKpts(np.copy(kps), img2bb)
 
                     # get background and crop
-                    bgImages = db.getBGItem(camID)
-                    bgRGB, bgDepth = db.undistort(bgImages, camID)
+                    gapImages = (gap, gap)
+                    _, gap = db.undistort(gapImages, camID)
 
                     # bgRGBCrop, _, _, _, _, = augmentation_real(bgRGB, bb, flip=False)
-                    bgDepthCrop = bgDepth[int(bb[1]):int(bb[1] + bb[3]), int(bb[0]):int(bb[0] + bb[2])]
+                    gapCrop = gap[int(bb[1]):int(bb[1] + bb[3]), int(bb[0]):int(bb[0] + bb[2])]
                     # bg = (bgRGBCrop, bgDepthCrop)
 
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     if flag_segmentation:
-                        db.segmenation(camID, idx, procImgSet, procKps, bgDepthCrop)
+                        db.segmentation(camID, idx, procImgSet, procKps, gapCrop)
                     pbar.set_description("(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, lenDBTotal, camID, idx, seqName))
         print("---------------end preprocess---------------")
 
