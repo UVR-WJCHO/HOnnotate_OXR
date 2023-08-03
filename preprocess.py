@@ -15,7 +15,7 @@ from absl import app
 import mediapipe as mp
 from modules.utils.processing import augmentation_real
 import numpy as np
-from modules.utils.loadParameters import LoadCameraParams
+from modules.utils.loadParameters import LoadCameraParams, LoadCameraMatrix, LoadDistortionParam
 
 
 # others
@@ -30,7 +30,7 @@ import tqdm
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230802', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230802', 'target db Name')   ## name ,default, help  230612 230802
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -109,7 +109,16 @@ class loadDataset():
         self.bbox_width = 640
         self.bbox_height = 480
         self.prev_bbox = [0, 0, 640, 480]
-        self.intrinsics, self.distCoeffs, _ = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
+
+        if FLAGS.db == '230612':
+            self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "230612_cameraInfo.txt"))
+            self.distCoeffs = {}
+            self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_intrinsic.json"))
+            self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_intrinsic.json"))
+            self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_intrinsic.json"))
+            self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_intrinsic.json"))
+        else:
+            self.intrinsics, self.distCoeffs, _ = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
 
         self.intrinsic_undistort = os.path.join(camResultDir, FLAGS.db + "_camIntrinsic_undistort.txt")
         self.prev_cam_check = None

@@ -2,7 +2,7 @@ import os
 from shutil import ExecError
 import sys
 sys.path.insert(0,os.path.join(os.getcwd(), '../', 'utils'))
-from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraMatrix_undistort, LoadCameraParams
+from modules.utils.loadParameters import LoadCameraParams, LoadCameraMatrix, LoadDistortionParam, LoadCameraMatrix_undistort
 import numpy as np
 import cv2
 import json
@@ -124,13 +124,25 @@ class DataLoader:
         return rgb_raw, depth_raw, seg
 
     def load_cam_parameters(self):
-        intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
+        if self.data_date == '230612':
+            with open(os.path.join(self.cam_path, "cameraParamsBA.json")) as json_file:
+                camera_extrinsics = json.load(json_file)
+                cam_extrinsic = np.array((camera_extrinsics[self.cam])).reshape(3, 4)
+                # scale z axis value as mm to cm
+                cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
 
-        cam_intrinsic = intrinsics[self.cam]
-        dist_coeff = dist_coeffs[self.cam]
-        cam_extrinsic = extrinsics[self.cam].reshape(3, 4)
-        # scale z axis value as mm to cm
-        cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
+            camera_intrinsics = LoadCameraMatrix_undistort(
+                os.path.join(self.cam_path, self.data_date + '_cameraInfo_undistort.txt'))
+            cam_intrinsic = camera_intrinsics[self.cam]
+            dist_coeff = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json" % self.cam))
+        else:
+            intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
+
+            cam_intrinsic = intrinsics[self.cam]
+            dist_coeff = dist_coeffs[self.cam]
+            cam_extrinsic = extrinsics[self.cam].reshape(3, 4)
+            # scale z axis value as mm to cm
+            cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
 
         return [cam_intrinsic, cam_extrinsic, dist_coeff]
 
