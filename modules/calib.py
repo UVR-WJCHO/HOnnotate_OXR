@@ -12,25 +12,25 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     '--db',
     type=str,
-    default='230612',
+    default='230802',
     help='target db Name'
 )
 parser.add_argument(
     '--seq1',
     type=str,
-    default='230612_mas_sub1',
+    default='230802_mas_sub3',
     help='Sequence Name for Master and Sub1'
 )
 parser.add_argument(
     '--seq2',
     type=str,
-    default='230612_sub1_sub2',
+    default='230802_sub2_sub3',
     help='Sequence Name for Sub1 and Sub2'
 )
 parser.add_argument(
     '--seq3',
     type=str,
-    default='230612_sub2_sub3',
+    default='230802_sub1_sub2',
     help='Sequence Name for Sub2 and Sub3'
 )
 parser.add_argument(
@@ -41,7 +41,7 @@ parser.add_argument(
 )
 opt = parser.parse_args()
 
-baseDir = '/hdd1/donghwan/OXR/dataset'
+baseDir = '/hdd1/donghwan/OXR/HOnnotate_OXR/dataset'
 h = np.array([[0,0,0,1]]) # array for homogeneous coordinates
 
 
@@ -55,21 +55,22 @@ class Calibration():
         self.resultDir = os.path.join(baseDir, opt.db, opt.res)
 
         # stereo calibration will be executed in (0-th, 1-th), (1-th, 2-th), (2-th, 3-th), ...
-        self.cameras = ["mas", "sub1", "sub2", "sub3"]
+        # self.cameras = ["mas", "sub1", "sub2", "sub3"]
+        self.cameras = ["mas", "sub3", "sub2", "sub1"]
 
-        assert os.path.exists(os.path.join(self.resultDir, "230612_cameraInfo.txt")), 'cameraInfo.txt does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "230802_cameraInfo.txt")), 'cameraInfo.txt does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "mas_intrinsic.json")), 'mas_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub1_intrinsic.json")), 'sub1_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub2_intrinsic.json")), 'sub2_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub3_intrinsic.json")), 'sub3_intrinsic.json does not exist'
 
-        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, "230612_cameraInfo.txt"))
+        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, "230802_cameraInfo.txt"))
         self.distCoeffs = {}
         self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(self.resultDir, "mas_intrinsic.json"))
         self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(self.resultDir, "sub1_intrinsic.json"))
         self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(self.resultDir, "sub2_intrinsic.json"))
         self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(self.resultDir, "sub3_intrinsic.json"))
-    
+
         self.nSize = (6, 5) # the number of checkers
         self.imgInt = 15
         self.minSize = 30
@@ -108,16 +109,16 @@ class Calibration():
 
 
     def Save(self):
-        np.save(os.path.join(self.resultDir, "objPoints.npy"), np.concatenate(self.objPoints, axis=0))
-        np.save(os.path.join(self.resultDir, "objPointsBA.npy"), self.objPointsBA.reshape(-1,3))
+        cameraParamsBA = {camera: self.cameraParamsBA[i].tolist() for i, camera in enumerate(self.cameras)}
 
-        cameraParams = {camera: self.cameraParams[i].tolist() for i, camera in enumerate(self.cameras)}
+        cameraParams = {
+            "intrinsic": {camera: self.intrinsic[camera].tolist() for camera in self.intrinsic},
+            "dist": {camera: self.distCoeffs[camera].tolist() for camera in self.distCoeffs},
+            "extrinsic": cameraParamsBA
+        }
+
         with open(os.path.join(self.resultDir, "cameraParams.json"), "w") as fp:
             json.dump(cameraParams, fp, sort_keys=True, indent=4)
-        
-        cameraParamsBA = {camera: self.cameraParamsBA[i].tolist() for i, camera in enumerate(self.cameras)}
-        with open(os.path.join(self.resultDir, "cameraParamsBA.json"), "w") as fp:
-            json.dump(cameraParamsBA, fp, sort_keys=True, indent=4)
 
 
 def main():
