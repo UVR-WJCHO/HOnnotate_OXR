@@ -57,6 +57,11 @@ class MultiViewLossFunc(nn.Module):
         # obj_mask = gt_sample['seg_bg'] - gt_sample['seg']
         self.gt_seg_obj = torch.unsqueeze(torch.FloatTensor(gt_sample['seg_obj']).to(self.device), 0).to(self.device)
 
+        # seg_obj = (gt_sample['seg_obj'] * 255.0).astype(np.uint8)
+        # cv2.imshow("seg_gap_obj", seg_obj)
+        # cv2.waitKey(0)
+
+
     def set_cam(self, camIdx):
         cam_params = self.dataloaders[camIdx].cam_parameter
         cam_renderer = self.renderers[camIdx]
@@ -121,9 +126,14 @@ class MultiViewLossFunc(nn.Module):
                 if pred_obj is not None:
                     pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
                     seg_obj_gap = ((pred_seg_obj - self.gt_seg_obj) * pred_seg_obj) ** 2.
+
                     loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
                     loss_seg_obj = torch.clamp(loss_seg_obj, min=0, max=5000)  # loss clipping following HOnnotate
                     loss['seg'] += loss_seg_obj
+
+                    # seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                    # cv2.imshow("seg_obj_gap", seg_obj_gap)
+                    # cv2.waitKey(0)
 
 
             if 'depth' in self.loss_dict:

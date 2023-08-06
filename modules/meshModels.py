@@ -135,7 +135,7 @@ class ObjModel(nn.Module):
 
     def forward(self):
         # self.obj_faces = self.template_faces
-        self.obj_verts = torch.unsqueeze(self.apply_transform_debug(self.obj_pose), 0)
+        self.obj_verts = torch.unsqueeze(self.apply_transform(self.obj_pose, self.template_verts), 0)
 
         return {'verts':self.obj_verts, 'faces':self.obj_faces, 'pose':self.obj_pose}
 
