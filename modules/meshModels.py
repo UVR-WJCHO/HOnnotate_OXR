@@ -91,32 +91,51 @@ class ObjModel(nn.Module):
         template_verts = np.asarray(template_verts)[:, :3]
         self.template_verts = torch.FloatTensor(template_verts).to(self.device)
 
-        # only obj_pose is trainable [bs, 4, 4]
-
-        self.obj_pose = nn.Parameter(torch.tensor(obj_init_pose, dtype=torch.float32).repeat(self.batch_size, 1).to(self.device))
+        # only obj_pose is trainable [bs, 4, 4]     ... currently consider only 1 batch
+        obj_pose = torch.unsqueeze(torch.tensor(obj_init_pose, dtype=torch.float32), dim=0)
+        self.obj_pose = nn.Parameter(obj_pose.to(self.device))
         self.obj_pose.requires_grad = True
+
+        # Append 1 to each coordinate to convert them to homogeneous coordinates
+        h = torch.ones((self.template_verts.shape[0], 1)).to(self.device)
+        self.template_verts_h = torch.concatenate((self.template_verts, h), 1)
+        self.scale = torch.FloatTensor([100.0]).to(self.device)
 
         # set initial obj mesh
         self.obj_faces = self.template_faces
-        self.obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
+        # self.obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
+
 
     def update_pose(self, pose):
-        self.obj_init_pose = pose
+        obj_pose = torch.unsqueeze(torch.tensor(pose, dtype=torch.float32), dim=0)
+        self.obj_pose = nn.Parameter(obj_pose.to(self.device))
+        self.obj_pose.requires_grad = True
 
     def apply_transform(self, obj_pose, obj_verts):
+        obj_pose = torch.squeeze(obj_pose)
+
         # Append 1 to each coordinate to convert them to homogeneous coordinates
         h = torch.ones((obj_verts.shape[0], 1)).to(self.device)
-        homogeneous_points = torch.hstack((obj_verts, h))
+        homogeneous_points = torch.concatenate((obj_verts, h), 1)
+
         # Apply matrix multiplication
-        transformed_points = (obj_pose @ homogeneous_points.T).T
+        transformed_points = homogeneous_points @ obj_pose.T
         # Convert back to Cartesian coordinates
         transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
 
         return transformed_points_cartesian * 100.0
 
+    def apply_transform_debug(self, obj_pose):
+        obj_pose_data = obj_pose[0, :, :]
+        # Apply matrix multiplication
+        transformed_points = torch.matmul(self.template_verts_h, obj_pose_data)
+
+        return transformed_points[:, :3] * self.scale
+
+
     def forward(self):
         # self.obj_faces = self.template_faces
-        self.obj_verts = torch.unsqueeze(self.apply_transform(self.obj_pose, self.template_verts), 0)
+        self.obj_verts = torch.unsqueeze(self.apply_transform_debug(self.obj_pose), 0)
 
         return {'verts':self.obj_verts, 'faces':self.obj_faces, 'pose':self.obj_pose}
 

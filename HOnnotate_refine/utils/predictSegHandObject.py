@@ -15,7 +15,7 @@ flags = tf.app.flags
 FLAGS = flags.FLAGS
 
 # Settings for log directories.
-
+flags.DEFINE_string('checkpoint_dir', 'checkpoints/Deeplab_seg', 'Directory of model checkpoints.')
 
 flags.DEFINE_multi_integer('vis_crop_size', [480, 640],#[480, 640],
                            'Crop size [height, width] for visualization.')
@@ -39,7 +39,7 @@ common.SEMANTIC = 'semantic'
 common.DATASET_NAME = 'datasetName'
 
 
-def getNetSess(data, imgH, imgW, g=None, ckptDir=None):
+def getNetSess(data, imgH, imgW, g=None):
 
   assert isinstance(data, networkData)
 
@@ -98,7 +98,7 @@ def getNetSess(data, imgH, imgW, g=None, ckptDir=None):
     last_checkpoint = None
 
     last_checkpoint = slim.evaluation.wait_for_new_checkpoint(
-                        ckptDir, last_checkpoint)
+                        FLAGS.checkpoint_dir, last_checkpoint)
 
   tf.reset_default_graph()
   tf_config = tf.ConfigProto()

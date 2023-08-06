@@ -341,6 +341,8 @@ def main(argv):
     if flag_preprocess:
         print("---------------start preprocess---------------")
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+            if seqName != '230802_mustard':
+                continue
             db = loadDataset(FLAGS.db, seqName)
 
             # db includes data for [mas, sub1, sub2, sub3]

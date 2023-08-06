@@ -207,7 +207,7 @@ class datasetOXRMultiCamera(datasetBase):
         newSeg[maskPatch[:, :, 0] == handInd] = handInd
         newSeg[maskPatch[:, :, 0] == objInd] = objInd
 
-        camMat = self.getCamMat(camInd)
+        # camMat = self.getCamMat(camInd)
         # depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
         # with open(depthScaleFile, 'r') as f:
         #     line = f.readline()
@@ -221,7 +221,7 @@ class datasetOXRMultiCamera(datasetBase):
         coordChangeMat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
         ds = dataSample(img=imgPatch, seg=newSeg, fName=fId, dataset=datasetType.HO3D,
                         outType=outputType.SEG | outputType.KEYPOINT_3D | outputType.KEYPOINTS_2D,
-                        camMat=camMat, depth=None, otherImgSet=otherImgSet, depthScale=None)
+                        camMat=None, depth=None, otherImgSet=otherImgSet, depthScale=None)
 
 
         return None, ds

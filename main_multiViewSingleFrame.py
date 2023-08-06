@@ -23,7 +23,7 @@ import time
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230612', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230802', 'target db name')   ## name ,default, help
 flags.DEFINE_string('type', 'mustard', 'target sequence name')
 FLAGS(sys.argv)
 
@@ -67,8 +67,6 @@ def main(argv):
     ## Initialize hand model
     model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE)
     model.change_grads(root=True, rot=True, pose=True, shape=True)
-    # TODO : duplicated define. check below
-    model_params = model.parameters()
 
     if CFG_WITH_OBJ:
         obj_init_pose = obj_dataloader[0]   # numpy (4, 4) format
@@ -90,13 +88,18 @@ def main(argv):
 
         ## Initialize optimizer
         # TODO : skipped shape lr in model_params. check lr ratio with above definition
+        debug_params = model.parameters()
         model_params = initialize_optimizer(model)
         # debug for different lr on params
-        optimizer = torch.optim.Adam(model.parameters(), lr=CFG_LR_INIT)
+        if not CFG_WITH_OBJ:
+            optimizer = torch.optim.Adam(model.parameters(), lr=CFG_LR_INIT)
+        else:
+            params = list(model.parameters()) + list(model_obj.parameters())
+            optimizer = torch.optim.Adam(params, lr=CFG_LR_INIT)
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
 
         for iter in range(CFG_NUM_ITER):
-            loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'obj':0.0}
+            loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0}
             if CFG_WITH_OBJ:
                 obj_param = model_obj()
 
@@ -124,13 +127,13 @@ def main(argv):
 
             num_done = len(CFG_CAMID_SET) - num_skip
             total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT) / num_done
-            logs = ["Iter: {}, Loss: {}".format(iter, total_loss.data)]
-            logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
-            logging.info(''.join(logs))
-
             optimizer.zero_grad()
             total_loss.backward(retain_graph=True)
             optimizer.step()
+
+            logs = ["Iter: {}, Loss: {}".format(iter, total_loss.data)]
+            logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
+            logging.info(''.join(logs))
 
         ## visualization results of frame
         for camIdx, camID in enumerate(CFG_CAMID_SET):

@@ -53,6 +53,10 @@ class MultiViewLossFunc(nn.Module):
         self.gt_depth = torch.unsqueeze(torch.FloatTensor(gt_sample['depth']).to(self.device), 0).to(self.device)
         self.gt_seg = torch.unsqueeze(torch.FloatTensor(gt_sample['seg']).to(self.device), 0).to(self.device)
 
+        # set object seg gt
+        # obj_mask = gt_sample['seg_bg'] - gt_sample['seg']
+        self.gt_seg_obj = torch.unsqueeze(torch.FloatTensor(gt_sample['seg_obj']).to(self.device), 0).to(self.device)
+
     def set_cam(self, camIdx):
         cam_params = self.dataloaders[camIdx].cam_parameter
         cam_renderer = self.renderers[camIdx]
@@ -99,28 +103,47 @@ class MultiViewLossFunc(nn.Module):
             # TODO : need to combine both verts of hand/object
             if pred_obj is not None:
                 verts_obj_cam = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms, self.main_Ms_obj), 0)
-                self.obj_rendered = self.cam_renderer.render(verts_obj_cam, pred_obj['faces'])
+                pred_obj_rendered = self.cam_renderer.render(verts_obj_cam, pred_obj['faces'])
+
+                # rgb_mesh = np.squeeze((pred_obj_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                # cv2.imshow("rgb_mesh_obj", rgb_mesh)
+                # cv2.waitKey(0)
 
             if 'seg' in self.loss_dict:
                 pred_seg = pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                seg_gap = (pred_seg - self.gt_seg) ** 2.
-                seg_gap *= pred_seg
+                seg_gap = ((pred_seg - self.gt_seg) * pred_seg) ** 2.
 
                 # loss_seg = self.mse_loss(pred_seg, self.gt_seg)
                 loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
                 loss_seg = torch.clamp(loss_seg, min=0, max=5000)  # loss clipping following HOnnotate
                 loss['seg'] = loss_seg
 
+                if pred_obj is not None:
+                    pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
+                    seg_obj_gap = ((pred_seg_obj - self.gt_seg_obj) * pred_seg_obj) ** 2.
+                    loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
+                    loss_seg_obj = torch.clamp(loss_seg_obj, min=0, max=5000)  # loss clipping following HOnnotate
+                    loss['seg'] += loss_seg_obj
+
+
             if 'depth' in self.loss_dict:
                 pred_seg = pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 pred_depth = pred_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                depth_gap = torch.abs(pred_depth - self.gt_depth)
-                depth_gap *= pred_seg
+                depth_gap = torch.abs(pred_depth - self.gt_depth) * pred_seg
 
                 # loss_depth = self.mse_loss(pred_depth, self.gt_depth)
                 loss_depth = torch.sum(depth_gap.view(self.bs, -1), -1)
                 loss_depth = torch.clamp(loss_depth, min=0, max=5000)  # loss clipping used in HOnnotate
                 loss['depth'] = loss_depth
+
+                if pred_obj is not None:
+                    pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                    pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                    depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth) * pred_seg_obj
+
+                    loss_depth_obj = torch.sum(depth_obj_gap.view(self.bs, -1), -1)
+                    loss_depth_obj = torch.clamp(loss_depth_obj, min=0, max=5000)  # loss clipping used in HOnnotate
+                    loss['depth'] += loss_depth_obj
 
         return loss
 
@@ -175,7 +198,7 @@ class MultiViewLossFunc(nn.Module):
             pred_kpts2d = (self.img2bb @ uv1.T).T
         else:
             # show original size of input (1080, 1920)
-            rgb_input, depth_input, seg_input = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
+            rgb_input, depth_input, seg_input, _, seg_obj = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
 
         rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
         rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
