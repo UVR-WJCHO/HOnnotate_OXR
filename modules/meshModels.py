@@ -22,19 +22,19 @@ class HandModel(nn.Module):
                                     center_idx=0, ncomps=45, root_rot_mode="axisang", joint_rot_mode="axisang").to(device)
 
         # initial pose parameters
-        self.xy_root = nn.Parameter(torch.tensor([0.6595, 1.0659], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
-        self.z_root = nn.Parameter(torch.tensor([56], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
+        self.xy_root = nn.Parameter(torch.tensor([-0.9094, 12.0501], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
+        self.z_root = nn.Parameter(torch.tensor([65.0], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
 
-        initial_pose = torch.tensor([[1.5464e-02, -1.5886e-02, -2.6480e-01, 1.7313e-03, -3.0119e-03,
-                 -4.3855e-01, 8.4188e-06, -1.5501e-04, 6.5009e+00, -2.0439e-02,
-                 4.3690e-02, -4.9303e-01, -1.1642e-03, 1.1375e-03, -2.8073e-01,
-                 4.0919e-05, 2.0615e-03, 6.1110e-02, -2.3347e-02, -7.9014e-02,
-                 -4.5420e-01, 8.7698e-02, -4.7082e-03, -4.4077e-01, 1.5274e-03,
-                 -2.9957e-03, 1.4533e-01, -2.2924e-02, -1.6601e-01, -3.8383e-01,
-                 1.3930e-03, -1.4208e-03, -5.2633e-01, 2.6763e-04, -2.0722e-03,
-                 2.8310e-01, -4.7774e-01, 6.2213e-03, 3.3319e-01, 3.3308e-02,
-                 -6.8497e-01, 4.3174e-02, 2.7197e-02, 8.1599e-01, -4.7765e-01]])
-        initial_rot = torch.tensor([[-1.3630, -1.8802, 1.8825]])
+        initial_pose = torch.tensor([[5.1057e-03, -4.8339e-01, 1.7344e-01, -5.7935e-05, 7.4130e-03,
+                 -3.8736e-01, -5.8735e-05, 1.7143e-04, 6.3895e+00, -1.1979e-02,
+                 -6.1291e-01, -1.4494e-01, 1.3029e-02, -9.6093e-03, 7.5279e-02,
+                 4.3783e-03, -1.0702e-02, 5.3488e-01, -3.3502e-02, -3.0971e-01,
+                 -2.8535e-01, 8.0780e-02, 1.7461e-03, -3.4025e-02, 2.4274e-04,
+                 1.0885e-03, 1.2122e+00, -1.8687e-02, -5.7216e-01, -3.2695e-01,
+                 1.1369e-02, -5.8926e-03, -1.0265e-01, 6.1043e-03, -7.2788e-03,
+                 1.3692e+00, -4.8982e-01, -6.3829e-01, 3.0540e-01, 2.6227e-02,
+                 -7.3978e-02, 2.6190e-02, 1.0506e-02, 2.9847e-01, -4.9171e-01]])
+        initial_rot = torch.tensor([[-1.4405, -1.8235, 2.5271]])
 
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
         self.input_pose = nn.Parameter(initial_pose.to(device))

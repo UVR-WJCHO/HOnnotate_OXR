@@ -24,7 +24,7 @@ import time
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230802', 'target db name')   ## name ,default, help
-flags.DEFINE_string('type', 'mug', 'target sequence name')
+flags.DEFINE_string('type', 'mustard', 'target sequence name')
 FLAGS(sys.argv)
 
 
@@ -96,9 +96,8 @@ def main(argv):
             params = list(params_hand) + list(params_obj)
             optimizer = torch.optim.Adam(params)
 
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0)
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=0)
 
-        loss_list = []
         for iter in range(CFG_NUM_ITER):
             loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'depth_obj':0.0}
             if CFG_WITH_OBJ:
@@ -136,7 +135,6 @@ def main(argv):
             logs = ["Iter: {}, Loss: {}".format(iter, total_loss.data)]
             logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
             logging.info(''.join(logs))
-            loss_list.append(loss_all)
 
         ## visualization results of frame
         for camIdx, camID in enumerate(CFG_CAMID_SET):

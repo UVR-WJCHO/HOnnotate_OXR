@@ -27,6 +27,7 @@ class MultiViewLossFunc(nn.Module):
         self.renderers = renderers
 
         self.loss_dict = losses
+        self.obj_scale = torch.FloatTensor([1.0, 1.0, 1.0]).to(self.device)
 
     def set_object_main_extrinsic(self, obj_main_cam_idx):
         cam_params = self.dataloaders[obj_main_cam_idx].cam_parameter
@@ -102,6 +103,12 @@ class MultiViewLossFunc(nn.Module):
             loss_reg = pose_reg + shape_reg
             loss['reg'] = loss_reg
 
+            if pred_obj is not None:
+                pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
+                pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
+                loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 100000.0
+                loss['reg'] += torch.sum(loss_reg_obj)
+
         if render:
             pred_rendered = self.cam_renderer.render(verts_cam, pred['faces'])
 
@@ -163,7 +170,7 @@ class MultiViewLossFunc(nn.Module):
                 depth_gap[self.gt_seg == 0] = 0
                 # depth_gap[pred_depth == 0] = 0.
                 depth_gap[depth_gap > 100] = 100.
-                depth_gap /= 100.0
+                depth_gap /= 1000.0
 
                 # pred_depth_vis = np.squeeze((pred_depth[0].cpu().detach().numpy())).astype(np.uint8)
                 # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())).astype(np.uint8)

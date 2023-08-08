@@ -282,18 +282,19 @@ class loadDataset():
 
         return kps
     
-    def segmentation(self, camID, idx, procImgSet, kps, gap):
+    def segmentation(self, camID, idx, procImgSet, kps, gap=None):
         if np.any(np.isnan(kps)):
             return
 
         rgb, depth = procImgSet
 
-        gap[gap < 15] = 0
-        gap[gap != 0] = 255
-        # cv2.imshow("gap", gap)
-        # cv2.waitKey(0)
-        imgName = str(camID) + '_' + format(idx, '04') + '.png'
-        cv2.imwrite(os.path.join(self.segBGDir, imgName), gap.astype('uint8'))
+        if gap != None:
+            gap[gap < 15] = 0
+            gap[gap != 0] = 255
+            # cv2.imshow("gap", gap)
+            # cv2.waitKey(0)
+            imgName = str(camID) + '_' + format(idx, '04') + '.png'
+            cv2.imwrite(os.path.join(self.segBGDir, imgName), gap.astype('uint8'))
 
         seg_image = np.uint8(rgb.copy())
         mask = np.ones(seg_image.shape[:2], np.uint8) * 2
@@ -337,6 +338,8 @@ def main(argv):
         - consider two-hand situation (currently assume single hand detection)
     '''
 
+    flag_undistort = False
+
     ### Preprocess ###
     if flag_preprocess:
         print("---------------start preprocess---------------")
@@ -351,25 +354,25 @@ def main(argv):
                 pbar = tqdm.tqdm(range(int(len(db) / 4)))
                 for idx in pbar:
                     rgb, depth = db.getItem(idx, camID=camID)
-                    bgRGB, bgDepth = db.getBGItem(camID)
-                    gap = abs(np.asarray(np.copy(depth), dtype=float) - np.asarray(bgDepth, dtype=float))
+                    # bgRGB, bgDepth = db.getBGItem(camID)
+                    # gap = abs(np.asarray(np.copy(depth), dtype=float) - np.asarray(bgDepth, dtype=float))
 
                     images = (rgb, depth)
-                    images = db.undistort(images, camID)
+                    if flag_undistort:
+                        images = db.undistort(images, camID)
                     bb, img2bb, bb2img, procImgSet, kps = db.procImg(images)
                     procKps = db.translateKpts(np.copy(kps), img2bb)
 
                     # get background and crop
-                    gapImages = (gap, gap)
-                    _, gap = db.undistort(gapImages, camID)
-
-                    # bgRGBCrop, _, _, _, _, = augmentation_real(bgRGB, bb, flip=False)
-                    gapCrop = gap[int(bb[1]):int(bb[1] + bb[3]), int(bb[0]):int(bb[0] + bb[2])]
-                    # bg = (bgRGBCrop, bgDepthCrop)
+                    # gapImages = (gap, gap)
+                    # if flag_undistort:
+                    #     _, gap = db.undistort(gapImages, camID)
+                    # gapCrop = gap[int(bb[1]):int(bb[1] + bb[3]), int(bb[0]):int(bb[0] + bb[2])]
 
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     if flag_segmentation:
-                        db.segmentation(camID, idx, procImgSet, procKps, gapCrop)
+                        db.segmentation(camID, idx, procImgSet, procKps)
+                        # db.segmentation(camID, idx, procImgSet, procKps, gapCrop)
                     pbar.set_description("(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, lenDBTotal, camID, idx, seqName))
         print("---------------end preprocess---------------")
 

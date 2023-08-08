@@ -131,6 +131,8 @@ class DataLoader:
             dist_coeff = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json" % self.cam))
         else:
             intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
+            intrinsics = LoadCameraMatrix_undistort(
+                os.path.join(self.cam_path, self.data_date + '_camIntrinsic_undistort.txt'))
 
             cam_intrinsic = intrinsics[self.cam]
             dist_coeff = dist_coeffs[self.cam]
