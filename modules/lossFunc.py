@@ -119,22 +119,31 @@ class MultiViewLossFunc(nn.Module):
                 # cv2.waitKey(1)
 
             if 'seg' in self.loss_dict:
-                pred_seg = pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                seg_gap = ((pred_seg - self.gt_seg) * pred_seg) ** 2.
+                pred_seg = pred_rendered['depth'].clone()[:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                pred_seg[pred_seg > 0] = 1.
 
-                # loss_seg = self.mse_loss(pred_seg, self.gt_seg)
+                seg_gap = torch.abs(pred_seg - self.gt_seg)
+                seg_gap[pred_seg == 0] = 0.
+                seg_gap *= 10.0
+
                 loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
-                loss_seg = torch.clamp(loss_seg, min=0, max=5000)  # loss clipping following HOnnotate
+                # loss_seg = torch.clamp(loss_seg, min=0, max=5000)  # loss clipping following HOnnotate
                 loss['seg'] = loss_seg
 
-                # pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                # pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy())).astype(np.uint8)
                 # cv2.imshow("pred_seg", pred_seg)
-                # cv2.waitKey(1)
+                # gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy())).astype(np.uint8)
+                # cv2.imshow("gt_seg", gt_seg)
+                # seg_gap = np.squeeze((seg_gap[0].cpu().detach().numpy())).astype(np.uint16)
+                # cv2.imshow("seg_gap", seg_gap)
+                # cv2.waitKey(0)
 
                 if pred_obj is not None:
-                    pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
-                    seg_obj_gap = ((pred_seg_obj - self.gt_seg_obj) * pred_seg_obj) ** 2.
+                    pred_seg_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
+                    pred_seg_obj[pred_seg_obj > 0] = 1
+                    pred_seg_obj[pred_seg_obj < 0] = 0
 
+                    seg_obj_gap = ((pred_seg_obj - self.gt_seg_obj) * pred_seg_obj) ** 2.
                     loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
                     loss_seg_obj = torch.clamp(loss_seg_obj, min=0, max=5000)  # loss clipping following HOnnotate
                     loss['seg'] += loss_seg_obj
@@ -146,19 +155,24 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.waitKey(1)
 
             if 'depth' in self.loss_dict:
-                pred_seg = pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 pred_depth = pred_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                depth_gap = torch.abs(pred_depth[pred_depth != 0] - self.gt_depth[pred_depth != 0])# * pred_seg
+                # depth_gap = torch.abs(pred_depth[pred_depth != 0] - self.gt_depth[pred_depth != 0])# * pred_seg
+                depth_gap = torch.abs(pred_depth - self.gt_depth)
+                depth_gap[pred_depth == 0] = 0.
+                depth_gap[depth_gap > 100] = 100.
 
-                pred_depth_vis = np.squeeze((pred_depth[0].cpu().detach().numpy())).astype(np.uint8)
-                gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())).astype(np.uint8)
-                cv2.imshow("pred_depth", pred_depth_vis)
-                cv2.imshow("gt_depth_vis", gt_depth_vis)
-                cv2.waitKey(1)
+                # pred_depth_vis = np.squeeze((pred_depth[0].cpu().detach().numpy())).astype(np.uint8)
+                # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())).astype(np.uint8)
+                # depth_gap_vis = np.squeeze((depth_gap[0].cpu().detach().numpy())).astype(np.uint8)
+                # cv2.imshow("pred_depth", pred_depth_vis)
+                # cv2.imshow("gt_depth_vis", gt_depth_vis)
+                # cv2.imshow("depth_gap_vis", depth_gap_vis)
+                # cv2.waitKey(0)
 
-                # loss_depth = self.mse_loss(pred_depth, self.gt_depth)
+
+                depth_gap /= 100.0
                 loss_depth = torch.sum(depth_gap.view(self.bs, -1), -1)
-                loss_depth = torch.clamp(loss_depth, min=0, max=5000)  # loss clipping used in HOnnotate
+                # loss_depth = torch.clamp(loss_depth, min=0, max=5000)  # loss clipping used in HOnnotate
                 loss['depth'] = loss_depth
 
                 if pred_obj is not None:

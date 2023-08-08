@@ -8,7 +8,7 @@ CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 
-CFG_LOSS_DICT = ['depth'] #['kpts2d', 'reg', 'seg']#, 'depth', ]
+CFG_LOSS_DICT = ['seg']#, 'depth'] #['kpts2d', 'reg', 'seg']#, 'depth', ]
 CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 
