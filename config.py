@@ -8,7 +8,7 @@ CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 
-CFG_LOSS_DICT = ['kpts2d', 'reg', 'depth', 'seg']
+CFG_LOSS_DICT = ['depth'] #['kpts2d', 'reg', 'seg']#, 'depth', ]
 CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 
@@ -17,4 +17,4 @@ CFG_IMG_HEIGHT = 1080
 CFG_CROP_IMG_WIDTH = 640
 CFG_CROP_IMG_HEIGHT = 480
 
-CFG_WITH_OBJ = True
+CFG_WITH_OBJ = False

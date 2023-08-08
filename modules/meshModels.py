@@ -22,16 +22,19 @@ class HandModel(nn.Module):
                                     center_idx=0, ncomps=45, root_rot_mode="axisang", joint_rot_mode="axisang").to(device)
 
         # initial pose parameters
-        self.xy_root = nn.Parameter(torch.tensor([-10, 4], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
-        self.z_root = nn.Parameter(torch.tensor([50], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
+        self.xy_root = nn.Parameter(torch.tensor([0.6595, 1.0659], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
+        self.z_root = nn.Parameter(torch.tensor([56], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
 
-        initial_pose = torch.tensor([[0.0211, -0.3187, 0.0651, 0.0000, 0.0000, -0.6944, 0.0000, 0.0000,
-                                   0.2245, -0.0072, -0.2008, 0.2014, 0.0000, 0.0000, -0.7271, 0.0000,
-                                   0.0000, 0.2305, -0.0091, -0.1125, -0.1157, 0.0883, 0.0000, -0.5734,
-                                   0.0000, 0.0000, 0.1881, -0.0093, -0.3019, 0.0766, 0.0000, 0.0000,
-                                   -0.6934, 0.0000, 0.0000, 0.3669, -0.5000, -0.2614, 0.2612, 0.0000,
-                                   -0.5810, 0.0000, 0.0000, 0.8677, -0.5000]])
-        initial_rot = torch.tensor([[-0.9538, -1.6024, 1.4709]])
+        initial_pose = torch.tensor([[1.5464e-02, -1.5886e-02, -2.6480e-01, 1.7313e-03, -3.0119e-03,
+                 -4.3855e-01, 8.4188e-06, -1.5501e-04, 6.5009e+00, -2.0439e-02,
+                 4.3690e-02, -4.9303e-01, -1.1642e-03, 1.1375e-03, -2.8073e-01,
+                 4.0919e-05, 2.0615e-03, 6.1110e-02, -2.3347e-02, -7.9014e-02,
+                 -4.5420e-01, 8.7698e-02, -4.7082e-03, -4.4077e-01, 1.5274e-03,
+                 -2.9957e-03, 1.4533e-01, -2.2924e-02, -1.6601e-01, -3.8383e-01,
+                 1.3930e-03, -1.4208e-03, -5.2633e-01, 2.6763e-04, -2.0722e-03,
+                 2.8310e-01, -4.7774e-01, 6.2213e-03, 3.3319e-01, 3.3308e-02,
+                 -6.8497e-01, 4.3174e-02, 2.7197e-02, 8.1599e-01, -4.7765e-01]])
+        initial_rot = torch.tensor([[-1.3630, -1.8802, 1.8825]])
 
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
         self.input_pose = nn.Parameter(initial_pose.to(device))
@@ -92,7 +95,8 @@ class ObjModel(nn.Module):
         self.template_verts = torch.FloatTensor(template_verts).to(self.device)
 
         # only obj_pose is trainable [bs, 4, 4]     ... currently consider only 1 batch
-        obj_pose = torch.unsqueeze(torch.tensor(obj_init_pose, dtype=torch.float32), dim=0)
+        obj_pose = torch.tensor(obj_init_pose, dtype=torch.float32)
+        obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
         self.obj_pose.requires_grad = True
 
@@ -107,12 +111,13 @@ class ObjModel(nn.Module):
 
 
     def update_pose(self, pose):
-        obj_pose = torch.unsqueeze(torch.tensor(pose, dtype=torch.float32), dim=0)
+        obj_pose = torch.tensor(pose, dtype=torch.float32)
+        obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
         self.obj_pose.requires_grad = True
 
     def apply_transform(self, obj_pose, obj_verts):
-        obj_pose = torch.squeeze(obj_pose)
+        obj_pose = obj_pose.view(4, 4)
 
         # Append 1 to each coordinate to convert them to homogeneous coordinates
         h = torch.ones((obj_verts.shape[0], 1)).to(self.device)
@@ -122,20 +127,13 @@ class ObjModel(nn.Module):
         transformed_points = homogeneous_points @ obj_pose.T
         # Convert back to Cartesian coordinates
         transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
+        transformed_points_cartesian = transformed_points_cartesian.view(self.batch_size, -1, 3)
 
-        return transformed_points_cartesian * 100.0
-
-    def apply_transform_debug(self, obj_pose):
-        obj_pose_data = obj_pose[0, :, :]
-        # Apply matrix multiplication
-        transformed_points = torch.matmul(self.template_verts_h, obj_pose_data)
-
-        return transformed_points[:, :3] * self.scale
-
+        return transformed_points_cartesian * self.scale
 
     def forward(self):
         # self.obj_faces = self.template_faces
-        self.obj_verts = torch.unsqueeze(self.apply_transform(self.obj_pose, self.template_verts), 0)
+        self.obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
 
         return {'verts':self.obj_verts, 'faces':self.obj_faces, 'pose':self.obj_pose}
 
