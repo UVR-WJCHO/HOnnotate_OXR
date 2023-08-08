@@ -104,7 +104,7 @@ class DataLoader:
         sample['kpts2d'] = meta['kpts'][:, :2]
 
         #get imgs
-        sample['rgb'], sample['depth'], sample['seg'], sample['seg_bg'], sample['seg_obj'], _, _ = self.get_img(index)
+        sample['rgb'], sample['depth'], sample['seg'], sample['seg_obj'], _, _ = self.get_img(index)
 
         # masking depth, need to modify
         # depth_bg = depth_raw > 800
@@ -114,8 +114,8 @@ class DataLoader:
         return sample
 
     def load_raw_image(self, index):
-        _, _, seg, seg_bg, seg_obj, rgb_raw, depth_raw = self.get_img(index)
-        return rgb_raw, depth_raw, seg, seg_bg, seg_obj
+        _, _, seg, seg_obj, rgb_raw, depth_raw = self.get_img(index)
+        return rgb_raw, depth_raw, seg, seg_obj
 
     def load_cam_parameters(self):
         if self.data_date == '230612':
@@ -149,7 +149,7 @@ class DataLoader:
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
 
         seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.png'%idx)
-        seg_bg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_bg_results', self.cam+'_%04d.png'%idx)
+        # seg_bg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_bg_results', self.cam+'_%04d.png'%idx)
 
         seg_obj_path = os.path.join(self.seg_path + '_deep', self.cam, 'raw_seg_results', self.cam+'_%04d.png'%idx)
 
@@ -167,17 +167,17 @@ class DataLoader:
         # there are skipped frame for segmentation
         if os.path.exists(seg_path):
             seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED))
-            seg_bg = np.asarray(cv2.imread(seg_bg_path, cv2.IMREAD_UNCHANGED))
+            # seg_bg = np.asarray(cv2.imread(seg_bg_path, cv2.IMREAD_UNCHANGED))
         else:
             seg = np.zeros((CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
-            seg_bg = np.zeros((CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+            # seg_bg = np.zeros((CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
         seg = np.where(seg>1, 1, 0)
-        seg_bg = np.where(seg_bg > 1, 1, 0)
+        # seg_bg = np.where(seg_bg > 1, 1, 0)
 
         seg_obj = np.asarray(cv2.imread(seg_obj_path, cv2.IMREAD_UNCHANGED))
         seg_obj[seg_obj == 2] = 0   # bg:0, obj:1, hand:2
 
-        return rgb, depth, seg, seg_bg, seg_obj, rgb_raw, depth_raw
+        return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
     
     def get_meta(self, idx):
         meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)

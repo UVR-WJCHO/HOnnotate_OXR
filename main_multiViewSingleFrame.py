@@ -12,7 +12,7 @@ from modules.renderer import Renderer
 from modules.meshModels import HandModel, ObjModel
 from modules.lossFunc import MultiViewLossFunc
 from utils import *
-from utils.modelUtils import initialize_optimizer
+from utils.modelUtils import set_lr_forHand, set_lr_forObj
 
 from absl import flags
 from absl import app
@@ -24,7 +24,7 @@ import time
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230802', 'target db name')   ## name ,default, help
-flags.DEFINE_string('type', 'mustard', 'target sequence name')
+flags.DEFINE_string('type', 'mug', 'target sequence name')
 FLAGS(sys.argv)
 
 
@@ -78,7 +78,7 @@ def main(argv):
 
     for frame in range(len(mas_dataloader)):
         ## initial frames are often errorneous (banana sub2 0000~0002 is error, ...)
-        if frame < 5:
+        if frame < 56:
             continue
 
         ## Set object ICG pose as init pose on every frame? or use previous pose?
@@ -87,19 +87,20 @@ def main(argv):
             model_obj.update_pose(pose=obj_pose)
 
         ## Initialize optimizer
-        # TODO : skipped shape lr in model_params. check lr ratio with above definition
-        debug_params = model.parameters()
-        model_params = initialize_optimizer(model)
-        # debug for different lr on params
         if not CFG_WITH_OBJ:
             optimizer = torch.optim.Adam(model.parameters(), lr=CFG_LR_INIT)
         else:
-            params = list(model.parameters()) + list(model_obj.parameters())
-            optimizer = torch.optim.Adam(params, lr=CFG_LR_INIT)
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.5)
+            params_hand = set_lr_forHand(model, CFG_LR_INIT)
+            params_obj = set_lr_forObj(model_obj, CFG_LR_INIT_OBJ)
 
+            params = list(params_hand) + list(params_obj)
+            optimizer = torch.optim.Adam(params)
+
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100, eta_min=0)
+
+        loss_list = []
         for iter in range(CFG_NUM_ITER):
-            loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0}
+            loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'depth_obj':0.0}
             if CFG_WITH_OBJ:
                 obj_param = model_obj()
 
@@ -130,10 +131,12 @@ def main(argv):
             optimizer.zero_grad()
             total_loss.backward(retain_graph=True)
             optimizer.step()
+            lr_scheduler.step()
 
             logs = ["Iter: {}, Loss: {}".format(iter, total_loss.data)]
             logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
             logging.info(''.join(logs))
+            loss_list.append(loss_all)
 
         ## visualization results of frame
         for camIdx, camID in enumerate(CFG_CAMID_SET):

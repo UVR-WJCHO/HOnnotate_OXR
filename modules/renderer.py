@@ -135,10 +135,13 @@ class Renderer():
         depth[depth == -1] = 0.
         depth = depth * 10.0
 
+        seg = torch.empty_like(depth).copy_(depth)
+        # seg = torch.tensor(depth)
+
         # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
 
-        return {"rgb":rgb[..., :3], "depth":depth[..., 0]}
+        return {"rgb":rgb[..., :3], "depth":depth[..., 0], "seg":seg[..., 0]}
 
     def render_meshes(self, verts_list, faces_list):
         '''

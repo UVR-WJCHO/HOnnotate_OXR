@@ -95,36 +95,34 @@ class ObjModel(nn.Module):
         self.template_verts = torch.FloatTensor(template_verts).to(self.device)
 
         # only obj_pose is trainable [bs, 4, 4]     ... currently consider only 1 batch
-        obj_pose = torch.tensor(obj_init_pose, dtype=torch.float32)
+        # trainable obj pose = (3, 4)
+        obj_pose = torch.tensor(obj_init_pose, dtype=torch.float32)[:-1, :]
         obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
         self.obj_pose.requires_grad = True
 
-        # Append 1 to each coordinate to convert them to homogeneous coordinates
-        h = torch.ones((self.template_verts.shape[0], 1)).to(self.device)
-        self.template_verts_h = torch.concatenate((self.template_verts, h), 1)
-        self.scale = torch.FloatTensor([100.0]).to(self.device)
 
-        # set initial obj mesh
-        self.obj_faces = self.template_faces
-        # self.obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
+        self.h = torch.tensor([[0, 0, 0, 1]], dtype=torch.float32).to(self.device)
+
+        self.scale = torch.FloatTensor([100.0]).to(self.device)
 
 
     def update_pose(self, pose):
-        obj_pose = torch.tensor(pose, dtype=torch.float32)
+        obj_pose = torch.tensor(pose, dtype=torch.float32)[:-1, :]
         obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
         self.obj_pose.requires_grad = True
 
     def apply_transform(self, obj_pose, obj_verts):
-        obj_pose = obj_pose.view(4, 4)
+        obj_pose = obj_pose.view(3, 4)
+        obj_mat = torch.cat([obj_pose, self.h], dim=0)
 
         # Append 1 to each coordinate to convert them to homogeneous coordinates
         h = torch.ones((obj_verts.shape[0], 1)).to(self.device)
         homogeneous_points = torch.concatenate((obj_verts, h), 1)
 
         # Apply matrix multiplication
-        transformed_points = homogeneous_points @ obj_pose.T
+        transformed_points = homogeneous_points @ obj_mat.T
         # Convert back to Cartesian coordinates
         transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
         transformed_points_cartesian = transformed_points_cartesian.view(self.batch_size, -1, 3)
@@ -132,8 +130,7 @@ class ObjModel(nn.Module):
         return transformed_points_cartesian * self.scale
 
     def forward(self):
-        # self.obj_faces = self.template_faces
-        self.obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
+        obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
 
-        return {'verts':self.obj_verts, 'faces':self.obj_faces, 'pose':self.obj_pose}
+        return {'verts':obj_verts, 'faces':self.template_faces, 'pose':self.obj_pose}
 
