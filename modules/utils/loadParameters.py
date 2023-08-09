@@ -68,3 +68,21 @@ def LoadDistortionParam(jsonFile):
     DistCoeffs = np.array([params[4], params[5], params[13], params[12], *params[6:10]])
 
     return np.expand_dims(DistCoeffs,0)
+
+
+def LoadCameraParams(jsonFile):
+    with open(jsonFile, "r") as camParams:
+        camParamsDict = json.load(camParams)
+
+    intrinsic = camParamsDict['intrinsic']
+    distCoeffs = camParamsDict['dist']
+    extrinsic = camParamsDict['extrinsic']
+
+    for key, value in intrinsic.items():
+        intrinsic[key] = np.asarray(value)
+    for key, value in distCoeffs.items():
+        distCoeffs[key] = np.asarray(value)
+    for key, value in extrinsic.items():
+        extrinsic[key] = np.asarray(value)
+
+    return intrinsic, distCoeffs, extrinsic

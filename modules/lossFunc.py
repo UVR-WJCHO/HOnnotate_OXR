@@ -27,6 +27,7 @@ class MultiViewLossFunc(nn.Module):
         self.renderers = renderers
 
         self.loss_dict = losses
+        self.obj_scale = torch.FloatTensor([1.0, 1.0, 1.0]).to(self.device)
 
     def set_object_main_extrinsic(self, obj_main_cam_idx):
         cam_params = self.dataloaders[obj_main_cam_idx].cam_parameter
@@ -50,8 +51,10 @@ class MultiViewLossFunc(nn.Module):
         self.gt_kpts3d = torch.unsqueeze(torch.FloatTensor(gt_sample['kpts3d']), 0).to(self.device)
 
         self.gt_rgb = torch.FloatTensor(gt_sample['rgb']).to(self.device)
-        self.gt_depth = torch.unsqueeze(torch.FloatTensor(gt_sample['depth']).to(self.device), 0).to(self.device)
-        self.gt_seg = torch.unsqueeze(torch.FloatTensor(gt_sample['seg']).to(self.device), 0).to(self.device)
+        self.gt_depth = torch.unsqueeze(torch.FloatTensor(gt_sample['depth']), 0).to(self.device)
+        self.gt_seg = torch.unsqueeze(torch.FloatTensor(gt_sample['seg']), 0).to(self.device)
+
+        self.gt_seg_obj = torch.unsqueeze(torch.FloatTensor(gt_sample['seg_obj']), 0).to(self.device)
 
     def set_cam(self, camIdx):
         cam_params = self.dataloaders[camIdx].cam_parameter
@@ -93,34 +96,101 @@ class MultiViewLossFunc(nn.Module):
 
             loss['reg'] = pose_reg + shape_reg
 
+            if pred_obj is not None:
+                pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
+                pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
+                loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 100000.0
+                loss['reg'] += torch.sum(loss_reg_obj)
+
         if render:
             pred_rendered = self.cam_renderer.render(verts_cam, pred['faces'])
 
             # TODO : need to combine both verts of hand/object
             if pred_obj is not None:
                 verts_obj_cam = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms, self.main_Ms_obj), 0)
-                self.obj_rendered = self.cam_renderer.render(verts_obj_cam, pred_obj['faces'])
+                pred_obj_rendered = self.cam_renderer.render(verts_obj_cam, pred_obj['faces'])
+
+                # rgb_mesh_obj = np.squeeze((pred_obj_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                # cv2.imshow("rgb_mesh_obj", rgb_mesh_obj)
+                # cv2.waitKey(1)
 
             if 'seg' in self.loss_dict:
                 pred_seg = pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                seg_gap = (pred_seg - self.gt_seg) ** 2.
-                seg_gap *= pred_seg
+                pred_seg[pred_seg > 0] = 1.0
 
-                # loss_seg = self.mse_loss(pred_seg, self.gt_seg)
+                seg_gap = torch.abs(pred_seg - self.gt_seg)
+                seg_gap[pred_seg == 0] = 0.
+
                 loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
-                loss_seg = torch.clamp(loss_seg, min=0, max=5000)  # loss clipping following HOnnotate
+                # loss_seg = torch.clamp(loss_seg, min=0, max=5000)  # loss clipping following HOnnotate
                 loss['seg'] = loss_seg
 
+                # pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
+                # gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
+                # seg_gap = np.squeeze((seg_gap[0].cpu().detach().numpy()))
+
+                # cv2.imshow("pred_seg", pred_seg)
+                # cv2.imshow("gt_seg", gt_seg)
+                # cv2.imshow("seg_gap", seg_gap)
+                # cv2.waitKey(0)
+
+                if pred_obj is not None:
+                    pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
+                    pred_seg_obj[pred_seg_obj > 0] = 1
+                    pred_seg_obj[pred_seg_obj < 0] = 0
+
+                    seg_obj_gap = ((pred_seg_obj - self.gt_seg_obj) * pred_seg_obj) ** 2.
+                    loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
+                    loss_seg_obj = torch.clamp(loss_seg_obj, min=0, max=5000)  # loss clipping following HOnnotate
+                    loss['seg'] += loss_seg_obj
+
+                    # seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                    # cv2.imshow("seg_obj_gap", seg_obj_gap)
+                    # # gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                    # # cv2.imshow("gt_seg_obj", gt_seg_obj)
+                    # cv2.waitKey(1)
+
             if 'depth' in self.loss_dict:
-                pred_seg = pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 pred_depth = pred_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 depth_gap = torch.abs(pred_depth - self.gt_depth)
-                depth_gap *= pred_seg
+                depth_gap[self.gt_seg == 0] = 0
+                # depth_gap[pred_depth == 0] = 0.
+                depth_gap[depth_gap > 100] = 100.
+                depth_gap /= 1000.0
 
-                # loss_depth = self.mse_loss(pred_depth, self.gt_depth)
+                # pred_depth_vis = np.squeeze((pred_depth[0].cpu().detach().numpy())).astype(np.uint8)
+                # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())).astype(np.uint8)
+                # depth_gap_vis = np.squeeze((depth_gap[0].cpu().detach().numpy()*255)).astype(np.uint8)
+                # cv2.imshow("pred_depth", pred_depth_vis)
+                # cv2.imshow("gt_depth_vis", gt_depth_vis)
+                # cv2.imshow("depth_gap_vis", depth_gap_vis)
+                # cv2.waitKey(1)
+
                 loss_depth = torch.sum(depth_gap.view(self.bs, -1), -1)
-                loss_depth = torch.clamp(loss_depth, min=0, max=5000)  # loss clipping used in HOnnotate
+                # loss_depth = torch.clamp(loss_depth, min=0, max=5000)  # loss clipping used in HOnnotate
                 loss['depth'] = loss_depth
+
+                if pred_obj is not None:
+                    pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+
+                    depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth)
+                    depth_obj_gap[self.gt_seg_obj == 0] = 0
+
+                    # depth_obj_gap[pred_depth_obj == 0] = 0.
+                    depth_obj_gap[depth_obj_gap > 100] = 100.
+                    depth_obj_gap /= 100.0
+
+                    loss_depth_obj = torch.sum(depth_obj_gap.view(self.bs, -1), -1)
+                    # loss_depth_obj = torch.clamp(loss_depth_obj, min=0, max=5000)  # loss clipping used in HOnnotate
+                    loss['depth_obj'] = loss_depth_obj
+
+                    # pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())).astype(np.uint8)
+                    # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())).astype(np.uint8)
+                    # depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy()*255)).astype(np.uint8)
+                    # cv2.imshow("pred_depth", pred_depth_vis)
+                    # cv2.imshow("gt_depth_vis", gt_depth_vis)
+                    # cv2.imshow("depth_gap_vis", depth_gap_vis)
+                    # cv2.waitKey(0)
 
         return loss
 
@@ -175,7 +245,7 @@ class MultiViewLossFunc(nn.Module):
             pred_kpts2d = (self.img2bb @ uv1.T).T
         else:
             # show original size of input (1080, 1920)
-            rgb_input, depth_input, seg_input = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
+            rgb_input, depth_input, seg_input, seg_obj = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
 
         rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
         rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
@@ -206,7 +276,7 @@ class MultiViewLossFunc(nn.Module):
         # cv2.imshow(blend_seg_name, seg_gap)
         cv2.waitKey(1)
 
-        # cv2.imwrite(os.path.join(save_path, 'img_blend_gt.png'), img_blend_gt)
-        # cv2.imwrite(os.path.join(save_path, 'img_blend_pred.png'), img_blend_pred)
+        cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
+        cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
 
 

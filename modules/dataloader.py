@@ -2,7 +2,7 @@ import os
 from shutil import ExecError
 import sys
 sys.path.insert(0,os.path.join(os.getcwd(), '../', 'utils'))
-from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraMatrix_undistort
+from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraMatrix_undistort, LoadCameraParams
 import numpy as np
 import cv2
 import json
@@ -62,8 +62,7 @@ class DataLoader:
         self.depth_path = os.path.join(self.base_path, 'depth_crop')
 
         # currently use temporal path from DH.K grabcut results
-        # self.seg_path = os.path.join(self.base_path, 'segmentation')
-        self.seg_path = os.path.join(self.base_path, 'seg_temp')
+        self.seg_path = os.path.join(self.base_path, 'segmentation')
 
         self.meta_base_path = os.path.join(self.base_path, 'meta')
 
@@ -108,35 +107,49 @@ class DataLoader:
         sample['kpts2d'] = meta['kpts'][:, :2]
 
         #get imgs
-        sample['rgb'], depth, seg, rgb_raw, depth_raw = self.get_img(index)
+        # sample['rgb'], depth, seg, rgb_raw, depth_raw = self.get_img(index)
+        # # masking depth, need to modify
+        # depth_bg = depth_raw > 800
+        # depth_raw[depth_bg] = 0
+        # # currently segmap is often errorneous
+        # # depth_raw[seg == 0] = 0
+        # sample['depth'] = depth_raw[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
+        # sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
+        # return sample
 
-        # masking depth, need to modify
-        depth_bg = depth_raw > 800
-        depth_raw[depth_bg] = 0
-        # currently segmap is often errorneous
-        # depth_raw[seg == 0] = 0
-
-        sample['depth'] = depth_raw[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
-        sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
-
+        sample['rgb'], sample['depth'], sample['seg'], sample['seg_obj'], _, _ = self.get_img(index)
         return sample
 
+
+
     def load_raw_image(self, index):
-        _, _, seg, rgb_raw, depth_raw = self.get_img(index)
-        return rgb_raw, depth_raw, seg
+        _, _, seg, seg_obj, rgb_raw, depth_raw = self.get_img(index)
+        return rgb_raw, depth_raw, seg, seg_obj
 
     def load_cam_parameters(self):
-        with open(os.path.join(self.cam_path, "cameraParamsBA.json")) as json_file:
-            camera_extrinsics = json.load(json_file)
-            camera_extrinsics = np.array((camera_extrinsics[self.cam])).reshape(3, 4)
+        if self.data_date == '230612':
+            with open(os.path.join(self.cam_path, "cameraParamsBA.json")) as json_file:
+                camera_extrinsics = json.load(json_file)
+                cam_extrinsic = np.array((camera_extrinsics[self.cam])).reshape(3, 4)
+                # scale z axis value as mm to cm
+                cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
+
+            camera_intrinsics = LoadCameraMatrix_undistort(
+                os.path.join(self.cam_path, self.data_date + '_cameraInfo_undistort.txt'))
+            cam_intrinsic = camera_intrinsics[self.cam]
+            dist_coeff = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json" % self.cam))
+        else:
+            _, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
+            intrinsics = LoadCameraMatrix_undistort(
+                os.path.join(self.cam_path, self.data_date + '_cameraInfo_undistort.txt'))
+
+            cam_intrinsic = intrinsics[self.cam]
+            dist_coeff = dist_coeffs[self.cam]
+            cam_extrinsic = extrinsics[self.cam].reshape(3, 4)
             # scale z axis value as mm to cm
-            camera_extrinsics[:, -1] = camera_extrinsics[:, -1] / 10.0
+            cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
 
-        camera_intrinsics = LoadCameraMatrix_undistort(os.path.join(self.cam_path, self.data_date + '_cameraInfo_undistort.txt'))
-        camera_intrinsics = camera_intrinsics[self.cam]
-        dist_coeffs = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json"%self.cam))       
-
-        return [camera_intrinsics, camera_extrinsics, dist_coeffs]
+        return [cam_intrinsic, cam_extrinsic, dist_coeff]
 
     def get_img(self, idx):
         rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam + '_%01d.png' % idx)
@@ -146,14 +159,15 @@ class DataLoader:
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
 
         # currently use temporal segmentation folder
-        # seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.png'%idx)
-        seg_path = os.path.join(self.seg_path, self.cam + '_%01d.png' % idx)
+        seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.png'%idx)
+        seg_obj_path = os.path.join(self.seg_path + '_deep', self.cam, 'raw_seg_results', self.cam + '_%04d.png' % idx)
 
-        rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
-        depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
 
         assert os.path.exists(rgb_path)
         assert os.path.exists(depth_path)
+
+        rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
+        depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
 
         rgb = np.asarray(cv2.imread(rgb_path))
         depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
@@ -162,10 +176,13 @@ class DataLoader:
         if os.path.exists(seg_path):
             seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED))
         else:
-            seg = np.zeros((CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+            seg = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
         seg = np.where(seg>1, 1, 0)
 
-        return rgb, depth, seg, rgb_raw, depth_raw
+        seg_obj = np.asarray(cv2.imread(seg_obj_path, cv2.IMREAD_UNCHANGED))
+        seg_obj[seg_obj == 2] = 0  # bg:0, obj:1, hand:2
+
+        return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
     
     def get_meta(self, idx):
         meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)

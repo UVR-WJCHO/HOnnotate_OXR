@@ -128,17 +128,18 @@ class Renderer():
         meshes = Meshes(verts=verts, faces=faces, textures=textures)
 
         rgb = self.renderer_rgb(meshes)
-        seg = torch.where(rgb[..., 3] != 0, 1, 0)
         depth = self.rasterizer_depth(meshes).zbuf
 
         # depth map process
         depth[depth == -1] = 0.
         depth = depth * 10.0
 
+        seg = torch.empty_like(depth).copy_(depth)
+
         # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
 
-        return {"rgb":rgb[..., :3], "seg":seg, "depth":depth[..., 0]}
+        return {"rgb":rgb[..., :3], "depth":depth[..., 0], "seg":seg[..., 0]}
 
     def render_meshes(self, verts_list, faces_list):
         '''
@@ -157,15 +158,16 @@ class Renderer():
         mesh_joined = join_meshes_as_scene(mesh_list)
 
         rgb = self.renderer_rgb(mesh_joined)
-        seg = torch.where(rgb[..., 3] != 0, 1, 0)
         depth = self.rasterizer_depth(mesh_joined).zbuf
 
         # depth map process
         depth[depth == -1] = 0.
         depth = depth * 10.0
 
+        seg = torch.empty_like(depth).copy_(depth)
+
         # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
 
-        return {"rgb": rgb[..., :3], "seg": seg, "depth": depth[..., 0]}
+        return {"rgb": rgb[..., :3], "depth": depth[..., 0], "seg":seg[..., 0]}
 

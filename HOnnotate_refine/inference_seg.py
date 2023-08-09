@@ -59,8 +59,8 @@ def postProcess(dummy, consQueue, numImgs, numConsThreads):
             camInd = ds.fileName.split('/')[1]
             id = ds.fileName.split('/')[2]
 
-            finalSaveDir =  os.path.join(baseDir, FLAGS.db, seq, 'segmentation', str(camInd), 'visualization')
-            finalRawSaveDir = os.path.join(baseDir, FLAGS.db, seq, 'segmentation', str(camInd), 'raw_seg_results')
+            finalSaveDir =  os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', str(camInd), 'visualization')
+            finalRawSaveDir = os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', str(camInd), 'raw_seg_results')
 
 
             labelFullImg = np.zeros_like(ds.imgRaw)[:,:,0]
@@ -159,12 +159,12 @@ def main(argv):
         if os.path.isdir(d):            
             print("(%s in %s) : %s" % (seqIdx, total_seq, seq))
             
-            if not os.path.exists(os.path.join(baseDir, FLAGS.db, seq, 'segmentation')):
-                os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation'))
+            if not os.path.exists(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep')):
+                os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep'))
                 for camID in camIDset:
-                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation', camID))
-                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation', camID, 'visualization'))
-                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation', camID, 'raw_seg_results'))
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', camID))
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', camID, 'visualization'))
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', camID, 'raw_seg_results'))
             
             for camID in camIDset:
                 fileListIn = os.listdir(join(baseDir, FLAGS.db, seq, 'rgb_crop', camID))
