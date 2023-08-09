@@ -4,7 +4,7 @@ import os
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 
 CFG_LR_INIT = 0.2
-CFG_LR_INIT_OBJ = 0.002
+CFG_LR_INIT_OBJ = 0.001
 
 CFG_NUM_ITER = 300
 CFG_DEVICE = 'cuda'
