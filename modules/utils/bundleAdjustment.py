@@ -30,7 +30,7 @@ def BundleAdjustmentSparsity(numCameras, numPoints, cameraIndices, pointIndices)
 
     i = np.arange(cameraIndices.size)
     for s in range(12):
-        A[i[cameraIndices!=2], cameraIndices[cameraIndices!=2] * 12 + s] = 1
+        A[i[cameraIndices!=0], cameraIndices[cameraIndices!=0] * 12 + s] = 1
     
     for s in range(3):
         A[i, numCameras * 12 + pointIndices * 3 + s] = 1

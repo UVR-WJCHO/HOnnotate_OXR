@@ -159,7 +159,7 @@ class loadDataset():
     def undistort(self, images, camID):
         rgb, depth = images
         image_cols, image_rows = rgb.shape[:2]
-        self.new_camera, _ = cv2.getOptimalNewCameraMatrix(self.K, self.dist, (image_rows, image_cols), 0)
+        self.new_camera, _ = cv2.getOptimalNewCameraMatrix(self.K, self.dist, (image_rows, image_cols), 1, (image_rows, image_cols))
         rgb = cv2.undistort(rgb, self.K, self.dist, None, self.new_camera)
         depth = cv2.undistort(depth, self.K, self.dist, None, self.new_camera)
 
@@ -199,7 +199,7 @@ class loadDataset():
 
             wrist_px = mp_drawing._normalized_to_pixel_coordinates(hand_landmark.landmark[0].x, hand_landmark.landmark[0].y,
                                                                                   image_cols, image_rows)
-            wristDepth = depth[wrist_px[1], wrist_px[0]]
+            wristDepth = depth[wrist_px[1], image_cols - wrist_px[0]]
 
             for idx_land, landmark in enumerate(hand_landmark.landmark):
                 landmark_px = mp_drawing._normalized_to_pixel_coordinates(landmark.x, landmark.y,
