@@ -6,23 +6,16 @@ import numpy as np
 import cv2
 import mediapipe as mp
 from tqdm import tqdm
-from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
+# from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
 from utils.geometry import uv2xyz
 
 DEBUG = True
 
 cameras = ["mas", "sub1", "sub2", "sub3"]
 
-intrinsicMatrices = LoadCameraMatrix("/hdd1/donghwan/OXR/dataset/230612/results/230612_cameraInfo.txt")
-distCoeffs = {}
-distCoeffs["mas"] = LoadDistortionParam("/hdd1/donghwan/OXR/dataset/230612/results/mas_intrinsic.json")
-distCoeffs["sub1"] = LoadDistortionParam("/hdd1/donghwan/OXR/dataset/230612/results/sub1_intrinsic.json")
-distCoeffs["sub2"] = LoadDistortionParam("/hdd1/donghwan/OXR/dataset/230612/results/sub2_intrinsic.json")
-distCoeffs["sub3"] = LoadDistortionParam("/hdd1/donghwan/OXR/dataset/230612/results/sub3_intrinsic.json")
-
-imageDir = "/hdd1/donghwan/OXR/dataset/230612/230612_3mustard_0/rgb"
-depthDir = "/hdd1/donghwan/OXR/dataset/230612/230612_3mustard_0/depth"
-resultDir = "/hdd1/donghwan/OXR/dataset/230612/230612_3mustard_0"
+imageDir = "/hdd1/donghwan/OXR/HOnnotate_OXR/dataset/230802/230802_banana/rgb"
+depthDir = "/hdd1/donghwan/OXR/HOnnotate_OXR/dataset/230802/230802_banana/depth"
+resultDir = "/hdd1/donghwan/OXR/HOnnotate_OXR/dataset/230802/230802_banana"
 numHandJoints = 21
 confidenceThreshold = 0.5
 h = np.array([[0,0,0,1]])
@@ -36,9 +29,14 @@ if DEBUG:
     os.makedirs(os.path.join(resultDir,"hand"), exist_ok=True)
     os.makedirs(os.path.join(resultDir,"reprojected"), exist_ok=True)
 
-with open("/hdd1/donghwan/OXR/dataset/230612/results/cameraParamsBA.json") as json_file:
-    cameraParams = json.load(json_file)
-    cameraParams = {camera: np.array(cameraParams[camera]) for camera in cameraParams}
+with open("/hdd1/donghwan/OXR/HOnnotate_OXR/dataset/230802/results/cameraParams.json") as json_file:
+    totalParams = json.load(json_file)
+    intrinsic = totalParams['intrinsic']
+    dist = totalParams['dist']
+    extrinsic = totalParams['extrinsic']
+    intrinsicMatrices = {camera: np.array(intrinsic[camera]) for camera in intrinsic}
+    distCoeffs = {camera: np.array(dist[camera]) for camera in dist}
+    cameraParams = {camera: np.array(extrinsic[camera]) for camera in extrinsic}
 
 # rough bounding box for hand detection
 boundingBox = {}
@@ -86,13 +84,6 @@ for idx in tqdm(range(numImages)):
 
         imageList.append(image)
         imageCroppedList.append(image[yRange[0]:yRange[1],xRange[0]:xRange[1]])
-
-    # imageMerged1 = np.concatenate((imageCroppedList[0], imageCroppedList[1]), axis=1)
-    # imageMerged2 = np.concatenate((imageCroppedList[2], imageCroppedList[3]), axis=1)
-    # imageMerged = np.concatenate((imageMerged1, imageMerged2), axis=0)
-    # cv2.imwrite(os.path.join(resultDir, f"hand/{idx}.png"), imageMerged)
-
-    # import pdb; pdb.set_trace()
 
     imageDetectedList = []
     for i, camera in enumerate(cameras):

@@ -16,22 +16,12 @@ parser.add_argument(
     help='target db Name'
 )
 parser.add_argument(
-    '--seq1',
-    type=str,
-    default='230802_mas_sub3',
-    help='Sequence Name for Master and Sub1'
-)
-parser.add_argument(
-    '--seq2',
-    type=str,
-    default='230802_sub2_sub3',
-    help='Sequence Name for Sub1 and Sub2'
-)
-parser.add_argument(
-    '--seq3',
-    type=str,
-    default='230802_sub1_sub2',
-    help='Sequence Name for Sub2 and Sub3'
+    '--cameras',
+    type=list,
+    # default=["mas", "sub3", "sub2", "sub1"],
+    default=["mas", "sub1", "sub2", "sub3"],
+
+    help='Sequence Order'
 )
 parser.add_argument(
     '--res',
@@ -47,24 +37,29 @@ h = np.array([[0,0,0,1]]) # array for homogeneous coordinates
 
 class Calibration():
     def __init__(self):
+
+        # stereo calibration will be executed in (0-th, 1-th), (1-th, 2-th), (2-th, 3-th), ...
+        self.cameras = opt.cameras
+        
         self.imgDirList = []
-        self.imgDirList.append(os.path.join(baseDir, opt.db, opt.seq1))
-        self.imgDirList.append(os.path.join(baseDir, opt.db, opt.seq2))
-        self.imgDirList.append(os.path.join(baseDir, opt.db, opt.seq3))
+        for camera_idx in range(len(self.cameras) - 1):
+            target_path = os.path.join(baseDir, opt.db, f"{opt.db}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
+            if os.path.exists(target_path):
+                self.imgDirList.append(target_path)
+            else:
+                target_path = os.path.join(baseDir, opt.db, f"{opt.db}_{self.cameras[camera_idx+1]}_{self.cameras[camera_idx]}")
+                self.imgDirList.append(target_path)
 
         self.resultDir = os.path.join(baseDir, opt.db, opt.res)
 
-        # stereo calibration will be executed in (0-th, 1-th), (1-th, 2-th), (2-th, 3-th), ...
-        # self.cameras = ["mas", "sub1", "sub2", "sub3"]
-        self.cameras = ["mas", "sub3", "sub2", "sub1"]
 
-        assert os.path.exists(os.path.join(self.resultDir, "230802_cameraInfo.txt")), 'cameraInfo.txt does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, f"{opt.db}_cameraInfo.txt")), 'cameraInfo.txt does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "mas_intrinsic.json")), 'mas_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub1_intrinsic.json")), 'sub1_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub2_intrinsic.json")), 'sub2_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub3_intrinsic.json")), 'sub3_intrinsic.json does not exist'
 
-        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, "230802_cameraInfo.txt"))
+        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, f"{opt.db}_cameraInfo.txt"))
         self.distCoeffs = {}
         self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(self.resultDir, "mas_intrinsic.json"))
         self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(self.resultDir, "sub1_intrinsic.json"))
