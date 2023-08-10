@@ -107,12 +107,18 @@ class loadDataset():
 
         self.bbox_width = 640
         self.bbox_height = 480
-        self.prev_bbox = [0, 0, 640, 480]
+        # 매뉴얼 하게 초기 bbox를 찾아서 설정해줌
+        self.temp_bbox = {}
+        self.temp_bbox["mas"] = [650, 280, self.bbox_width, self.bbox_height]
+        self.temp_bbox["sub1"] = [750, 300, self.bbox_width, self.bbox_height]
+        self.temp_bbox["sub2"] = [500, 150, self.bbox_width, self.bbox_height]
+        self.temp_bbox["sub3"] = [650, 200, self.bbox_width, self.bbox_height]
+        self.prev_bbox = None
+        self.wrist_px = None
 
         intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
         self.intrinsics = intrinsics
         self.distCoeffs = dist_coeffs
-
 
         self.intrinsic_undistort = os.path.join(camResultDir, FLAGS.db + "_cameraInfo_undistort.txt")
         self.prev_cam_check = None
@@ -140,6 +146,8 @@ class loadDataset():
         self.mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=threshold) 
         self.K = self.intrinsics[camID]
         self.dist = self.distCoeffs[camID]
+
+        self.prev_bbox = self.temp_bbox[camID]
 
     def getItem(self, idx, camID='mas'):
         # camID : mas, sub1, sub2, sub3
@@ -180,60 +188,76 @@ class loadDataset():
         
     def procImg(self, images):
         rgb, depth = images
-
         image_rows, image_cols, _ = rgb.shape
-
         idx_to_coordinates = None
-        #### extract image bounding box ####
-        image = cv2.flip(rgb, 1)
-        # Convert the BGR image to RGB before processing.
-        results = self.mp_hand.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-
         kps = np.empty((21, 3), dtype=np.float32)
         kps[:] = np.nan
 
-        if results.multi_hand_landmarks:
-            #TODO: handle multi hands
-            hand_landmark = results.multi_hand_landmarks[0]
-            idx_to_coordinates = {}
+        # 반복해서 검출 시도
+        for _ in range(2):
+            results = self.mp_hand.process(cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
+            if results.multi_hand_landmarks and len(results.multi_hand_landmarks[0].landmark) == 21:
+                hand_landmark = results.multi_hand_landmarks[0]
+                idx_to_coordinates = {}
+                # wristDepth = depth[
+                #     int(hand_landmark.landmark[0].y * image_rows), int(hand_landmark.landmark[0].x * image_cols)]
+                for idx_land, landmark in enumerate(hand_landmark.landmark):
+                    landmark_px = [landmark.x * image_cols, landmark.y * image_rows]
+                    if landmark_px:
+                        # landmark_px has fliped x axis
+                        orig_x = landmark_px[0]
+                        idx_to_coordinates[idx_land] = [orig_x, landmark_px[1]]
 
-            wrist_px = mp_drawing._normalized_to_pixel_coordinates(hand_landmark.landmark[0].x, hand_landmark.landmark[0].y,
-                                                                                  image_cols, image_rows)
-            wristDepth = depth[wrist_px[1], image_cols - wrist_px[0]]
-
-            for idx_land, landmark in enumerate(hand_landmark.landmark):
-                landmark_px = mp_drawing._normalized_to_pixel_coordinates(landmark.x, landmark.y,
-                                                                                  image_cols, image_rows)
-                if landmark_px:
-                    # landmark_px has fliped x axis
-                    orig_x = image_cols - landmark_px[0]
-                    idx_to_coordinates[idx_land] = [orig_x, landmark_px[1]]
-
-                    # 3d keypoints from depth image and mediapipe
-                    if wristDepth > 0:
-                        kps[idx_land, 0] = image_cols - landmark_px[0]
+                        kps[idx_land, 0] = landmark_px[0]
                         kps[idx_land, 1] = landmark_px[1]
-                        kps[idx_land, 2] = landmark.z * image_cols + wristDepth
+                        # save relative depth on z axis
+                        kps[idx_land, 2] = landmark.z
 
-        # consider only one hand, if both hands are detected utilize idx_to_coord_1
-        # if tracking fails, use the previous bbox
+
+            # 전체 이미지에서 손 검출이 안되는 경우 이전 bbox로 크롭한 후에 다시 검출
+            if not results.multi_hand_landmarks or len(results.multi_hand_landmarks[0].landmark) != 21 or np.any(
+                    np.isnan(kps)):
+                bbox = self.prev_bbox
+                rgb_crop = rgb[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+                results = self.mp_hand.process(cv2.cvtColor(rgb_crop, cv2.COLOR_BGR2RGB))
+                if results.multi_hand_landmarks:
+                    hand_landmarks = results.multi_hand_landmarks[0]
+                    idx_to_coordinates = {}
+                    # wristDepth = depth[int(hand_landmarks.landmark[0].y * bbox[3] + bbox[1]), int(
+                    #     hand_landmarks.landmark[0].x * bbox[2] + bbox[0])]
+                    for idx_land, landmarks in enumerate(hand_landmarks.landmark):
+                        landmarks_px = [int(landmarks.x * bbox[2] + bbox[0]), int(landmarks.y * bbox[3] + bbox[1])]
+                        if landmarks_px:
+                            idx_to_coordinates[idx_land] = landmarks_px
+
+                            kps[idx_land, 0] = landmarks_px[0]
+                            kps[idx_land, 1] = landmarks_px[1]
+                            # save relative depth on z axis
+                            kps[idx_land, 2] = landmarks.z
+
+            # 손이 나왔을 경우 반복 멈춤
+            if not np.any(np.isnan(kps)):
+                break
+
         idx_to_coord = idx_to_coordinates
 
-        if idx_to_coord is None:
-            bbox = self.prev_bbox
+        # 크롭 후에도 검출이 안된다면 이전 키포인트를 그대로 사용
+        if idx_to_coord is not None:
+            self.prev_idx_to_coord = idx_to_coord
+            self.prev_kps = kps
         else:
-            bbox = self.extractBbox(idx_to_coord, image_rows, image_cols)
+            idx_to_coord = self.prev_idx_to_coord
+            kps = self.prev_kps
 
+        bbox = self.extractBbox(idx_to_coord, image_rows, image_cols)
         rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
-
-        # need to update if bbox is not fixed size
         depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
 
         procImgSet = [rgbCrop, depthCrop]
-
         self.prev_bbox = copy.deepcopy(bbox)
 
         return bbox, img2bb_trans, bb2img_trans, procImgSet, kps
+
 
     def extractBbox(self, idx_to_coord, image_rows, image_cols):
         # consider fixed size bbox
