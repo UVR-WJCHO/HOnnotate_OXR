@@ -21,18 +21,16 @@ parser.add_argument(
     '--cameras',
     type=list,
     default=["mas", "sub3", "sub2", "sub1"],
-
     help='Sequence Order'
 )
 parser.add_argument(
-    '--res',
+    '--base_dir',
     type=str,
-    default='results',
-    help='Directory to save result'
+    default='/hdd1/donghwan/OXR/HOnnotate_OXR/dataset',
+    help='Base directory that contains images with checkerboard'
 )
 opt = parser.parse_args()
 
-baseDir = '/hdd1/donghwan/OXR/HOnnotate_OXR/dataset'
 h = np.array([[0,0,0,1]]) # array for homogeneous coordinates
 
 
@@ -44,14 +42,14 @@ class Calibration():
         
         self.imgDirList = []
         for camera_idx in range(len(self.cameras) - 1):
-            target_path = os.path.join(baseDir, opt.db, f"{opt.db}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
+            target_path = os.path.join(opt.base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
             if os.path.exists(target_path):
                 self.imgDirList.append(target_path)
             else:
-                target_path = os.path.join(baseDir, opt.db, f"{opt.db}_{self.cameras[camera_idx+1]}_{self.cameras[camera_idx]}")
+                target_path = os.path.join(opt.base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx+1]}_{self.cameras[camera_idx]}")
                 self.imgDirList.append(target_path)
 
-        self.resultDir = os.path.join(baseDir, f"{opt.db}_cam")
+        self.resultDir = os.path.join(opt.base_dir, f"{opt.db}_cam")
 
 
         assert os.path.exists(os.path.join(self.resultDir, f"{opt.db}_cameraInfo.txt")), 'cameraInfo.txt does not exist'
@@ -76,30 +74,36 @@ class Calibration():
         self.imgPointsRight = []
         self.objPoints = []
 
-        self.cameraParams = np.zeros((self.numCameras, 12)) # flattened extrinsic paramters
-        self.cameraParams[0] = np.eye(4)[:3].ravel() # master camera's coordinate is equal to world coordinate.
+        self.cameraParams = {camera: np.eye(4)[:3] for camera in self.cameras} # initialize extrinsic parameters
 
     
     def Calibrate(self):
         #TODO: order of cameraParams
         for i in range(self.numCameras - 1):
-            retval, R, T, pt2dL, pt2dR, pt3dL, pt3dR = StereoCalibrate(self.imgDirList[i], self.cameras[i], self.cameras[i+1], self.intrinsic, self.distCoeffs,
+            left_cam = self.cameras[i]
+            right_cam = self.cameras[i+1]
+            retval, R, T, pt2dL, pt2dR, pt3dL, pt3dR = StereoCalibrate(self.imgDirList[i], left_cam, right_cam, self.intrinsic, self.distCoeffs,
                     imgInt=self.imgInt, nsize=self.nSize, minSize=self.minSize)
-            originCameraParams = self.cameraParams[i].reshape(3,4)
+            
+            originCameraParams = self.cameraParams[left_cam]
             originCameraParams = np.concatenate((originCameraParams, h), axis=0)
             targetCameraParams = np.concatenate((R,T),axis=1) @ originCameraParams
-            self.cameraParams[i+1] = targetCameraParams.ravel()
+            self.cameraParams[right_cam] = targetCameraParams
 
             self.imgPointsLeft.append(pt2dL)
             self.imgPointsRight.append(pt2dR)
 
             points3d = np.concatenate((pt3dL, np.ones((pt3dL.shape[0],1))), axis=1) # 3d points in i-th camera's coordinate
-            params = np.concatenate((self.cameraParams[i].reshape((3,4)),h), axis=0)
+            params = np.concatenate((self.cameraParams[left_cam],h), axis=0)
             self.objPoints.append((np.linalg.inv(params) @ points3d.T).T[:,:3]) # 3d points in world coordinate (master cameras' coordinate)
 
 
     def BA(self):
-        result = BundleAdjustment(self.cameras, self.objPoints, self.imgPointsLeft, self.imgPointsRight, self.cameraParams, self.intrinsic)
+        cameraParams = np.zeros((self.numCameras, 12)) # flattened extrinsic paramters
+        for idx, camera in enumerate(self.cameras):
+            cameraParams[idx] = self.cameraParams[camera].ravel()
+
+        result = BundleAdjustment(self.cameras, self.objPoints, self.imgPointsLeft, self.imgPointsRight, cameraParams, self.intrinsic)
 
         self.cameraParamsBA = result.x[:self.numCameras * 12].reshape(self.numCameras, 12)
         self.objPointsBA = result.x[self.numCameras * 12:]

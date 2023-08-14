@@ -23,14 +23,14 @@ def Fun(params, intrinsicMatrices, numCameras, numPoints, cameraIndices, pointIn
     return np.sum(reprojection_error,1)
 
 
-def BundleAdjustmentSparsity(numCameras, numPoints, cameraIndices, pointIndices):
+def BundleAdjustmentSparsity(numCameras, numPoints, cameraIndices, pointIndices, mas_idx):
     m = cameraIndices.size
     n = numCameras * 12 + numPoints * 3
     A = lil_matrix((m, n), dtype=int)
 
     i = np.arange(cameraIndices.size)
     for s in range(12):
-        A[i[cameraIndices!=0], cameraIndices[cameraIndices!=0] * 12 + s] = 1
+        A[i[cameraIndices!=mas_idx], cameraIndices[cameraIndices!=mas_idx] * 12 + s] = 1
     
     for s in range(3):
         A[i, numCameras * 12 + pointIndices * 3 + s] = 1
@@ -39,6 +39,7 @@ def BundleAdjustmentSparsity(numCameras, numPoints, cameraIndices, pointIndices)
 
 
 def BundleAdjustment(cameras, objPointsList, imgPointsLeft, imgPointsRight, cameraParams, intrinsicMatrices):
+    mas_idx = cameras.index('mas')
     objPoints = np.concatenate(objPointsList, axis=0)
     numCameras = len(cameras)
     numPoints = objPoints.shape[0]
@@ -62,7 +63,7 @@ def BundleAdjustment(cameras, objPointsList, imgPointsLeft, imgPointsRight, came
     plt.plot(np.sqrt(f0))
     plt.show()
 
-    A = BundleAdjustmentSparsity(numCameras, numPoints, cameraIndices, pointIndices)
+    A = BundleAdjustmentSparsity(numCameras, numPoints, cameraIndices, pointIndices, mas_idx)
 
     t0 = time.time()
     res = least_squares(Fun, x0, jac_sparsity=A, verbose=2, x_scale='jac', ftol=1e-5, method='trf',
