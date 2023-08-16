@@ -9,6 +9,7 @@ import math
 from utils.loadParameters import LoadCameraMatrix, LoadDistortionParam
 from utils.bundleAdjustment import BundleAdjustment
 from utils.calibration import StereoCalibrate
+import cv2
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -19,8 +20,8 @@ parser.add_argument(
 )
 parser.add_argument(
     '--cameras',
-    type=list,
-    default=["mas", "sub3", "sub2", "sub1"],
+    nargs='+',
+    default=["mas", "sub1", "sub2", "sub3"],
     help='Sequence Order'
 )
 parser.add_argument(
@@ -28,6 +29,11 @@ parser.add_argument(
     type=str,
     default='/hdd1/donghwan/OXR/HOnnotate_OXR/dataset',
     help='Base directory that contains images with checkerboard'
+)
+parser.add_argument(
+    '--world_img',
+    type=str,
+    help='Checkerboard image for initializing world coordinate'
 )
 opt = parser.parse_args()
 
@@ -120,6 +126,86 @@ class Calibration():
 
         with open(os.path.join(self.resultDir, "cameraParams.json"), "w") as fp:
             json.dump(cameraParams, fp, sort_keys=True, indent=4)
+    
+
+    def InitWorldCoordinate(self, image_path):
+        image = cv2.imread(image_path)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        retval, corners = cv2.findChessboardCorners(gray, self.nSize)
+
+        if retval:
+            criteria = (cv2.TERM_CRITERIA_EPS +
+                        cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+            corners = cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
+
+        # visualize world coordinates
+        colors = [(0,0,255), (0,255,0), (255,0,0)]
+        checker_formats = [
+            {
+                0: np.arange(30),
+                1: np.arange(30).reshape(5,6).transpose().ravel()
+            },
+            {
+                0: np.arange(30).reshape(5,6)[:,::-1].ravel(),
+                1: np.arange(30).reshape(5,6)[:,::-1].transpose().ravel()
+            },
+            {
+                0: np.arange(30).reshape(5,6)[::-1,:].ravel(),
+                1: np.arange(30).reshape(5,6)[::-1,:].transpose().ravel()
+            },
+            {
+                0: np.arange(30)[::-1],
+                1: np.arange(30).reshape(5,6).transpose().ravel()[::-1]
+            },
+        ]
+
+        for i, format in enumerate(checker_formats):
+            for transposed in format:
+                O, xyz, rvec, tvec = self.VisualizeWorldCoordinate(corners, reorder_idx=format[transposed], transposed=transposed, cam='sub2')
+
+                Z = xyz[2]
+                if (Z[1] - O[1] > 0):
+                    # if z-basis is down direction, skip it.
+                    continue
+
+                for color, basis in zip(colors, xyz):
+                    image = cv2.line(image, (int(O[0]), int(O[1])), (int(basis[0]), int(basis[1])), color, 3)
+
+                cv2.putText(image, f"{i}-th coord", (int(Z[0]), int(Z[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
+
+                R = cv2.Rodrigues(rvec)[0]
+                P = np.concatenate((R, tvec), axis=1)
+                np.save(os.path.join(self.resultDir, f"{i}-world.npy"), P)
+
+        cv2.imwrite(os.path.join(self.resultDir, "world_coordinate.png"), image)
+
+
+    def VisualizeWorldCoordinate(self, pts_2d, reorder_idx, transposed, cam):
+        if transposed:
+            objp = np.zeros((self.nSize[0]*self.nSize[1],3), np.float32)
+            objp[:,:2] = np.mgrid[0:self.nSize[1],0:self.nSize[0]].T.reshape(-1,2)
+        else:
+            objp = np.zeros((self.nSize[1]*self.nSize[0],3), np.float32)
+            objp[:,:2] = np.mgrid[0:self.nSize[0],0:self.nSize[1]].T.reshape(-1,2)
+
+        corners = pts_2d[reorder_idx]
+        ret, rvec, tvec = cv2.solvePnP(objp, corners, self.intrinsic[cam], self.distCoeffs[cam])
+
+        # x, y, z basis
+        coord = np.zeros((4,3))
+        coord[1] = [1,0,0]
+        coord[2] = [0,1,0]
+        coord[3] = [0,0,1]
+
+        reprojected, _ = cv2.projectPoints(coord, rvec, tvec, self.intrinsic[cam], self.distCoeffs[cam])
+
+        O = reprojected[0,0]
+        X = reprojected[1,0]
+        Y = reprojected[2,0]
+        Z = reprojected[3,0]
+        xyz = [X, Y, Z]
+
+        return O, xyz, rvec, tvec
 
 
 def main():
@@ -129,6 +215,7 @@ def main():
     calib.BA()
     calib.Save()
 
+    calib.InitWorldCoordinate(opt.world_img)
 
 if __name__ == '__main__':
     main()
