@@ -129,6 +129,7 @@ class Calibration():
     
 
     def InitWorldCoordinate(self, image_path):
+        camera = os.path.split(image_path)[-1].split('_')[0]
         image = cv2.imread(image_path)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         retval, corners = cv2.findChessboardCorners(gray, self.nSize)
@@ -161,7 +162,7 @@ class Calibration():
 
         for i, format in enumerate(checker_formats):
             for transposed in format:
-                O, xyz, rvec, tvec = self.VisualizeWorldCoordinate(corners, reorder_idx=format[transposed], transposed=transposed, cam='sub2')
+                O, xyz, rvec, tvec = self.VisualizeWorldCoordinate(corners, reorder_idx=format[transposed], transposed=transposed, cam=camera)
 
                 Z = xyz[2]
                 if (Z[1] - O[1] > 0):
@@ -215,7 +216,8 @@ def main():
     calib.BA()
     calib.Save()
 
-    calib.InitWorldCoordinate(opt.world_img)
+    if (opt.world_img != None):
+        calib.InitWorldCoordinate(opt.world_img)
 
 if __name__ == '__main__':
     main()
