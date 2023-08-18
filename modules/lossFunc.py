@@ -250,33 +250,42 @@ class MultiViewLossFunc(nn.Module):
         rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
         rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
 
+        rgb_seg = (rgb_input * seg_input[..., None]).astype(np.uint8)
+
         img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
         img_blend_pred = cv2.addWeighted(rgb_input, 0.5, rgb_2d_pred, 0.7, 0)
+        img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
         depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
         seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
 
-        depth_gap *= seg_mesh
-        seg_gap = seg_gap * seg_mesh * 255
+        seg_mask = np.copy(seg_mesh)
+        seg_mask[seg_mesh>0] = 1
+        depth_gap *= seg_mask
+        seg_gap = seg_gap * seg_mask * 255
 
         if not flag_crop:
             # resize images to (360, 640)
             img_blend_gt = cv2.resize(img_blend_gt, dsize=(640,360), interpolation=cv2.INTER_LINEAR)
             img_blend_pred = cv2.resize(img_blend_pred, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+            img_blend_pred_seg = cv2.resize(img_blend_pred_seg, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
             depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
             seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
 
         blend_gt_name = "blend_gt_" + camID
         blend_pred_name = "blend_pred_" + camID
+        blend_pred_seg_name = "blend_pred_seg_" + camID
         blend_depth_name = "blend_depth_" + camID
         blend_seg_name = "blend_seg_" + camID
 
         cv2.imshow(blend_gt_name, img_blend_gt)
         cv2.imshow(blend_pred_name, img_blend_pred)
+        cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
         cv2.imshow(blend_depth_name, depth_gap)
         # cv2.imshow(blend_seg_name, seg_gap)
         cv2.waitKey(1)
 
         cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
+        cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
         cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
 
 

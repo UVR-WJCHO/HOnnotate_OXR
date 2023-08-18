@@ -1,0 +1,7 @@
+pyk4a
+opencv-python
+numpy
+typing_extensions
+
+# https://github.com/microsoft/Azure-Kinect-Sensor-SDK/blob/develop/docs/usage.md
+# https://github.com/etiennedub/pyk4a
