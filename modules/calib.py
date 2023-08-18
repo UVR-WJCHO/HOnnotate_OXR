@@ -72,7 +72,7 @@ class Calibration():
         self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(self.resultDir, "sub3_intrinsic.json"))
 
         self.nSize = (6, 5) # the number of checkers
-        self.imgInt = 15
+        self.imgInt = 5
         self.minSize = 30
         self.numCameras = len(self.cameras)
 
