@@ -13,9 +13,9 @@ import cv2
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--dir',
+    '--db',
     type=str,
-    default='230817',
+    default='230802',
     help='target db Name'
 )
 parser.add_argument(
@@ -24,6 +24,13 @@ parser.add_argument(
     default=["mas", "sub1", "sub2", "sub3"],
     help='Sequence Order'
 )
+parser.add_argument(
+    '--num',
+    type=int,
+    default=300,
+    help='Max frame number used in AzureKinect_calib.py'
+)
+
 parser.add_argument(
     '--world_img',
     type=str,
@@ -44,31 +51,31 @@ class Calibration():
         
         self.imgDirList = []
         for camera_idx in range(len(self.cameras) - 1):
-            target_path = os.path.join(base_dir, opt.dir, f"{opt.dir}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
+            target_path = os.path.join(base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
             if os.path.exists(target_path):
                 self.imgDirList.append(target_path)
             else:
-                target_path = os.path.join(base_dir, opt.dir, f"{opt.dir}_{self.cameras[camera_idx+1]}_{self.cameras[camera_idx]}")
+                target_path = os.path.join(base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx+1]}_{self.cameras[camera_idx]}")
                 self.imgDirList.append(target_path)
 
-        self.resultDir = os.path.join(base_dir, f"{opt.dir}")
+        self.resultDir = os.path.join(base_dir, f"{opt.db}_cam")
 
 
-        assert os.path.exists(os.path.join(self.resultDir, f"{opt.dir}_cameraInfo.txt")), 'cameraInfo.txt does not exist'
-        assert os.path.exists(os.path.join(self.resultDir, "mas_camInfo.json")), 'mas_intrinsic.json does not exist'
-        assert os.path.exists(os.path.join(self.resultDir, "sub1_camInfo.json")), 'sub1_intrinsic.json does not exist'
-        assert os.path.exists(os.path.join(self.resultDir, "sub2_camInfo.json")), 'sub2_intrinsic.json does not exist'
-        assert os.path.exists(os.path.join(self.resultDir, "sub3_camInfo.json")), 'sub3_intrinsic.json does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, f"{opt.db}_cameraInfo.txt")), 'cameraInfo.txt does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "mas_intrinsic.json")), 'mas_intrinsic.json does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "sub1_intrinsic.json")), 'sub1_intrinsic.json does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "sub2_intrinsic.json")), 'sub2_intrinsic.json does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "sub3_intrinsic.json")), 'sub3_intrinsic.json does not exist'
 
-        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, f"{opt.dir}_cameraInfo.txt"))
+        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, f"{opt.db}_cameraInfo.txt"))
         self.distCoeffs = {}
-        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(self.resultDir, "mas_camInfo.json"))
-        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(self.resultDir, "sub1_camInfo.json"))
-        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(self.resultDir, "sub2_camInfo.json"))
-        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(self.resultDir, "sub3_camInfo.json"))
+        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(self.resultDir, "mas_intrinsic.json"))
+        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(self.resultDir, "sub1_intrinsic.json"))
+        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(self.resultDir, "sub2_intrinsic.json"))
+        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(self.resultDir, "sub3_intrinsic.json"))
 
         self.nSize = (6, 5) # the number of checkers
-        self.imgInt = 15
+        self.imgInt = 5
         self.minSize = 30
         self.numCameras = len(self.cameras)
 
@@ -85,7 +92,7 @@ class Calibration():
             left_cam = self.cameras[i]
             right_cam = self.cameras[i+1]
             retval, R, T, pt2dL, pt2dR, pt3dL, pt3dR = StereoCalibrate(self.imgDirList[i], left_cam, right_cam, self.intrinsic, self.distCoeffs,
-                    imgInt=self.imgInt, nsize=self.nSize, minSize=self.minSize)
+                    imgInt=self.imgInt, numImg=opt.num, nsize=self.nSize, minSize=self.minSize)
             
             originCameraParams = self.cameraParams[left_cam]
             originCameraParams = np.concatenate((originCameraParams, h), axis=0)
