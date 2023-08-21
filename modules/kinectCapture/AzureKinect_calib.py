@@ -21,10 +21,12 @@ import time
 import multiprocessing
 from multiprocessing import Queue
 
+### For calibration sample of camera-camera, set --num 100
+### For calibration sample of world coordinate, set --num 10
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dir', type=str, default="230802")
-parser.add_argument('--num', type=int, default=300)
+parser.add_argument('--num', type=int, default=100)
 args = parser.parse_args()
 
 outfolder = args.dir
@@ -115,13 +117,13 @@ if __name__=="__main__":
         
         # for calibration, save one image per one second.
         if (i%5 == 4):
-            cv2.imwrite(os.path.join(outfolder, 'rgb\mas_%d.png' % (i)), color)
+            cv2.imwrite(os.path.join(outfolder, 'rgb\mas_%d.jpg' % (i)), color)
             cv2.imwrite(os.path.join(outfolder,'depth\mas_%d.png' % (i)), depth)
-            cv2.imwrite(os.path.join(outfolder, 'rgb\sub1_%d.png' % (i)), color_1)
+            cv2.imwrite(os.path.join(outfolder, 'rgb\sub1_%d.jpg' % (i)), color_1)
             cv2.imwrite(os.path.join(outfolder,'depth\sub1_%d.png' % (i)), depth_1)
-            cv2.imwrite(os.path.join(outfolder, 'rgb\sub2_%d.png' % (i)), color_2)
+            cv2.imwrite(os.path.join(outfolder, 'rgb\sub2_%d.jpg' % (i)), color_2)
             cv2.imwrite(os.path.join(outfolder,'depth\sub2_%d.png' % (i)), depth_2)
-            cv2.imwrite(os.path.join(outfolder, 'rgb\sub3_%d.png' % (i)), color_3)
+            cv2.imwrite(os.path.join(outfolder, 'rgb\sub3_%d.jpg' % (i)), color_3)
             cv2.imwrite(os.path.join(outfolder,'depth\sub3_%d.png' % (i)), depth_3)
             print('%d.png' % i + ' saved')
 
