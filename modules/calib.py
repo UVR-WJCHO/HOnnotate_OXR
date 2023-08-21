@@ -25,12 +25,6 @@ parser.add_argument(
     help='Sequence Order'
 )
 parser.add_argument(
-    '--num',
-    type='int',
-    default=300,
-    help='Max frame number used in AzureKinect_calib.py'
-)
-parser.add_argument(
     '--base_dir',
     type=str,
     default='/hdd1/donghwan/OXR/HOnnotate_OXR/dataset',
@@ -95,7 +89,7 @@ class Calibration():
             left_cam = self.cameras[i]
             right_cam = self.cameras[i+1]
             retval, R, T, pt2dL, pt2dR, pt3dL, pt3dR = StereoCalibrate(self.imgDirList[i], left_cam, right_cam, self.intrinsic, self.distCoeffs,
-                    imgInt=self.imgInt, numImg=opt.num nsize=self.nSize, minSize=self.minSize)
+                    imgInt=self.imgInt, nsize=self.nSize, minSize=self.minSize)
             
             originCameraParams = self.cameraParams[left_cam]
             originCameraParams = np.concatenate((originCameraParams, h), axis=0)
