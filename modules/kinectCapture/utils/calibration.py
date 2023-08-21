@@ -56,7 +56,7 @@ def Resgistration3D(p1_t,p2_t):
     return retval, R, T
 
 
-def StereoCalibrate(imgDir, cam1, cam2, intrinsicMatrices, distCoeffs, imgInt=5, nsize=(12,7), minSize=30):
+def StereoCalibrate(imgDir, cam1, cam2, intrinsicMatrices, distCoeffs, imgInt=5, numImg=300, nsize=(12,7), minSize=30):
     rgbDir = os.path.join(imgDir, "rgb")
     depthDir = os.path.join(imgDir, "depth")
 
@@ -70,12 +70,15 @@ def StereoCalibrate(imgDir, cam1, cam2, intrinsicMatrices, distCoeffs, imgInt=5,
     pt3dL =[]
     pt3dR =[]
     nptperImg = nsize[0] * nsize[1]
-    numImg = min(len(glob.glob(os.path.join(depthDir, f"{cam1}_*.png"))), len(glob.glob(os.path.join(depthDir, f"{cam2}*.png"))))
     numDetection = 0
 
 
     print(f"Stereo Calibration between {cam1} and {cam2} starts!")
     for i in tqdm(range(imgInt-1, numImg, imgInt)):
+        if not os.path.exists(os.path.join(rgbDir, f"{cam1}_{i}.jpg")):
+            continue
+        if not os.path.exists(os.path.join(rgbDir, f"{cam2}_{i}.jpg")):
+            continue
         isValidLeft, leftCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam1}_{i}.jpg"), nsize)
         isValidRight, rightCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam2}_{i}.jpg"), nsize)
 
