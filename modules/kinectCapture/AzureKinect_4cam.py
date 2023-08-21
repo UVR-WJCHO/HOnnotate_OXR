@@ -86,19 +86,6 @@ def run_capture(queue):
     k4a_master.stop()
 
 
-def img_save(imgs, i):
-   color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3 = imgs
-   cv2.imwrite(os.path.join(outfolder, 'rgb\mas_%d.jpg' % (i)), color)
-   cv2.imwrite(os.path.join(outfolder, 'depth\mas_%d.png' % (i)), depth)
-   cv2.imwrite(os.path.join(outfolder, 'rgb\sub1_%d.jpg' % (i)), color_1)
-   cv2.imwrite(os.path.join(outfolder, 'depth\sub1_%d.png' % (i)), depth_1)
-   cv2.imwrite(os.path.join(outfolder, 'rgb\sub2_%d.jpg' % (i)), color_2)
-   cv2.imwrite(os.path.join(outfolder, 'depth\sub2_%d.png' % (i)), depth_2)
-   cv2.imwrite(os.path.join(outfolder, 'rgb\sub3_%d.jpg' % (i)), color_3)
-   cv2.imwrite(os.path.join(outfolder, 'depth\sub3_%d.png' % (i)), depth_3)
-   print('%d.png' % i + ' saved')
-
-
 
 if __name__=="__main__":
 
@@ -113,19 +100,16 @@ if __name__=="__main__":
             continue
 
         color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3 = queue.get()
-        cv2.imwrite(os.path.join(outfolder, 'rgb\mas_%d.png' % (i)), color)
+        cv2.imwrite(os.path.join(outfolder, 'rgb\mas_%d.jpg' % (i)), color)
         cv2.imwrite(os.path.join(outfolder,'depth\mas_%d.png' % (i)), depth)
-        cv2.imwrite(os.path.join(outfolder, 'rgb\sub1_%d.png' % (i)), color_1)
+        cv2.imwrite(os.path.join(outfolder, 'rgb\sub1_%d.jpg' % (i)), color_1)
         cv2.imwrite(os.path.join(outfolder,'depth\sub1_%d.png' % (i)), depth_1)
-        cv2.imwrite(os.path.join(outfolder, 'rgb\sub2_%d.png' % (i)), color_2)
+        cv2.imwrite(os.path.join(outfolder, 'rgb\sub2_%d.jpg' % (i)), color_2)
         cv2.imwrite(os.path.join(outfolder,'depth\sub2_%d.png' % (i)), depth_2)
-        cv2.imwrite(os.path.join(outfolder, 'rgb\sub3_%d.png' % (i)), color_3)
+        cv2.imwrite(os.path.join(outfolder, 'rgb\sub3_%d.jpg' % (i)), color_3)
         cv2.imwrite(os.path.join(outfolder,'depth\sub3_%d.png' % (i)), depth_3)
         print('%d.png' % i + ' saved')
 
-        # imgs = queue.get()
-        # p = multiprocessing.Process(target=img_save, args=(imgs, i,))
-        # p.start()
 
 
     process_capture.terminate()
