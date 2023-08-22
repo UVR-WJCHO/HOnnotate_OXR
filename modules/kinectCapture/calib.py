@@ -13,7 +13,7 @@ import cv2
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--db',
+    '--dir',
     type=str,
     default='230802',
     help='target db Name'
@@ -51,28 +51,30 @@ class Calibration():
         
         self.imgDirList = []
         for camera_idx in range(len(self.cameras) - 1):
-            target_path = os.path.join(base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
-            if os.path.exists(target_path):
-                self.imgDirList.append(target_path)
+            target_path1 = os.path.join(base_dir, opt.dir, f"{opt.dir}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
+            target_path2 = os.path.join(base_dir, opt.dir, f"{opt.dir}_{self.cameras[camera_idx + 1]}_{self.cameras[camera_idx]}")
+            if os.path.exists(target_path1):
+                self.imgDirList.append(target_path1)
+            elif os.path.exists(target_path2):
+                self.imgDirList.append(target_path2)
             else:
-                target_path = os.path.join(base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx+1]}_{self.cameras[camera_idx]}")
-                self.imgDirList.append(target_path)
+                print("wrong directory for calibration")
+                exit()
 
-        self.resultDir = os.path.join(base_dir, f"{opt.db}_cam")
+        self.resultDir = os.path.join(base_dir, f"{opt.dir}")
 
+        assert os.path.exists(os.path.join(self.resultDir, f"{opt.dir}_cameraInfo.txt")), 'cameraInfo.txt does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "mas_camInfo.json")), 'mas_intrinsic.json does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "sub1_camInfo.json")), 'sub1_intrinsic.json does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "sub2_camInfo.json")), 'sub2_intrinsic.json does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "sub3_camInfo.json")), 'sub3_intrinsic.json does not exist'
 
-        assert os.path.exists(os.path.join(self.resultDir, f"{opt.db}_cameraInfo.txt")), 'cameraInfo.txt does not exist'
-        assert os.path.exists(os.path.join(self.resultDir, "mas_intrinsic.json")), 'mas_intrinsic.json does not exist'
-        assert os.path.exists(os.path.join(self.resultDir, "sub1_intrinsic.json")), 'sub1_intrinsic.json does not exist'
-        assert os.path.exists(os.path.join(self.resultDir, "sub2_intrinsic.json")), 'sub2_intrinsic.json does not exist'
-        assert os.path.exists(os.path.join(self.resultDir, "sub3_intrinsic.json")), 'sub3_intrinsic.json does not exist'
-
-        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, f"{opt.db}_cameraInfo.txt"))
+        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, f"{opt.dir}_cameraInfo.txt"))
         self.distCoeffs = {}
-        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(self.resultDir, "mas_intrinsic.json"))
-        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(self.resultDir, "sub1_intrinsic.json"))
-        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(self.resultDir, "sub2_intrinsic.json"))
-        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(self.resultDir, "sub3_intrinsic.json"))
+        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(self.resultDir, "mas_camInfo.json"))
+        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(self.resultDir, "sub1_camInfo.json"))
+        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(self.resultDir, "sub2_camInfo.json"))
+        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(self.resultDir, "sub3_camInfo.json"))
 
         self.nSize = (6, 5) # the number of checkers
         self.imgInt = 5

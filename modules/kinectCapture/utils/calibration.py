@@ -79,6 +79,7 @@ def StereoCalibrate(imgDir, cam1, cam2, intrinsicMatrices, distCoeffs, imgInt=5,
             continue
         if not os.path.exists(os.path.join(rgbDir, f"{cam2}_{i}.jpg")):
             continue
+
         isValidLeft, leftCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam1}_{i}.jpg"), nsize)
         isValidRight, rightCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam2}_{i}.jpg"), nsize)
 
