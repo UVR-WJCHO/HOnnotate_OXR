@@ -39,8 +39,10 @@ def Resgistration3D(p1_t,p2_t):
     #Calculate singular value decomposition (SVD)
     U, X, V_t = np.linalg.svd(H) #the SVD of linalg gives you Vt
 
-    #Calculate rotation matrix
-    R = np.matmul(V_t.transpose(),U.transpose())
+    # #Calculate rotation matrix
+    V = V_t.transpose()
+    U_transpose = U.transpose()
+    R = V @ np.diag([1, 1, np.linalg.det(V) * np.linalg.det(U_transpose)]) @ U_transpose
 
     assert np.allclose(np.linalg.det(R), 1.0), "Rotation matrix of N-point registration not 1, see paper Arun et al."
 
