@@ -132,7 +132,7 @@ class loadDataset():
 
 
     def __len__(self):
-        return len(os.listdir(self.rgbDir))
+        return len(os.listdir(os.path.join(self.rgbDir, 'mas'))) * 4
 
     def init_cam(self, camID, threshold=0.3):
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
@@ -151,7 +151,7 @@ class loadDataset():
 
     def getItem(self, idx, camID='mas'):
         # camID : mas, sub1, sub2, sub3
-        imgName = str(camID) + '_' + str(idx) + '.png'
+        imgName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.png'
 
         rgbPath = os.path.join(self.rgbDir, imgName)
         depthPath = os.path.join(self.depthDir, imgName)
