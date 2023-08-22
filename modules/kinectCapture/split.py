@@ -68,8 +68,8 @@ def main():
                 os.makedirs(os.path.join(input_folder, sub_name, 'depth', cam), exist_ok=True)
         
                 
-                src_rgb  = os.path.join(input_folder,'rgb',cam,cam+'_'+str(i)+'.png')
-                dest_rgb = os.path.join(output_rgb_path,cam,cam+'_'+str(num)+'.png')
+                src_rgb  = os.path.join(input_folder,'rgb',cam,cam+'_'+str(i)+'.jpg')
+                dest_rgb = os.path.join(output_rgb_path,cam,cam+'_'+str(num)+'.jpg')
                 src_depth  = os.path.join(input_folder,'depth',cam,cam+'_'+str(i)+'.png')
                 dest_depth = os.path.join(output_depth_path,cam,cam+'_'+str(num)+'.png')
                 
