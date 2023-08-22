@@ -20,17 +20,20 @@ from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, 
 
 # others
 import cv2
+from PIL import Image
 import time
 import json
 import pickle
 import copy
 import tqdm
+import torch
+from torchvision.transforms.functional import to_tensor
 
 
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230802', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230612', 'target db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -41,6 +44,11 @@ FLAGS(sys.argv)
 baseDir = os.path.join(os.getcwd(), 'dataset')
 handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
 camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
+bgmModelPath = "/home/workplace/BackgroundMattingV2/model.pth"
+"""
+!pip install gdown -q
+!gdown https://drive.google.com/uc?id=1-t9SO--H4WmP7wUl1tVNNeDkq47hjbv4 -O model.pth -q
+"""
 
 ## TODO
 """
@@ -76,10 +84,13 @@ class loadDataset():
         self.seq = seq
 
         self.dbDir = os.path.join(baseDir, db, seq)
+        self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
         self.handDir = handResultDir
 
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
+        self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
+        self.depthBgDir = os.path.join(self.bgDir, 'depth')
 
         if not os.path.exists(os.path.join(self.dbDir, 'rgb_crop')):
             os.mkdir(os.path.join(self.dbDir, 'rgb_crop'))
@@ -100,6 +111,12 @@ class loadDataset():
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'))
+        #temp
+        if not os.path.exists(os.path.join(self.dbDir, 'masked_rgb')):
+            os.mkdir(os.path.join(self.dbDir, 'masked_rgb'))
+            for camID in camIDset:
+                os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
+                os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
 
         self.rgbCropDir = None
         self.depthCropDir = None
@@ -116,9 +133,15 @@ class loadDataset():
         self.prev_bbox = None
         self.wrist_px = None
 
-        intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
-        self.intrinsics = intrinsics
-        self.distCoeffs = dist_coeffs
+        # intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
+        # self.intrinsics = intrinsics
+        # self.distCoeffs = dist_coeffs
+        self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "230612_cameraInfo.txt"))
+        self.distCoeffs = {}
+        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_intrinsic.json"))
+        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_intrinsic.json"))
+        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_intrinsic.json"))
+        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_intrinsic.json"))
 
         self.intrinsic_undistort = os.path.join(camResultDir, FLAGS.db + "_cameraInfo_undistort.txt")
         self.prev_cam_check = None
@@ -141,6 +164,10 @@ class loadDataset():
         segDir = os.path.join(self.dbDir, 'segmentation', camID)
         self.segVisDir = os.path.join(segDir, 'visualization')
         self.segResDir = os.path.join(segDir, 'raw_seg_results')
+
+        #temp
+        self.maskedRgbDir = os.path.join(self.dbDir, 'masked_rgb', camID)
+        self.croppedBgDir = os.path.join(self.dbDir, 'masked_rgb', camID, 'bg')
         
         self.debugDir = os.path.join(self.dbDir, 'debug')
         self.mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=threshold) 
@@ -163,6 +190,19 @@ class loadDataset():
         depth = cv2.imread(depthPath, cv2.IMREAD_ANYDEPTH)
 
         return (rgb, depth)
+    
+    def getBg(self, camID='mas'):
+        bgName = str(camID) + '_1' + '.png'
+        rgbBgPath = os.path.join(self.rgbBgDir, bgName)
+        depthBgPath = os.path.join(self.depthBgDir, bgName)
+
+        assert os.path.exists(rgbBgPath), 'rgb background image does not exist'
+        assert os.path.exists(depthBgPath), 'depth background image does not exist'
+
+        rgbBg = cv2.imread(rgbBgPath)
+        depthBg = cv2.imread(depthBgPath, cv2.IMREAD_ANYDEPTH)
+
+        return (rgbBg, depthBg)
 
     def undistort(self, images, camID):
         rgb, depth = images
@@ -286,12 +326,40 @@ class loadDataset():
 
         return kps
     
+    def backgroundMatting(self, imgs, bgs, bbox):
+        src, depth = imgs #non cropped image
+        bgr, _ = bgs #non cropped backbround
+        cv2.imwrite(os.path.join(self.croppedBgDir, 'bg.png'), bgr)
+        model = torch.jit.load(bgmModelPath).cuda().eval()
+        src = src[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+        bgr = bgr[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+        src = cv2.cvtColor(src, cv2.COLOR_BGR2RGB)
+        bgr = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        src = Image.fromarray(src)
+        bgr = Image.fromarray(bgr)
+        src = to_tensor(src).cuda().unsqueeze(0)
+        bgr = to_tensor(bgr).cuda().unsqueeze(0)
+        if src.size(2) <= 2048 and src.size(3) <= 2048:
+            model.backbone_scale = 1/4
+            model.refine_sample_pixels = 80_000
+        else:
+            model.backbone_scale = 1/8
+            model.refine_sample_pixels = 320_000
+        pha, fgr = model(src, bgr)[:2]
+        mask = pha[0].permute(1, 2, 0).cpu().numpy()*255
+        com = pha * fgr + (1 - pha) * torch.tensor([120/255, 255/255, 155/255], device='cuda').view(1, 3, 1, 1)
+        com = com.permute(0, 2, 3, 1).cpu().numpy()[0] * 255
+        com = cv2.cvtColor(com.astype(np.uint8), cv2.COLOR_RGB2BGR)
+        # return mask[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])], com[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+        return mask, com
+    
     def segmenation(self, camID, idx, procImgSet, kps):
         if np.any(np.isnan(kps)):
             return
 
-        rgb, _ = procImgSet
-        seg_image = np.uint8(rgb.copy())
+        rgb, _, matting, mattedRgb = procImgSet
+        seg_image = np.uint8(mattedRgb.copy())
+        # seg_image = np.uint8(rgb.copy())
         mask = np.ones(seg_image.shape[:2], np.uint8) * 2
         for lineIndex in lineIndices:
             for j in range(len(lineIndex)-1):
@@ -312,6 +380,8 @@ class loadDataset():
         imgName = str(camID) + '_' + format(idx, '04') + '.png'
         cv2.imwrite(os.path.join(self.rgbCropDir, imgName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, imgName), procImgSet[1])
+        #temp
+        cv2.imwrite(os.path.join(self.maskedRgbDir, imgName), procImgSet[2])
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
@@ -341,16 +411,23 @@ def main(argv):
 
             # db includes data for [mas, sub1, sub2, sub3]
             for camID in camIDset:
+                if camID == 'sub2':
+                    continue
                 db.init_cam(camID)
+                bgs = db.getBg(camID)
+                bgs = db.undistort(bgs, camID)
                 pbar = tqdm.tqdm(range(int(len(db) / 4)))
                 for idx in pbar:
+                    if idx < 120 or idx > 140:
+                        continue
                     images = db.getItem(idx, camID=camID)
-
                     images = db.undistort(images, camID)
 
                     bb, img2bb, bb2img, procImgSet, kps = db.procImg(images)
                     procKps = db.translateKpts(np.copy(kps), img2bb)
-
+                    matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
+                    procImgSet.append(matting)
+                    procImgSet.append(mattedRgb)
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     if flag_segmentation:
                         db.segmenation(camID, idx, procImgSet, procKps)
