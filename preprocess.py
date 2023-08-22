@@ -31,6 +31,7 @@ import tqdm
 ### FLAGS ###
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230802', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230802_cam', 'target cam db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -39,8 +40,7 @@ FLAGS(sys.argv)
 
 ### Config ###
 baseDir = os.path.join(os.getcwd(), 'dataset')
-handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
-camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
+camResultDir = os.path.join(baseDir, FLAGS.cam_db)
 
 ## TODO
 """
@@ -76,7 +76,6 @@ class loadDataset():
         self.seq = seq
 
         self.dbDir = os.path.join(baseDir, db, seq)
-        self.handDir = handResultDir
 
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')

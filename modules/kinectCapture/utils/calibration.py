@@ -77,13 +77,13 @@ def StereoCalibrate(imgDir, cam1, cam2, intrinsicMatrices, distCoeffs, imgInt=5,
 
     print(f"Stereo Calibration between {cam1} and {cam2} starts!")
     for i in tqdm(range(imgInt-1, numImg, imgInt)):
-        if not os.path.exists(os.path.join(rgbDir, f"{cam1}_{i}.jpg")):
+        if not os.path.exists(os.path.join(rgbDir, cam1, f"{cam1}_{i}.jpg")):
             continue
-        if not os.path.exists(os.path.join(rgbDir, f"{cam2}_{i}.jpg")):
+        if not os.path.exists(os.path.join(rgbDir, cam2, f"{cam2}_{i}.jpg")):
             continue
 
-        isValidLeft, leftCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam1}_{i}.jpg"), nsize)
-        isValidRight, rightCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam2}_{i}.jpg"), nsize)
+        isValidLeft, leftCorners = CvCornerFinder(os.path.join(rgbDir, cam1, f"{cam1}_{i}.jpg"), nsize)
+        isValidRight, rightCorners = CvCornerFinder(os.path.join(rgbDir, cam2, f"{cam2}_{i}.jpg"), nsize)
 
         if isValidLeft and isValidRight and (
             min(np.linalg.norm(leftCorners[0,0]-leftCorners[1,0]), np.linalg.norm(leftCorners[0,0]-leftCorners[nsize[0],0])) > minSize and
@@ -101,7 +101,7 @@ def StereoCalibrate(imgDir, cam1, cam2, intrinsicMatrices, distCoeffs, imgInt=5,
             normalizedPointsLeft = np.concatenate((normalizedPointsLeft, np.ones((1,nptperImg))),0)
             undistortedPointsLeft = np.matmul(leftIntrinsic, normalizedPointsLeft)[:2,:]
             lxy = undistortedPointsLeft.transpose()
-            leftDepth = cv2.imread(os.path.join(depthDir, f"{cam1}_{i}.png"),-1)
+            leftDepth = cv2.imread(os.path.join(depthDir, cam1, f"{cam1}_{i}.png"),-1)
             lvalz, lxyz = uv2xyz(leftIntrinsic, leftDepth, leftCorners.squeeze(), lxy)
 
             normalizedPointsRight = cv2.undistortPoints(rightCorners, rightIntrinsic, rightDistCoeffs)
@@ -109,7 +109,7 @@ def StereoCalibrate(imgDir, cam1, cam2, intrinsicMatrices, distCoeffs, imgInt=5,
             normalizedPointsRight = np.concatenate((normalizedPointsRight, np.ones((1,nptperImg))),0)
             undistortedPointsRight = np.matmul(rightIntrinsic, normalizedPointsRight)[:2,:]
             rxy = undistortedPointsRight.transpose()
-            rightDepth = cv2.imread(os.path.join(depthDir, f"{cam2}_{i}.png"),-1)
+            rightDepth = cv2.imread(os.path.join(depthDir, cam2, f"{cam2}_{i}.png"),-1)
             rvalz, rxyz = uv2xyz(rightIntrinsic, rightDepth, rightCorners.squeeze(), rxy)
 
             valz = [x and y for x, y in zip(lvalz, rvalz)]

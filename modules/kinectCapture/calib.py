@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     '--dir',
     type=str,
-    default='230802',
+    default='dataset/230822_cam',
     help='target db Name'
 )
 parser.add_argument(
@@ -45,8 +45,8 @@ class Calibration():
         
         self.imgDirList = []
         for camera_idx in range(len(self.cameras) - 1):
-            target_path1 = os.path.join(base_dir, opt.dir, f"{opt.dir}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
-            target_path2 = os.path.join(base_dir, opt.dir, f"{opt.dir}_{self.cameras[camera_idx + 1]}_{self.cameras[camera_idx]}")
+            target_path1 = os.path.join(base_dir, opt.dir, f"{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
+            target_path2 = os.path.join(base_dir, opt.dir, f"{self.cameras[camera_idx + 1]}_{self.cameras[camera_idx]}")
             if os.path.exists(target_path1):
                 self.imgDirList.append(target_path1)
             elif os.path.exists(target_path2):
@@ -57,13 +57,13 @@ class Calibration():
 
         self.resultDir = os.path.join(base_dir, f"{opt.dir}")
 
-        assert os.path.exists(os.path.join(self.resultDir, f"{opt.dir}_cameraInfo.txt")), 'cameraInfo.txt does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "cameraInfo.txt")), 'cameraInfo.txt does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "mas_camInfo.json")), 'mas_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub1_camInfo.json")), 'sub1_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub2_camInfo.json")), 'sub2_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub3_camInfo.json")), 'sub3_intrinsic.json does not exist'
 
-        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, f"{opt.dir}_cameraInfo.txt"))
+        self.intrinsic = LoadCameraMatrix(os.path.join(self.resultDir, "cameraInfo.txt"))
         self.distCoeffs = {}
         self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(self.resultDir, "mas_camInfo.json"))
         self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(self.resultDir, "sub1_camInfo.json"))
@@ -113,7 +113,19 @@ class Calibration():
         self.cameraParamsBA = result.x[:self.numCameras * 12].reshape(self.numCameras, 12)
         self.objPointsBA = result.x[self.numCameras * 12:]
 
+    def Save(self):
+        cameraParamsBA = {camera: self.cameraParamsBA[i].tolist() for i, camera in enumerate(self.cameras)}
 
+        cameraParams = {
+            "intrinsic": {camera: self.intrinsic[camera].tolist() for camera in self.intrinsic},
+            "dist": {camera: self.distCoeffs[camera].tolist() for camera in self.distCoeffs},
+            "extrinsic": cameraParamsBA
+        }
+
+        with open(os.path.join(self.resultDir, "cameraParams.json"), "w") as fp:
+            json.dump(cameraParams, fp, sort_keys=True, indent=4)
+
+        
 def main():
     calib = Calibration()
 

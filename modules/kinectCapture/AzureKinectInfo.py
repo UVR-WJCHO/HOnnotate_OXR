@@ -55,7 +55,7 @@ print(k4a_sub1.calibration.get_distortion_coefficients(camera=1))
 print(k4a_sub2.calibration.get_distortion_coefficients(camera=1))
 print(k4a_sub3.calibration.get_distortion_coefficients(camera=1))
 
-f_name = str(args.dir) + '/' + str(args.dir) + '_cameraInfo.txt'
+f_name = str(args.dir) + '/' + 'cameraInfo.txt'
 with open(f_name,"w") as f:
     for camname in camSet:
         f.write(camname + '\n')
