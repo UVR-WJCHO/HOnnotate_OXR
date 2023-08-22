@@ -324,9 +324,9 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.rgbCropDir, rgbName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, depthName), procImgSet[1])
 
-        # vis = paint_kpts(None, procImgSet[0], processed_kpts)
-        # imgName = str(camID) + '_' + format(idx, '04') + '.jpg'
-        # cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+        vis = paint_kpts(None, procImgSet[0], processed_kpts)
+        imgName = str(camID) + '_' + format(idx, '04') + '.jpg'
+        cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
