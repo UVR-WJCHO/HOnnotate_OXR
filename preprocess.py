@@ -17,6 +17,9 @@ from modules.utils.processing import augmentation_real
 import numpy as np
 from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraParams
 
+#temp
+import matplotlib.pyplot as plt
+
 
 # others
 import cv2
@@ -28,7 +31,7 @@ import copy
 import tqdm
 import torch
 from torchvision.transforms.functional import to_tensor
-
+import math
 
 
 ### FLAGS ###
@@ -37,8 +40,8 @@ flags.DEFINE_string('db', '230612', 'target db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
+# camIDset = ['sub2', 'sub3']
 FLAGS(sys.argv)
-
 
 ### Config ###
 baseDir = os.path.join(os.getcwd(), 'dataset')
@@ -49,15 +52,6 @@ bgmModelPath = "/home/workplace/BackgroundMattingV2/model.pth"
 !pip install gdown -q
 !gdown https://drive.google.com/uc?id=1-t9SO--H4WmP7wUl1tVNNeDkq47hjbv4 -O model.pth -q
 """
-
-## TODO
-"""
-    - Issues in camResultDir 
-    - segmentation process(original) requires cam_mas_intrinsics.txt ... etc.
-        - check HOnnotate_refine.HOdatasets.ho3d_multicamera.dataset.py
-        - convert the process to utilize our format (230612_cameraInfo.txt)
-"""
-
 
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
@@ -73,11 +67,9 @@ ringIndices = [13,14,15,16]
 pinkyIndices = [17,18,19,20]
 lineIndices = [palmIndices, thumbIndices, indexIndices, middleIndices, ringIndices, pinkyIndices]
 
-
 ### Manual Flags (remove after debug) ###
 flag_preprocess = True
 flag_segmentation = True
-
 
 class loadDataset():
     def __init__(self, db, seq):
@@ -124,7 +116,10 @@ class loadDataset():
 
         self.bbox_width = 640
         self.bbox_height = 480
+<<<<<<< HEAD
         # 매뉴얼 하게 초기 bbox를 찾아서 설정해줌
+=======
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
         self.temp_bbox = {}
         self.temp_bbox["mas"] = [650, 280, self.bbox_width, self.bbox_height]
         self.temp_bbox["sub1"] = [750, 300, self.bbox_width, self.bbox_height]
@@ -132,10 +127,13 @@ class loadDataset():
         self.temp_bbox["sub3"] = [650, 200, self.bbox_width, self.bbox_height]
         self.prev_bbox = None
         self.wrist_px = None
+<<<<<<< HEAD
 
         # intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
         # self.intrinsics = intrinsics
         # self.distCoeffs = dist_coeffs
+=======
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
         self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "230612_cameraInfo.txt"))
         self.distCoeffs = {}
         self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_intrinsic.json"))
@@ -156,7 +154,7 @@ class loadDataset():
 
     def __len__(self):
         return len(os.listdir(self.rgbDir))
-
+    
     def init_cam(self, camID, threshold=0.3):
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
         self.depthCropDir = os.path.join(self.dbDir, 'depth_crop', camID)
@@ -191,6 +189,7 @@ class loadDataset():
 
         return (rgb, depth)
     
+<<<<<<< HEAD
     def getBg(self, camID='mas'):
         bgName = str(camID) + '_1' + '.png'
         rgbBgPath = os.path.join(self.rgbBgDir, bgName)
@@ -204,6 +203,8 @@ class loadDataset():
 
         return (rgbBg, depthBg)
 
+=======
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
     def undistort(self, images, camID):
         rgb, depth = images
         image_cols, image_rows = rgb.shape[:2]
@@ -225,24 +226,39 @@ class loadDataset():
                 self.flag_save = False
 
         return (rgb, depth)
-        
+    
     def procImg(self, images):
         rgb, depth = images
         image_rows, image_cols, _ = rgb.shape
+<<<<<<< HEAD
         idx_to_coordinates = None
         kps = np.empty((21, 3), dtype=np.float32)
+=======
+        kps = np.empty((21, 2), dtype=np.float32)
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
         kps[:] = np.nan
+        idx_to_coordinates = None
 
+<<<<<<< HEAD
         # 반복해서 검출 시도
         for _ in range(2):
+=======
+        for _ in range(5):
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
             results = self.mp_hand.process(cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
             if results.multi_hand_landmarks and len(results.multi_hand_landmarks[0].landmark) == 21:
                 hand_landmark = results.multi_hand_landmarks[0]
                 idx_to_coordinates = {}
+<<<<<<< HEAD
                 # wristDepth = depth[
                 #     int(hand_landmark.landmark[0].y * image_rows), int(hand_landmark.landmark[0].x * image_cols)]
                 for idx_land, landmark in enumerate(hand_landmark.landmark):
                     landmark_px = [landmark.x * image_cols, landmark.y * image_rows]
+=======
+                wristDepth = depth[int(hand_landmark.landmark[0].y*image_rows), int(hand_landmark.landmark[0].x*image_cols)]
+                for idx_land, landmark in enumerate(hand_landmark.landmark):
+                    landmark_px = [landmark.x*image_cols, landmark.y*image_rows]
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
                     if landmark_px:
                         # landmark_px has fliped x axis
                         orig_x = landmark_px[0]
@@ -250,6 +266,7 @@ class loadDataset():
 
                         kps[idx_land, 0] = landmark_px[0]
                         kps[idx_land, 1] = landmark_px[1]
+<<<<<<< HEAD
                         # save relative depth on z axis
                         kps[idx_land, 2] = landmark.z
 
@@ -259,10 +276,24 @@ class loadDataset():
                     np.isnan(kps)):
                 bbox = self.prev_bbox
                 rgb_crop = rgb[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+=======
+                        # 3d keypoints from depth image and mediapipe
+                        # if wristDepth > 0:
+                        #     kps[idx_land, 0] = landmark_px[0]
+                        #     kps[idx_land, 1] = landmark_px[1]
+                        #     kps[idx_land, 2] = landmark.z + wristDepth
+                        # else:
+                        #     print("wristDepth is 0")
+
+            if not results.multi_hand_landmarks or len(results.multi_hand_landmarks[0].landmark) != 21 or np.any(np.isnan(kps)):
+                bbox = self.prev_bbox
+                rgb_crop = rgb[int(bbox[1]):int(bbox[1]+bbox[3]), int(bbox[0]):int(bbox[0]+bbox[2])]
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
                 results = self.mp_hand.process(cv2.cvtColor(rgb_crop, cv2.COLOR_BGR2RGB))
                 if results.multi_hand_landmarks:
                     hand_landmarks = results.multi_hand_landmarks[0]
                     idx_to_coordinates = {}
+<<<<<<< HEAD
                     # wristDepth = depth[int(hand_landmarks.landmark[0].y * bbox[3] + bbox[1]), int(
                     #     hand_landmarks.landmark[0].x * bbox[2] + bbox[0])]
                     for idx_land, landmarks in enumerate(hand_landmarks.landmark):
@@ -282,6 +313,28 @@ class loadDataset():
         idx_to_coord = idx_to_coordinates
 
         # 크롭 후에도 검출이 안된다면 이전 키포인트를 그대로 사용
+=======
+                    wristDepth = depth[int(hand_landmarks.landmark[0].y*bbox[3]+bbox[1]), int(hand_landmarks.landmark[0].x*bbox[2]+bbox[0])]
+                    for idx_land, landmarks in enumerate(hand_landmarks.landmark):
+                        landmarks_px = [int(landmarks.x*bbox[2]+bbox[0]), int(landmarks.y*bbox[3]+bbox[1])]
+                        if landmarks_px:
+                            idx_to_coordinates[idx_land] = landmarks_px
+                        
+                            kps[idx_land, 0] = landmarks_px[0]
+                            kps[idx_land, 1] = landmarks_px[1]
+                            # if wristDepth > 0:
+                            #     kps[idx_land, 0] = landmarks_px[0]
+                            #     kps[idx_land, 1] = landmarks_px[1]
+                            #     kps[idx_land, 2] = wristDepth + landmarks.z
+                            # else:
+                            #     print("wristDepth is 0")
+            
+            if not np.any(np.isnan(kps)):
+                break
+        
+        idx_to_coord = idx_to_coordinates
+
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
         if idx_to_coord is not None:
             self.prev_idx_to_coord = idx_to_coord
             self.prev_kps = kps
@@ -292,38 +345,46 @@ class loadDataset():
         bbox = self.extractBbox(idx_to_coord, image_rows, image_cols)
         rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
         depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+        depthMask = np.where(depth < 3, 1, 0).astype(np.uint8)[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
 
+<<<<<<< HEAD
         procImgSet = [rgbCrop, depthCrop]
         self.prev_bbox = copy.deepcopy(bbox)
 
         return bbox, img2bb_trans, bb2img_trans, procImgSet, kps
 
 
+=======
+        procImgSet = [rgbCrop, depthCrop, depthMask]
+        self.prev_bbox = copy.deepcopy(bbox)
+
+        return [bbox, img2bb_trans, bb2img_trans, procImgSet, kps]
+    
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
     def extractBbox(self, idx_to_coord, image_rows, image_cols):
-        # consider fixed size bbox
-        x_min = min(idx_to_coord.values(), key=lambda x: x[0])[0]
-        x_max = max(idx_to_coord.values(), key=lambda x: x[0])[0]
-        y_min = min(idx_to_coord.values(), key=lambda x: x[1])[1]
-        y_max = max(idx_to_coord.values(), key=lambda x: x[1])[1]
+            # consider fixed size bbox
+            x_min = min(idx_to_coord.values(), key=lambda x: x[0])[0]
+            x_max = max(idx_to_coord.values(), key=lambda x: x[0])[0]
+            y_min = min(idx_to_coord.values(), key=lambda x: x[1])[1]
+            y_max = max(idx_to_coord.values(), key=lambda x: x[1])[1]
 
-        x_avg = (x_min + x_max) / 2
-        y_avg = (y_min + y_max) / 2
+            x_avg = (x_min + x_max) / 2
+            y_avg = (y_min + y_max) / 2
 
-        x_min = max(0, x_avg - (self.bbox_width / 2))
-        y_min = max(0, y_avg - (self.bbox_height / 2))
+            x_min = max(0, x_avg - (self.bbox_width / 2))
+            y_min = max(0, y_avg - (self.bbox_height / 2))
 
-        if (x_min + self.bbox_width) > image_cols:
-            x_min = image_cols - self.bbox_width
-        if (y_min + self.bbox_height) > image_rows:
-            y_min = image_rows - self.bbox_height
+            if (x_min + self.bbox_width) > image_cols:
+                x_min = image_cols - self.bbox_width
+            if (y_min + self.bbox_height) > image_rows:
+                y_min = image_rows - self.bbox_height
 
-        bbox = [x_min, y_min, self.bbox_width, self.bbox_height]
-        return bbox
+            bbox = [x_min, y_min, self.bbox_width, self.bbox_height]
+            return bbox
 
     def translateKpts(self, kps, img2bb):
         uv1 = np.concatenate((kps[:, :2], np.ones_like(kps[:, :1])), 1)
         kps[:, :2] = np.dot(img2bb, uv1.transpose(1, 0)).transpose(1, 0)[:, :2]
-
         return kps
     
     def backgroundMatting(self, imgs, bgs, bbox):
@@ -354,12 +415,15 @@ class loadDataset():
         return mask, com
     
     def segmenation(self, camID, idx, procImgSet, kps):
-        if np.any(np.isnan(kps)):
-            return
+        rgb, _, depth_mask = procImgSet
 
+<<<<<<< HEAD
         rgb, _, matting, mattedRgb = procImgSet
         seg_image = np.uint8(mattedRgb.copy())
         # seg_image = np.uint8(rgb.copy())
+=======
+        seg_image = np.uint8(rgb.copy())
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
         mask = np.ones(seg_image.shape[:2], np.uint8) * 2
         for lineIndex in lineIndices:
             for j in range(len(lineIndex)-1):
@@ -376,7 +440,6 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.segVisDir, imgName), seg_image*mask[:,:,np.newaxis])
 
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, camID='mas'):
-
         imgName = str(camID) + '_' + format(idx, '04') + '.png'
         cv2.imwrite(os.path.join(self.rgbCropDir, imgName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, imgName), procImgSet[1])
@@ -423,11 +486,20 @@ def main(argv):
                     images = db.getItem(idx, camID=camID)
                     images = db.undistort(images, camID)
 
-                    bb, img2bb, bb2img, procImgSet, kps = db.procImg(images)
+                    procResult = db.procImg(images) #bb, img2bb, bb2img, procImgSet, kps
+                    bb, img2bb, bb2img, procImgSet, kps = procResult
                     procKps = db.translateKpts(np.copy(kps), img2bb)
+<<<<<<< HEAD
                     matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
                     procImgSet.append(matting)
                     procImgSet.append(mattedRgb)
+=======
+
+                    if np.any(np.isnan(kps)) or np.any(np.isnan(procKps)):
+                        print("nan detected")
+                        # bb, img2bb, bb2img, procImgSet, kps = prevResult
+
+>>>>>>> 12204fdc3787a0ae75f6000e6405fac60c703dde
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     if flag_segmentation:
                         db.segmenation(camID, idx, procImgSet, procKps)
