@@ -25,13 +25,19 @@ from multiprocessing import Queue
 parser = argparse.ArgumentParser()
 parser.add_argument('--dir', type=str, default="230802")
 parser.add_argument('--fps', type=int, default=2)
-parser.add_argument('--num', type=int, default=300)
+parser.add_argument('--num', type=int, default=10)
 args = parser.parse_args()
 
 outfolder = args.dir
 os.makedirs(outfolder, exist_ok=True)
 os.makedirs(os.path.join(outfolder,'rgb'), exist_ok=True)
 os.makedirs(os.path.join(outfolder,'depth'), exist_ok=True)
+
+camList = ['mas', 'sub1', 'sub2', 'sub3']
+
+for cam in camList:
+    os.makedirs(os.path.join(outfolder, 'rgb', cam), exist_ok=True)
+    os.makedirs(os.path.join(outfolder, 'depth', cam), exist_ok=True)
 
 # Set camera config
 current_fps=2   # 1 : 15fps # 2: 30fps
@@ -57,46 +63,39 @@ def run_capture(queue):
     k4a_sub1.start()
     k4a_master.start()
 
-    for i in range(num_frames):
-        start_time = time.time()
-        capture = k4a_master.get_capture()
-        capture_1 = k4a_sub1.get_capture()
-        capture_2 = k4a_sub2.get_capture()
-        capture_3 = k4a_sub3.get_capture()
+    try:
+        for i in range(num_frames):
+            start_time = time.time()
+            capture = k4a_master.get_capture()
+            capture_1 = k4a_sub1.get_capture()
+            capture_2 = k4a_sub2.get_capture()
+            capture_3 = k4a_sub3.get_capture()
 
-        color = capture.color
-        depth = capture.transformed_depth
-        color_1 = capture_1.color
-        depth_1 = capture_1.transformed_depth
-        color_2 = capture_2.color
-        depth_2 = capture_2.transformed_depth
-        color_3 = capture_3.color
-        depth_3 = capture_3.transformed_depth
+            color = capture.color
+            depth = capture.transformed_depth
+            color_1 = capture_1.color
+            depth_1 = capture_1.transformed_depth
+            color_2 = capture_2.color
+            depth_2 = capture_2.transformed_depth
+            color_3 = capture_3.color
+            depth_3 = capture_3.transformed_depth
 
-        queue.put(
-            (color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3)
-        )
+            queue.put(
+                (color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3)
+            )
 
-        diff = time.time() - start_time
-        print('%d.png' % i + ' captured' + ' fps: ' + str(1/diff))
-
-    k4a_sub3.stop()
-    k4a_sub2.stop()
-    k4a_sub1.stop()
-    k4a_master.stop()
-
-
-def img_save(imgs, i):
-   color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3 = imgs
-   cv2.imwrite(os.path.join(outfolder, 'rgb\mas_%d.png' % (i)), color)
-   cv2.imwrite(os.path.join(outfolder, 'depth\mas_%d.png' % (i)), depth)
-   cv2.imwrite(os.path.join(outfolder, 'rgb\sub1_%d.png' % (i)), color_1)
-   cv2.imwrite(os.path.join(outfolder, 'depth\sub1_%d.png' % (i)), depth_1)
-   cv2.imwrite(os.path.join(outfolder, 'rgb\sub2_%d.png' % (i)), color_2)
-   cv2.imwrite(os.path.join(outfolder, 'depth\sub2_%d.png' % (i)), depth_2)
-   cv2.imwrite(os.path.join(outfolder, 'rgb\sub3_%d.png' % (i)), color_3)
-   cv2.imwrite(os.path.join(outfolder, 'depth\sub3_%d.png' % (i)), depth_3)
-   print('%d.png' % i + ' saved')
+            diff = time.time() - start_time
+            print('%d.png' % i + ' captured' + ' fps: ' + str(1/diff))
+    except KeyboardInterrupt:
+        k4a_sub3.stop()
+        k4a_sub2.stop()
+        k4a_sub1.stop()
+        k4a_master.stop()
+    finally:
+        k4a_sub3.stop()
+        k4a_sub2.stop()
+        k4a_sub1.stop()
+        k4a_master.stop()
 
 
 
@@ -107,25 +106,31 @@ if __name__=="__main__":
     process_capture = multiprocessing.Process(target=run_capture, args=(queue,))
     process_capture.start()
 
-    for i in range(num_frames):
+    rgb_path = os.path.join(outfolder, 'rgb')
+    depth_path = os.path.join(outfolder, 'depth')
+
+    while True:
         if queue.empty():
-            time.sleep(1)
+            time.sleep(0.5)
             continue
+        else:
+            break
+    try:
+        for i in range(num_frames):
+            color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3 = queue.get()
+            cv2.imwrite(rgb_path + '/mas/mas_' + str(i) + '.jpg', color)
+            cv2.imwrite(depth_path + '/mas/mas_' + str(i) + '.png', depth)
 
-        color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3 = queue.get()
-        cv2.imwrite(os.path.join(outfolder, 'rgb\mas_%d.png' % (i)), color)
-        cv2.imwrite(os.path.join(outfolder,'depth\mas_%d.png' % (i)), depth)
-        cv2.imwrite(os.path.join(outfolder, 'rgb\sub1_%d.png' % (i)), color_1)
-        cv2.imwrite(os.path.join(outfolder,'depth\sub1_%d.png' % (i)), depth_1)
-        cv2.imwrite(os.path.join(outfolder, 'rgb\sub2_%d.png' % (i)), color_2)
-        cv2.imwrite(os.path.join(outfolder,'depth\sub2_%d.png' % (i)), depth_2)
-        cv2.imwrite(os.path.join(outfolder, 'rgb\sub3_%d.png' % (i)), color_3)
-        cv2.imwrite(os.path.join(outfolder,'depth\sub3_%d.png' % (i)), depth_3)
-        print('%d.png' % i + ' saved')
+            cv2.imwrite(rgb_path + '/sub1/sub1_' + str(i) + '.jpg', color_1)
+            cv2.imwrite(depth_path + '/sub1/sub1_' + str(i) + '.png', depth_1)
 
-        # imgs = queue.get()
-        # p = multiprocessing.Process(target=img_save, args=(imgs, i,))
-        # p.start()
+            cv2.imwrite(rgb_path + '/sub2/sub2_' + str(i) + '.jpg', color_2)
+            cv2.imwrite(depth_path + '/sub2/sub2_' + str(i) + '.png', depth_2)
 
-
-    process_capture.terminate()
+            cv2.imwrite(rgb_path + '/sub3/sub3_' + str(i) + '.jpg', color_3)
+            cv2.imwrite(depth_path + '/sub3/sub3_' + str(i) + '.png', depth_3)
+            print('%d.png' % i + ' saved')
+    except KeyboardInterrupt:
+        process_capture.terminate()
+    finally:
+        process_capture.terminate()

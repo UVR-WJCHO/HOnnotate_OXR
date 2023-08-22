@@ -30,12 +30,7 @@ parser.add_argument(
     default=300,
     help='Max frame number used in AzureKinect_calib.py'
 )
-parser.add_argument(
-    '--base_dir',
-    type=str,
-    default='/hdd1/donghwan/OXR/HOnnotate_OXR/dataset',
-    help='Base directory that contains images with checkerboard'
-)
+
 parser.add_argument(
     '--world_img',
     type=str,
@@ -46,6 +41,8 @@ opt = parser.parse_args()
 h = np.array([[0,0,0,1]]) # array for homogeneous coordinates
 
 
+base_dir = os.path.join(os.getcwd())
+
 class Calibration():
     def __init__(self):
 
@@ -54,14 +51,14 @@ class Calibration():
         
         self.imgDirList = []
         for camera_idx in range(len(self.cameras) - 1):
-            target_path = os.path.join(opt.base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
+            target_path = os.path.join(base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx]}_{self.cameras[camera_idx+1]}")
             if os.path.exists(target_path):
                 self.imgDirList.append(target_path)
             else:
-                target_path = os.path.join(opt.base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx+1]}_{self.cameras[camera_idx]}")
+                target_path = os.path.join(base_dir, opt.db, f"{opt.db}_{self.cameras[camera_idx+1]}_{self.cameras[camera_idx]}")
                 self.imgDirList.append(target_path)
 
-        self.resultDir = os.path.join(opt.base_dir, f"{opt.db}_cam")
+        self.resultDir = os.path.join(base_dir, f"{opt.db}_cam")
 
 
         assert os.path.exists(os.path.join(self.resultDir, f"{opt.db}_cameraInfo.txt")), 'cameraInfo.txt does not exist'

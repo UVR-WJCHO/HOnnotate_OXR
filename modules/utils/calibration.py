@@ -75,12 +75,12 @@ def StereoCalibrate(imgDir, cam1, cam2, intrinsicMatrices, distCoeffs, imgInt=5,
 
     print(f"Stereo Calibration between {cam1} and {cam2} starts!")
     for i in tqdm(range(imgInt-1, numImg, imgInt)):
-        if not os.path.exists(os.path.join(rgbDir, f"{cam1}_{i}.png")):
+        if not os.path.exists(os.path.join(rgbDir, f"{cam1}_{i}.jpg")):
             continue
-        if not os.path.exists(os.path.join(rgbDir, f"{cam2}_{i}.png")):
+        if not os.path.exists(os.path.join(rgbDir, f"{cam2}_{i}.jpg")):
             continue
-        isValidLeft, leftCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam1}_{i}.png"), nsize)
-        isValidRight, rightCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam2}_{i}.png"), nsize)
+        isValidLeft, leftCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam1}_{i}.jpg"), nsize)
+        isValidRight, rightCorners = CvCornerFinder(os.path.join(rgbDir, f"{cam2}_{i}.jpg"), nsize)
 
         if isValidLeft and isValidRight and (
             min(np.linalg.norm(leftCorners[0,0]-leftCorners[1,0]), np.linalg.norm(leftCorners[0,0]-leftCorners[nsize[0],0])) > minSize and
