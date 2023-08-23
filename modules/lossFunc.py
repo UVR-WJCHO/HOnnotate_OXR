@@ -54,7 +54,10 @@ class MultiViewLossFunc(nn.Module):
         self.gt_depth = torch.unsqueeze(torch.FloatTensor(gt_sample['depth']), 0).to(self.device)
         self.gt_seg = torch.unsqueeze(torch.FloatTensor(gt_sample['seg']), 0).to(self.device)
 
-        self.gt_seg_obj = torch.unsqueeze(torch.FloatTensor(gt_sample['seg_obj']), 0).to(self.device)
+        if gt_sample['seg_obj'] != None:
+            self.gt_seg_obj = torch.unsqueeze(torch.FloatTensor(gt_sample['seg_obj']), 0).to(self.device)
+        else:
+            self.gt_seg_obj = None
 
     def set_cam(self, camIdx):
         cam_params = self.dataloaders[camIdx].cam_parameter
@@ -277,12 +280,15 @@ class MultiViewLossFunc(nn.Module):
         blend_depth_name = "blend_depth_" + camID
         blend_seg_name = "blend_seg_" + camID
 
-        cv2.imshow(blend_gt_name, img_blend_gt)
-        cv2.imshow(blend_pred_name, img_blend_pred)
-        cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-        cv2.imshow(blend_depth_name, depth_gap)
-        # cv2.imshow(blend_seg_name, seg_gap)
-        cv2.waitKey(1)
+        # try:
+        #     cv2.imshow(blend_gt_name, img_blend_gt)
+        #     cv2.imshow(blend_pred_name, img_blend_pred)
+        #     cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+        #     cv2.imshow(blend_depth_name, depth_gap)
+        #     # cv2.imshow(blend_seg_name, seg_gap)
+        #     cv2.waitKey(1)
+        # except:
+        #     print("headless server")
 
         cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
         cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)

@@ -141,7 +141,7 @@ class loadDataset():
 
 
     def __len__(self):
-        return len(os.listdir(os.path.join(self.rgbDir, 'mas'))) * 4
+        return len(os.listdir(os.path.join(self.rgbDir)))
 
     def init_cam(self, camID, threshold=0.3):
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
@@ -164,13 +164,14 @@ class loadDataset():
 
     def getItem(self, idx, camID='mas'):
         # camID : mas, sub1, sub2, sub3
-        imgName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.png'
+        # imgName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.png'
+        imgName = str(camID) + '_' + str(idx) + '.png'
 
         rgbPath = os.path.join(self.rgbDir, imgName)
         depthPath = os.path.join(self.depthDir, imgName)
 
-        assert os.path.exists(rgbPath), 'rgb image does not exist'
-        assert os.path.exists(depthPath), 'depth image does not exist'
+        assert os.path.exists(rgbPath), f'{rgbPath} rgb image does not exist'
+        assert os.path.exists(depthPath), f'{depthPath} depth image does not exist'
 
         rgb = cv2.imread(rgbPath)
         depth = cv2.imread(depthPath, cv2.IMREAD_ANYDEPTH)
@@ -215,7 +216,7 @@ class loadDataset():
     def procImg(self, images):
         rgb, depth = images
         image_rows, image_cols, _ = rgb.shape
-        kps = np.empty((21, 2), dtype=np.float32)
+        kps = np.empty((21, 3), dtype=np.float32)
         kps[:] = np.nan
         idx_to_coordinates = None
 
@@ -340,10 +341,10 @@ class loadDataset():
         return mask, com
     
     def segmenation(self, camID, idx, procImgSet, kps):
-        rgb, _, depth_mask = procImgSet
+        rgb, _ = procImgSet
 
-        rgb, _, matting, mattedRgb = procImgSet
-        seg_image = np.uint8(mattedRgb.copy())
+        # rgb, _, matting, mattedRgb = procImgSet
+        seg_image = np.uint8(rgb.copy())
         # seg_image = np.uint8(rgb.copy())
         mask = np.ones(seg_image.shape[:2], np.uint8) * 2
         for lineIndex in lineIndices:
@@ -365,7 +366,7 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.rgbCropDir, imgName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, imgName), procImgSet[1])
         #temp
-        cv2.imwrite(os.path.join(self.maskedRgbDir, imgName), procImgSet[2])
+        # cv2.imwrite(os.path.join(self.maskedRgbDir, imgName), procImgSet[2])
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
@@ -395,24 +396,20 @@ def main(argv):
 
             # db includes data for [mas, sub1, sub2, sub3]
             for camID in camIDset:
-                if camID == 'sub2':
-                    continue
                 db.init_cam(camID)
-                bgs = db.getBg(camID)
-                bgs = db.undistort(bgs, camID)
+                # bgs = db.getBg(camID)
+                # bgs = db.undistort(bgs, camID)
                 pbar = tqdm.tqdm(range(int(len(db) / 4)))
                 for idx in pbar:
-                    if idx < 120 or idx > 140:
-                        continue
                     images = db.getItem(idx, camID=camID)
                     images = db.undistort(images, camID)
 
                     procResult = db.procImg(images) #bb, img2bb, bb2img, procImgSet, kps
                     bb, img2bb, bb2img, procImgSet, kps = procResult
                     procKps = db.translateKpts(np.copy(kps), img2bb)
-                    matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
-                    procImgSet.append(matting)
-                    procImgSet.append(mattedRgb)
+                    # matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
+                    # procImgSet.append(matting)
+                    # procImgSet.append(mattedRgb)
                     db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
                     if flag_segmentation:
                         db.segmenation(camID, idx, procImgSet, procKps)
