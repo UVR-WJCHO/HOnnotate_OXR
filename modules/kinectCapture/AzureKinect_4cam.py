@@ -84,7 +84,7 @@ def run_capture(queue):
                 (color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3)
             )
 
-            diff = time.time() - start_time
+            diff = time.time() - start_time + 1e-9
             print('%d.png' % i + ' captured' + ' fps: ' + str(1/diff))
     except KeyboardInterrupt:
         k4a_sub3.stop()

@@ -213,8 +213,13 @@ class ObjectLoader:
         obj_mesh_path = os.path.join(self.obj_template_dir, data_type) + '.obj'
         self.obj_mesh_data = self.read_obj(obj_mesh_path)
 
-        obj_file_path = os.path.join(self.obj_result_dir, seq_name) + '.txt'
-        self.obj_pose_data = self.read_file(obj_file_path)
+        # our ICG output
+        if not CFG_MOCAP:
+            obj_file_path = os.path.join(self.obj_result_dir, seq_name) + '.txt'
+            self.obj_pose_data = self.read_file(obj_file_path)
+        if CFG_MOCAP:
+            obj_file_path = os.path.join(self.obj_result_dir, seq_name) + '.txt'
+            self.obj_pose_data = self.read_file(obj_file_path)
         # ICG has own main viewpoint
         self.obj_view = self.obj_pose_data[0]
 

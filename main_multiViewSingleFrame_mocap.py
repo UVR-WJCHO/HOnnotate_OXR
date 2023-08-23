@@ -26,22 +26,17 @@ import matplotlib.pyplot as plt
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230822', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230822_S01_obj_01_grasp_13', 'target sequence name')
+flags.DEFINE_string('db', '230612', 'target db name')   ## name ,default, help
+flags.DEFINE_string('type', '230822_S01_obj_01_grasp_13', 'target sequence name')
+
 # flags.DEFINE_string('type', 'banana', 'target sequence name')
 FLAGS(sys.argv)
 
-baseDir = os.path.join(os.getcwd(), 'dataset')
 
 def main(argv):
     flag_render = False
     if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
         flag_render = True
-
-    targetDir = os.path.join(baseDir, FLAGS.db, FLAGS.seq)
-    for trialIdx, trialName in enumerate(sorted(os.listdir(targetDir))):
-        print("")
-
 
     ## Load data of each camera, save pkl file for second run.
     print("loading data... %s %s " % (FLAGS.db, FLAGS.type))

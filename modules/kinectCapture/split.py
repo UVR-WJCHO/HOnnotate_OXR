@@ -19,7 +19,7 @@ import shutil
 # split에 start,end로 구성되도록 작성함.
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--dir', type=str, default="230802")
+parser.add_argument('--dir', type=str, default="230822_S01_obj_01_grasp_13")
 #parser.add_argument('--trials', type=int, default=7)
 parser.add_argument('--split', type=int, nargs='+', required=True)
 args = parser.parse_args()

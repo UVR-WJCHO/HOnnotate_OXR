@@ -15,7 +15,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     '--dir',
     type=str,
-    default='230821_cam',
+    default='../../dataset/230822_cam',
     help='target db Name'
 )
 parser.add_argument(
