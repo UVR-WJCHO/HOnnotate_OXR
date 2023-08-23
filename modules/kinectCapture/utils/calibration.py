@@ -17,6 +17,13 @@ def CvCornerFinder(path, nsize):
                     cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
         corners = cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
 
+    '''
+    if calibration raises error, uncomment it and check the result of detection
+    '''
+    #     cv2.drawChessboardCorners(color, nsize, corners, retval)
+    # cv2.imshow(path, color)
+    # cv2.waitKey(0)
+
     return retval, corners
 
 
