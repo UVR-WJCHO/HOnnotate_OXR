@@ -1,3 +1,4 @@
+import os
 import pyk4a
 from pyk4a import PyK4A, Config
 # Import Numpy for easy array manipulation
@@ -13,6 +14,9 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--dir', type=str, default="230802")
 args = parser.parse_args()
+
+outfolder = args.dir
+os.makedirs(outfolder, exist_ok=True)
 
 camSet = ['mas', 'sub1', 'sub2', 'sub3']
 

@@ -27,9 +27,10 @@ parser.add_argument(
 parser.add_argument(
     '--num',
     type=int,
-    default=300,
+    default=100,
     help='Max frame number used in AzureKinect_calib.py'
 )
+parser.add_argument("--vis", action="store_true")
 opt = parser.parse_args()
 
 h = np.array([[0,0,0,1]]) # array for homogeneous coordinates
@@ -57,7 +58,7 @@ class Calibration():
 
         self.resultDir = os.path.join(base_dir, f"{opt.dir}")
 
-        assert os.path.exists(os.path.join(self.resultDir, "cameraInfo.txt")), 'cameraInfo.txt does not exist'
+        assert os.path.exists(os.path.join(self.resultDir, "cameraInfo.txt")), 'cameraInfo.txt does not exist, run AzureKinectInfo.py first!'
         assert os.path.exists(os.path.join(self.resultDir, "mas_camInfo.json")), 'mas_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub1_camInfo.json")), 'sub1_intrinsic.json does not exist'
         assert os.path.exists(os.path.join(self.resultDir, "sub2_camInfo.json")), 'sub2_intrinsic.json does not exist'
@@ -88,7 +89,7 @@ class Calibration():
             left_cam = self.cameras[i]
             right_cam = self.cameras[i+1]
             retval, R, T, pt2dL, pt2dR, pt3dL, pt3dR = StereoCalibrate(self.imgDirList[i], left_cam, right_cam, self.intrinsic, self.distCoeffs,
-                    imgInt=self.imgInt, numImg=opt.num, nsize=self.nSize, minSize=self.minSize)
+                    imgInt=self.imgInt, numImg=opt.num, nsize=self.nSize, minSize=self.minSize, vis_mode=opt.vis)
             
             originCameraParams = self.cameraParams[left_cam]
             originCameraParams = np.concatenate((originCameraParams, h), axis=0)

@@ -117,18 +117,20 @@ if __name__=="__main__":
     try:
         for i in range(num_frames):
             color, depth, color_1, depth_1, color_2, depth_2, color_3, depth_3 = queue.get()
-            cv2.imwrite(rgb_path + '/mas/mas_' + str(i) + '.jpg', color)
-            cv2.imwrite(depth_path + '/mas/mas_' + str(i) + '.png', depth)
 
-            cv2.imwrite(rgb_path + '/sub1/sub1_' + str(i) + '.jpg', color_1)
-            cv2.imwrite(depth_path + '/sub1/sub1_' + str(i) + '.png', depth_1)
+            if (i % 5 == 4):
+                cv2.imwrite(rgb_path + '/mas/mas_' + str(i) + '.jpg', color)
+                cv2.imwrite(depth_path + '/mas/mas_' + str(i) + '.png', depth)
 
-            cv2.imwrite(rgb_path + '/sub2/sub2_' + str(i) + '.jpg', color_2)
-            cv2.imwrite(depth_path + '/sub2/sub2_' + str(i) + '.png', depth_2)
+                cv2.imwrite(rgb_path + '/sub1/sub1_' + str(i) + '.jpg', color_1)
+                cv2.imwrite(depth_path + '/sub1/sub1_' + str(i) + '.png', depth_1)
 
-            cv2.imwrite(rgb_path + '/sub3/sub3_' + str(i) + '.jpg', color_3)
-            cv2.imwrite(depth_path + '/sub3/sub3_' + str(i) + '.png', depth_3)
-            print('%d.png' % i + ' saved')
+                cv2.imwrite(rgb_path + '/sub2/sub2_' + str(i) + '.jpg', color_2)
+                cv2.imwrite(depth_path + '/sub2/sub2_' + str(i) + '.png', depth_2)
+
+                cv2.imwrite(rgb_path + '/sub3/sub3_' + str(i) + '.jpg', color_3)
+                cv2.imwrite(depth_path + '/sub3/sub3_' + str(i) + '.png', depth_3)
+                print('%d.png' % i + ' saved')
     except KeyboardInterrupt:
         process_capture.terminate()
     finally:
