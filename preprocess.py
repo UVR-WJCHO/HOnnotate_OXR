@@ -31,10 +31,13 @@ import copy
 import tqdm
 import torch
 from torchvision.transforms.functional import to_tensor
+from utils.lossUtils import *
+
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230612', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230822/230822_S01_obj_01_grasp_13', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230822_cam', 'target cam db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -43,13 +46,14 @@ FLAGS(sys.argv)
 
 ### Config ###
 baseDir = os.path.join(os.getcwd(), 'dataset')
-handResultDir = os.path.join(baseDir, FLAGS.db) + '_hand'
-camResultDir = os.path.join(baseDir, FLAGS.db) + '_cam'
-bgmModelPath = "/home/workplace/BackgroundMattingV2/model.pth"
+bgmModelPath = os.path.join(os.getcwd(), 'model.pth')
 """
+Background matting을 위해 pretrained model 다운
 !pip install gdown -q
 !gdown https://drive.google.com/uc?id=1-t9SO--H4WmP7wUl1tVNNeDkq47hjbv4 -O model.pth -q
 """
+camResultDir = os.path.join(baseDir, FLAGS.cam_db)
+
 
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
@@ -75,7 +79,6 @@ class loadDataset():
 
         self.dbDir = os.path.join(baseDir, db, seq)
         self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
-        self.handDir = handResultDir
 
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
@@ -101,13 +104,18 @@ class loadDataset():
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'))
-        #temp
+        
         if not os.path.exists(os.path.join(self.dbDir, 'masked_rgb')):
             os.mkdir(os.path.join(self.dbDir, 'masked_rgb'))
             for camID in camIDset:
                 os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
                 os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
 
+        
+        if not os.path.exists(os.path.join(self.dbDir, 'visualize')):
+            os.mkdir(os.path.join(self.dbDir, 'visualize'))
+        self.debug_vis = os.path.join(self.dbDir, 'visualize')
+            
         self.rgbCropDir = None
         self.depthCropDir = None
         self.metaDir = None
@@ -129,7 +137,7 @@ class loadDataset():
         self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_intrinsic.json"))
         self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_intrinsic.json"))
 
-        self.intrinsic_undistort = os.path.join(camResultDir, FLAGS.db + "_cameraInfo_undistort.txt")
+        self.intrinsic_undistort = os.path.join(camResultDir, "cameraInfo_undistort.txt")
         self.prev_cam_check = None
         if os.path.isfile(self.intrinsic_undistort):
             self.flag_save = False
@@ -138,7 +146,8 @@ class loadDataset():
             with open(self.intrinsic_undistort, "w") as f:
                 print("creating undistorted intrinsic of each cam")
 
-
+        self.prev_kps = None
+        self.prev_idx_to_coord = None
 
     def __len__(self):
         return len(os.listdir(os.path.join(self.rgbDir)))
@@ -164,11 +173,11 @@ class loadDataset():
 
     def getItem(self, idx, camID='mas'):
         # camID : mas, sub1, sub2, sub3
-        # imgName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.png'
-        imgName = str(camID) + '_' + str(idx) + '.png'
+        rgbName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.jpg'
+        depthName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.png'
 
-        rgbPath = os.path.join(self.rgbDir, imgName)
-        depthPath = os.path.join(self.depthDir, imgName)
+        rgbPath = os.path.join(self.rgbDir, rgbName)
+        depthPath = os.path.join(self.depthDir, depthName)
 
         assert os.path.exists(rgbPath), f'{rgbPath} rgb image does not exist'
         assert os.path.exists(depthPath), f'{depthPath} depth image does not exist'
@@ -273,8 +282,11 @@ class loadDataset():
             self.prev_idx_to_coord = idx_to_coord
             self.prev_kps = kps
         else:
-            idx_to_coord = self.prev_idx_to_coord
-            kps = self.prev_kps
+            if self.prev_kps is None:
+                return [None]
+            else:
+                idx_to_coord = self.prev_idx_to_coord
+                kps = self.prev_kps
 
         bbox = self.extractBbox(idx_to_coord, image_rows, image_cols)
         rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
@@ -284,7 +296,7 @@ class loadDataset():
         procImgSet = [rgbCrop, depthCrop]
         self.prev_bbox = copy.deepcopy(bbox)
 
-        return bbox, img2bb_trans, bb2img_trans, procImgSet, kps
+        return [bbox, img2bb_trans, bb2img_trans, procImgSet, kps]
 
 
     def extractBbox(self, idx_to_coord, image_rows, image_cols):
@@ -357,16 +369,20 @@ class loadDataset():
         mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
         mask = np.where((mask==2)|(mask==0),0,1).astype('uint8')
 
-        imgName = str(camID) + '_' + format(idx, '04') + '.png'
+        imgName = str(camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.segResDir, imgName), mask * 255)
         cv2.imwrite(os.path.join(self.segVisDir, imgName), seg_image*mask[:,:,np.newaxis])
 
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, camID='mas'):
-        imgName = str(camID) + '_' + format(idx, '04') + '.png'
-        cv2.imwrite(os.path.join(self.rgbCropDir, imgName), procImgSet[0])
-        cv2.imwrite(os.path.join(self.depthCropDir, imgName), procImgSet[1])
-        #temp
-        # cv2.imwrite(os.path.join(self.maskedRgbDir, imgName), procImgSet[2])
+
+        rgbName = str(camID) + '_' + format(idx, '04') + '.jpg'
+        depthName = str(camID) + '_' + format(idx, '04') + '.png'
+        cv2.imwrite(os.path.join(self.rgbCropDir, rgbName), procImgSet[0])
+        cv2.imwrite(os.path.join(self.depthCropDir, depthName), procImgSet[1])
+
+        vis = paint_kpts(None, procImgSet[0], processed_kpts)
+        imgName = str(camID) + '_' + format(idx, '04') + '.jpg'
+        cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
@@ -404,8 +420,11 @@ def main(argv):
                     images = db.getItem(idx, camID=camID)
                     images = db.undistort(images, camID)
 
-                    procResult = db.procImg(images) #bb, img2bb, bb2img, procImgSet, kps
-                    bb, img2bb, bb2img, procImgSet, kps = procResult
+                    output = db.procImg(images)
+                    if output[0] is None:
+                        continue
+                    else:
+                        bb, img2bb, bb2img, procImgSet, kps = output
                     procKps = db.translateKpts(np.copy(kps), img2bb)
                     # matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
                     # procImgSet.append(matting)

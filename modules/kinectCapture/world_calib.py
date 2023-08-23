@@ -1,4 +1,6 @@
 import os
+import sys
+sys.path.insert(0,os.path.join(os.getcwd()))
 import argparse
 import numpy as np
 import cv2
@@ -11,9 +13,9 @@ h = np.array([[0,0,0,1]]) # array for homogeneous coordinates
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--db',
+    '--dir',
     type=str,
-    default='230821',
+    default='230821_cam',
     help='target db Name'
 )
 parser.add_argument(
@@ -25,14 +27,8 @@ parser.add_argument(
 parser.add_argument(
     '--index',
     type=int,
-    default=10,
+    default=5,
     help='image index to use'
-)
-parser.add_argument(
-    '--base_dir',
-    type=str,
-    default='/hdd1/donghwan/OXR/HOnnotate_OXR/dataset',
-    help='Base directory that contains images with checkerboard'
 )
 parser.add_argument(
     '--world_coordinate',
@@ -41,26 +37,31 @@ parser.add_argument(
 )
 opt = parser.parse_args()
 
+
+base_dir = os.path.join(os.getcwd())
+
+
 class WorldCalib():
     def __init__(self):
 
         self.nSize = (6, 5) # the number of checkers
-        self.result_dir = os.path.join(opt.base_dir, f"{opt.db}_cam")
+        self.result_dir = os.path.join(base_dir, opt.dir)
         self.intrinsic, self.distCoeffs, self.extrinsics = LoadCameraParams(os.path.join(self.result_dir, "cameraParams.json"))
         self.camera = "mas"
-        image_dir = os.path.join(opt.base_dir, f"{opt.db}_world", "rgb")
-        depth_dir = os.path.join(opt.base_dir, f"{opt.db}_world", "depth")
+        image_dir = os.path.join(self.result_dir, "world", "rgb")
+        depth_dir = os.path.join(self.result_dir, "world", "depth")
 
-        self.image_path = os.path.join(image_dir, f'{self.camera}_{opt.index}.png')
-        depth_path = os.path.join(depth_dir, f'{self.camera}_{opt.index}.png')
+        self.image_path = os.path.join(image_dir, self.camera, f'{self.camera}_{opt.index}.jpg')
+        depth_path = os.path.join(depth_dir, self.camera, f'{self.camera}_{opt.index}.png')
         self.depth = cv2.imread(depth_path, -1)
 
     
     def InitWorldCoordinate(self):
         colors = [(0,0,255), (0,255,0), (255,0,0)]
         if opt.world_coordinate is None:
-
+            print("sss ", self.image_path)
             image = cv2.imread(self.image_path)
+
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             retval, corners = cv2.findChessboardCorners(gray, self.nSize)
 
@@ -128,8 +129,7 @@ class WorldCalib():
 
             cameras = ['mas', 'sub1', 'sub2', 'sub3']
             for cam in cameras:
-                image = cv2.imread(os.path.join(opt.base_dir, f"{opt.db}_world", "rgb", f"{cam}_{opt.index}.png"))
-                os.path.join(opt.base_dir, f"{opt.db}_world", "rgb")
+                image = cv2.imread(os.path.join(self.result_dir, "world", "rgb", cam, f"{cam}_{opt.index}.jpg"))
                 projection = self.extrinsics[cam].reshape(3,4)
                 reprojected, _ = cv2.projectPoints(world_coord, projection[:,:3], projection[:,3:], self.intrinsic[cam], self.distCoeffs[cam])
 

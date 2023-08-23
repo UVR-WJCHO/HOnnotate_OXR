@@ -1,3 +1,4 @@
+import os
 import pyk4a
 from pyk4a import PyK4A, Config
 # Import Numpy for easy array manipulation
@@ -13,6 +14,9 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--dir', type=str, default="230802")
 args = parser.parse_args()
+
+outfolder = args.dir
+os.makedirs(outfolder, exist_ok=True)
 
 camSet = ['mas', 'sub1', 'sub2', 'sub3']
 
@@ -55,7 +59,7 @@ print(k4a_sub1.calibration.get_distortion_coefficients(camera=1))
 print(k4a_sub2.calibration.get_distortion_coefficients(camera=1))
 print(k4a_sub3.calibration.get_distortion_coefficients(camera=1))
 
-f_name = str(args.dir) + '/' + str(args.dir) + '_cameraInfo.txt'
+f_name = str(args.dir) + '/' + 'cameraInfo.txt'
 with open(f_name,"w") as f:
     for camname in camSet:
         f.write(camname + '\n')

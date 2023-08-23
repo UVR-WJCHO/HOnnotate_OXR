@@ -60,8 +60,8 @@ def BundleAdjustment(cameras, objPointsList, imgPointsLeft, imgPointsRight, came
     f0 = Fun(x0, intrinsic, numCameras, numPoints, cameraIndices, pointIndices, imgPoints)
     reprojectionError = np.sqrt(f0.mean())
     print(f"reprojection error is {reprojectionError}")
-    plt.plot(np.sqrt(f0))
-    plt.show()
+    # plt.plot(np.sqrt(f0))
+    # plt.show()
 
     A = BundleAdjustmentSparsity(numCameras, numPoints, cameraIndices, pointIndices, mas_idx)
 
@@ -73,7 +73,7 @@ def BundleAdjustment(cameras, objPointsList, imgPointsLeft, imgPointsRight, came
     print("Optimization took {0:.0f} seconds".format(t1 - t0))
     reprojectionError = np.sqrt(res.fun.mean())
     print(f"reprojection error is {reprojectionError}")
-    plt.plot(np.sqrt(res.fun))
-    plt.show()
+    # plt.plot(np.sqrt(res.fun))
+    # plt.show()
 
     return res
