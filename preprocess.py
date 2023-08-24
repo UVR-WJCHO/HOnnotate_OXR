@@ -34,6 +34,7 @@ from torchvision.transforms.functional import to_tensor
 from utils.lossUtils import *
 import csv
 import datetime as dt
+from config import *
 
 # multiprocessing
 from tqdm_multiprocess import TqdmMultiProcessPool
@@ -41,8 +42,8 @@ from tqdm_multiprocess import TqdmMultiProcessPool
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230823', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230823_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230824', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230824_cam', 'target cam db Name')   ## name ,default, help
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -79,8 +80,13 @@ flag_segmentation = True
 
 class loadDataset():
     def __init__(self, db, seq, trial):
-        self.seq = seq
+        self.seq = seq # 230612_S01_obj_01_grasp_01
+        self.db = db
+        self.subject_id = seq.split('_')[1][1:]
+        self.obj_id = seq.split('_')[3]
+        self.grasp_id = seq.split('_')[5]
         self.trial = trial
+        self.trial_num = trial.split('_')[1]
 
         self.dbDir = os.path.join(baseDir, db, seq, trial)
         # self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
@@ -187,55 +193,60 @@ class loadDataset():
 
         self.prev_bbox = self.temp_bbox[camID]
 
-    def initInfo(self, idx):
-        self.annotDir = os.path.join(self.dbDir, 'annotation')
-        #====================================================
-        # Dummy data
-        input = "/home/workplace/HOnnotate_OXR/dummy_annotation_meta.csv"
+    def init_info(self):
+        if self.camID == 'mas':
+            self.annotDir = os.path.join(self.dbDir, 'annotation')
+            #====================================================
+            # Dummy data 임시
+            input = "./dummy_annotation_meta.csv"
 
-        with open(input, "r", encoding="utf-8", newline="") as r:
-            f = csv.reader(r, delimiter=",", skipinitialspace=True)
-            csv_dict = {}
-            for row in f:
-                csv_dict[row[0]] = row[1]
-        #====================================================
-        #Sequence 내 공동정보 저장
-        with open(os.path.join(os.getcwd(), 'info_template.json')) as r:
-            info = json.load(r)
-        #info keys 'info', 'actor', 'kinect_camera', 'infrared_camera', 'images', 'object', 'calibration', 'annotations', 'Mesh'
-        # 기록해 놓은 actor 정보 받아오기
-        info['actor']['id'] = csv_dict['actor.id']
-        info['actor']['sex'] = csv_dict['actor.sex']
-        info['actor']['age'] = csv_dict['actor.age']
-        info['actor']['height'] = csv_dict['actor.height']
-        info['actor']['handsize'] = csv_dict['actor.handsize']
-        #카메라 정보 받아오기
-        info['kinect_camera']['name'] = csv_dict['kinect_camera.name']
-        info['kinect_camera']['time'] = csv_dict['kinect_camera.time']
-        # info['kinect_camera']['time'] = os.path.getctime(os.path.join(mp4 path))
-        info['kinect_camera']['id'] = csv_dict['kinect_camera.id']
-        # 고정값
-        info['kinect_camera']['height'] = "1080"
-        info['kinect_camera']['width'] = "1920"
+            with open(input, "r", encoding="utf-8", newline="") as r:
+                f = csv.reader(r, delimiter=",", skipinitialspace=True)
+                csv_dict = {}
+                for row in f:
+                    csv_dict[row[0]] = row[1]
+            #====================================================
+            #Sequence 내 공동정보 저장
+            with open(os.path.join(os.getcwd(), 'info_template.json')) as r:
+                info = json.load(r)
+            #info keys 'info', 'actor', 'kinect_camera', 'infrared_camera', 'images', 'object', 'calibration', 'annotations', 'Mesh'
+            # 기록해 놓은 actor 정보 받아오기
+            info['info']['data_created'] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time()))
+            info['actor']['id'] = csv_dict['actor.id']
+            info['actor']['sex'] = csv_dict['actor.sex']
+            info['actor']['age'] = csv_dict['actor.age']
+            info['actor']['height'] = csv_dict['actor.height']
+            info['actor']['handsize'] = csv_dict['actor.handsize']
+            #카메라 정보 받아오기
+            info['kinect_camera']['name'] = csv_dict['kinect_camera.name']
+            info['kinect_camera']['time'] = len(os.listdir(os.path.join(self.rgbDir, 'mas'))) / 30.0 #TODO 프레임레이트 확인 필요
+            info['kinect_camera']['id'] = csv_dict['kinect_camera.id']
+            # 고정값
+            info['kinect_camera']['height'] = "1080"
+            info['kinect_camera']['width'] = "1920"
 
-        info['infrared_camera']['name'] = csv_dict['infrared_camera.name']
-        info['infrared_camera']['time'] = csv_dict['infrared_camera.time']
-        # info['infrared_camera']['time'] = os.path.getctime(os.path.join(mp4 path))
-        info['infrared_camera']['id'] = csv_dict['infrared_camera.id']
-        # 고정값
-        info['infrared_camera']['height'] = "1080"
-        info['infrared_camera']['width'] = "1920"
-        info['infrared_camera']['frame'] = "60"
-        info['infrared_camera']['resolution'] = "0.14"
-        info['infrared_camera']['optics'] = "S"
+            info['infrared_camera']['name'] = csv_dict['infrared_camera.name']
+            info['infrared_camera']['time'] = csv_dict['infrared_camera.time']
+            info['infrared_camera']['id'] = csv_dict['infrared_camera.id']
+            # 고정값
+            info['infrared_camera']['height'] = "1080"
+            info['infrared_camera']['width'] = "1920"
+            info['infrared_camera']['frame'] = "60"
+            info['infrared_camera']['resolution'] = "0.14"
+            info['infrared_camera']['optics'] = "S"
 
-        info['calibration']['sderror'] = "0.05" #TODO 확인 필요
-        info['calibration']['extrinsic'] = self.extrinsics
-        info['calibration']['intrinsic'] = self.intrinsics
+            info['calibration']['sderror'] = "0.05" #TODO 확인 필요
+            info['calibration']['extrinsic'] = self.extrinsics
+            info['calibration']['intrinsic'] = self.intrinsics
 
-        info['object']['id'] = csv_dict['object.id']
-        info['object']['name'] = 
-        self.info = info
+            info['object']['id'] = self.obj_id
+            info['object']['name'] = OBJType(int(self.obj_id)).name
+            info['object']['marker_count'] = csv_dict['object.marker_count']
+            info['object']['markers_data'] = csv_dict['markers_data']
+            info['object']['pose_data'] = csv_dict['pose_data']
+            self.info = info
+        else:
+            self.info = None
 
     def getItem(self, idx):
         # camID : mas, sub1, sub2, sub3
@@ -250,10 +261,11 @@ class loadDataset():
 
         rgb = cv2.imread(rgbPath)
         depth = cv2.imread(depthPath, cv2.IMREAD_ANYDEPTH)
-        if camID == 'mas':
+        if self.info != None:
             for cam in camIDset:
-                self.info['images'].append(os.path.join("rgb", str(cam) + '/' + str(cam) + '_' + str(idx) + '.jpg'))
-                self.info['images'].append(os.path.join("depth", str(cam) + '/' + str(cam) + '_' + str(idx) + '.png'))
+                self.info['images']['file_name'].append(os.path.join("rgb", str(cam) + '/' + str(cam) + '_' + str(idx) + '.jpg'))
+                self.info['images']['file_name'].append(os.path.join("depth", str(cam) + '/' + str(cam) + '_' + str(idx) + '.png'))
+            self.info['images']['id'] = str(self.db) + str(self.subject_id) + str(self.obj_id) + str(self.grasp_id) + str(self.trial_num)
             self.info['images']['width'] = rgb.shape[1]
             self.info['images']['height'] = rgb.shape[0]
             self.info['images']['data_created'] = dt.datetime.fromtimestamp(os.path.getctime(rgbPath)).strftime('%Y-%m-%d %H:%M')
@@ -465,13 +477,16 @@ class loadDataset():
         jsonPath = os.path.join(self.metaDir, metaName)
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
+        
+        if self.info != None:
+            with open(os.path.join(self.annotDir, "annot_%04d.json"), "w") as w:
+                json.dump(self.info, w)
 
 def preprocess_single_cam(db, tqdm_func, global_tqdm):
     with tqdm_func(total=len(db)) as progress:
         progress.set_description(f"{db.seq} - {db.trial} [{db.camID}]")
         mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.3)
         for idx in range(len(db)):
-
             images = db.getItem(idx)
             images = db.undistort(images)
             output = db.procImg(images, mp_hand)
@@ -521,6 +536,7 @@ def main(argv):
             for camID in camIDset:
                 db = loadDataset(FLAGS.db, seqName, trialName)
                 db.init_cam(camID)
+                db.init_info()
                 total_count += len(db)
                 tasks.append((preprocess_single_cam, (db,)))
 
