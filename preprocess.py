@@ -32,12 +32,16 @@ import tqdm
 import torch
 from torchvision.transforms.functional import to_tensor
 from utils.lossUtils import *
+import csv
+import datetime as dt
 
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230822/230822_S01_obj_01_grasp_13', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230822_cam', 'target cam db Name')   ## name ,default, help
+# flags.DEFINE_string('db', '230822/230822_S01_obj_01_grasp_13', 'target db Name')   ## name ,default, help
+# flags.DEFINE_string('cam_db', '230822_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230612', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230612_cam', 'target cam db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -111,6 +115,8 @@ class loadDataset():
                 os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
                 os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
 
+        if not os.path.exists(os.path.join(self.dbDir, 'annotation')):
+            os.mkdir(os.path.join(self.dbDir, 'annotation'))
         
         if not os.path.exists(os.path.join(self.dbDir, 'visualize')):
             os.mkdir(os.path.join(self.dbDir, 'visualize'))
@@ -130,12 +136,21 @@ class loadDataset():
         self.temp_bbox["sub3"] = [650, 200, self.bbox_width, self.bbox_height]
         self.prev_bbox = None
         self.wrist_px = None
-        self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "cameraInfo.txt"))
-        self.distCoeffs = {}
-        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_camInfo.json"))
-        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_camInfo.json"))
-        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_camInfo.json"))
-        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_camInfo.json"))
+        # Data 230612
+        if FLAGS.db == "230612":
+            self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "%s_cameraInfo.txt"%FLAGS.db))
+            self.distCoeffs = {}
+            self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_camInfo.json"))
+            self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_camInfo.json"))
+            self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_camInfo.json"))
+            self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_camInfo.json"))
+            with open(os.path.join(camResultDir, "cameraParamsBA.json")) as json_file:
+                self.extrinsics = json.load(json_file)
+        else: # Data 2308~
+            intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
+            self.intrinsics = intrinsics
+            self.distCoeffs = dist_coeffs
+            self.extrinsics = extrinsics
 
         self.intrinsic_undistort = os.path.join(camResultDir, "cameraInfo_undistort.txt")
         self.prev_cam_check = None
@@ -160,7 +175,7 @@ class loadDataset():
         self.segVisDir = os.path.join(segDir, 'visualization')
         self.segResDir = os.path.join(segDir, 'raw_seg_results')
 
-        #temp
+        #for background matting
         self.maskedRgbDir = os.path.join(self.dbDir, 'masked_rgb', camID)
         self.croppedBgDir = os.path.join(self.dbDir, 'masked_rgb', camID, 'bg')
         
@@ -171,11 +186,60 @@ class loadDataset():
 
         self.prev_bbox = self.temp_bbox[camID]
 
+    def initInfo(self, idx):
+        self.annotDir = os.path.join(self.dbDir, 'annotation')
+        #====================================================
+        # Dummy data
+        input = "/home/workplace/HOnnotate_OXR/dummy_annotation_meta.csv"
+
+        with open(input, "r", encoding="utf-8", newline="") as r:
+            f = csv.reader(r, delimiter=",", skipinitialspace=True)
+            csv_dict = {}
+            for row in f:
+                csv_dict[row[0]] = row[1]
+        #====================================================
+        #Sequence 내 공동정보 저장
+        with open(os.path.join(os.getcwd(), 'info_template.json')) as r:
+            info = json.load(r)
+        #info keys 'info', 'actor', 'kinect_camera', 'infrared_camera', 'images', 'object', 'calibration', 'annotations', 'Mesh'
+        # 기록해 놓은 actor 정보 받아오기
+        info['actor']['id'] = csv_dict['actor.id']
+        info['actor']['sex'] = csv_dict['actor.sex']
+        info['actor']['age'] = csv_dict['actor.age']
+        info['actor']['height'] = csv_dict['actor.height']
+        info['actor']['handsize'] = csv_dict['actor.handsize']
+        #카메라 정보 받아오기
+        info['kinect_camera']['name'] = csv_dict['kinect_camera.name']
+        info['kinect_camera']['time'] = csv_dict['kinect_camera.time']
+        # info['kinect_camera']['time'] = os.path.getctime(os.path.join(mp4 path))
+        info['kinect_camera']['id'] = csv_dict['kinect_camera.id']
+        # 고정값
+        info['kinect_camera']['height'] = "1080"
+        info['kinect_camera']['width'] = "1920"
+
+        info['infrared_camera']['name'] = csv_dict['infrared_camera.name']
+        info['infrared_camera']['time'] = csv_dict['infrared_camera.time']
+        # info['infrared_camera']['time'] = os.path.getctime(os.path.join(mp4 path))
+        info['infrared_camera']['id'] = csv_dict['infrared_camera.id']
+        # 고정값
+        info['infrared_camera']['height'] = "1080"
+        info['infrared_camera']['width'] = "1920"
+        info['infrared_camera']['frame'] = "60"
+        info['infrared_camera']['resolution'] = "0.14"
+        info['infrared_camera']['optics'] = "S"
+
+        info['calibration']['sderror'] = "0.05" #TODO 확인 필요
+        info['calibration']['extrinsic'] = self.extrinsics
+        info['calibration']['intrinsic'] = self.intrinsics
+
+        info['object']['id'] = csv_dict['object.id']
+        info['object']['name'] = 
+        self.info = info
+
     def getItem(self, idx, camID='mas'):
         # camID : mas, sub1, sub2, sub3
         rgbName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.jpg'
         depthName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.png'
-
         rgbPath = os.path.join(self.rgbDir, rgbName)
         depthPath = os.path.join(self.depthDir, depthName)
 
@@ -184,6 +248,14 @@ class loadDataset():
 
         rgb = cv2.imread(rgbPath)
         depth = cv2.imread(depthPath, cv2.IMREAD_ANYDEPTH)
+        if camID == 'mas':
+            for cam in camIDset:
+                self.info['images'].append(os.path.join("rgb", str(cam) + '/' + str(cam) + '_' + str(idx) + '.jpg'))
+                self.info['images'].append(os.path.join("depth", str(cam) + '/' + str(cam) + '_' + str(idx) + '.png'))
+            self.info['images']['width'] = rgb.shape[1]
+            self.info['images']['height'] = rgb.shape[0]
+            self.info['images']['data_created'] = dt.datetime.fromtimestamp(os.path.getctime(rgbPath)).strftime('%Y-%m-%d %H:%M')
+            self.info['frame_num'] = idx
 
         return (rgb, depth)
     
@@ -407,9 +479,9 @@ def main(argv):
     ### Preprocess ###
     if flag_preprocess:
         print("---------------start preprocess---------------")
+        imgID = 0
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
             db = loadDataset(FLAGS.db, seqName)
-
             # db includes data for [mas, sub1, sub2, sub3]
             for camID in camIDset:
                 db.init_cam(camID)
@@ -419,6 +491,10 @@ def main(argv):
 
                 pbar = tqdm.tqdm(range(len(db)))
                 for idx in pbar:
+                    if camID == 'mas':
+                        db.initInfo(idx, camID)
+                        db.info['images']['id'] = imgID
+                        imgID += 1
                     images = db.getItem(idx, camID=camID)
                     images = db.undistort(images, camID)
 
