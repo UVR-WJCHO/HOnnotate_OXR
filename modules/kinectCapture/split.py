@@ -36,9 +36,9 @@ def main():
     input_list = natsorted(input_list)
 
     
-    num_trials = len(split_list)
-    
-    split_list.append( int(input_list[-1].split('_')[1].split('.')[0]) + 1 )
+    num_trials = len(split_list) - 1
+
+    # split_list.append( int(input_list[-1].split('_')[1].split('.')[0]) + 1 )
     
     print("target split frames : ", split_list)
     
