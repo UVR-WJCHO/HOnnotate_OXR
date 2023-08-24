@@ -50,33 +50,36 @@ def split_ext(fpath:str):
     return os.path.splitext(os.path.basename(fpath))
 
 class DataLoader:
-    def __init__(self, base_path:str, data_date:str, data_type:str, cam:str):
+    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, cam:str):
+
+        # base_path : os.path.join(os.getcwd(), 'dataset')
+        # data_date : 230822
+        # data_type : 230822_S01_obj_01_grasp_13
+        # data_trial : trial_0
+        # cam : 'mas'
         self.cam = cam
         self.data_date = data_date
         self.data_type = data_type
-        self.base_path = os.path.join(base_path, data_date, data_date+'_'+data_type)
+        self.data_trial = data_trial
+        self.base_path = os.path.join(base_path, data_date, data_type, data_trial)
+
         self.rgb_raw_path = os.path.join(self.base_path, 'rgb')
         self.depth_raw_path = os.path.join(self.base_path, 'depth')
-
         self.rgb_path = os.path.join(self.base_path, 'rgb_crop')
         self.depth_path = os.path.join(self.base_path, 'depth_crop')
-
-        # currently use temporal path from DH.K grabcut results
         self.seg_path = os.path.join(self.base_path, 'segmentation')
-
         self.meta_base_path = os.path.join(self.base_path, 'meta')
 
+
+
         self.cam_path = os.path.join(base_path, data_date+"_"+'cam')
-
-        self.hand_path = os.path.join(base_path, data_date+"_"+'hand', data_date+"_"+data_type)
-
-        self.obj_data_path = os.path.join(base_path, data_date+'_'+'obj') + '/'+data_date+'_'+data_type+'.txt'
 
         # #Get data from files
         self.cam_parameter = self.load_cam_parameters()
 
-        self.db_len = len(glob(os.path.join(self.rgb_path, self.cam, '*.png')))
+        self.db_len = len(glob(os.path.join(self.rgb_path, self.cam, '*.jpg')))
 
+        # set preprocessed sample as pickle
         self.sample_dict = {}
         sample_pkl_path = self.base_path + '/sample_'+ cam + '.pickle'
         if os.path.exists(sample_pkl_path):
@@ -127,40 +130,28 @@ class DataLoader:
         return rgb_raw, depth_raw, seg, seg_obj
 
     def load_cam_parameters(self):
-        if self.data_date == '230612':
-            with open(os.path.join(self.cam_path, "cameraParamsBA.json")) as json_file:
-                camera_extrinsics = json.load(json_file)
-                cam_extrinsic = np.array((camera_extrinsics[self.cam])).reshape(3, 4)
-                # scale z axis value as mm to cm
-                cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
+        _, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
+        intrinsics = LoadCameraMatrix_undistort(
+            os.path.join(self.cam_path, 'cameraInfo_undistort.txt'))
 
-            camera_intrinsics = LoadCameraMatrix_undistort(
-                os.path.join(self.cam_path, self.data_date + '_cameraInfo_undistort.txt'))
-            cam_intrinsic = camera_intrinsics[self.cam]
-            dist_coeff = LoadDistortionParam(os.path.join(self.cam_path, "%s_intrinsic.json" % self.cam))
-        else:
-            _, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
-            intrinsics = LoadCameraMatrix_undistort(
-                os.path.join(self.cam_path, self.data_date + '_cameraInfo_undistort.txt'))
-
-            cam_intrinsic = intrinsics[self.cam]
-            dist_coeff = dist_coeffs[self.cam]
-            cam_extrinsic = extrinsics[self.cam].reshape(3, 4)
-            # scale z axis value as mm to cm
-            cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
+        cam_intrinsic = intrinsics[self.cam]
+        dist_coeff = dist_coeffs[self.cam]
+        cam_extrinsic = extrinsics[self.cam].reshape(3, 4)
+        # scale z axis value as mm to cm
+        cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
 
         return [cam_intrinsic, cam_extrinsic, dist_coeff]
 
     def get_img(self, idx):
-        rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam + '_%01d.png' % idx)
+        rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam + '_%01d.jpg' % idx)
         depth_raw_path = os.path.join(self.depth_raw_path, self.cam + '_%01d.png' % idx)
 
-        rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.png'%idx)
+        rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.jpg'%idx)
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
 
         # currently use temporal segmentation folder
-        seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.png'%idx)
-        seg_obj_path = os.path.join(self.seg_path + '_deep', self.cam, 'raw_seg_results', self.cam + '_%04d.png' % idx)
+        seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.jpg'%idx)
+        seg_obj_path = os.path.join(self.seg_path + '_deep', self.cam, 'raw_seg_results', self.cam + '_%04d.jpg' % idx)
 
 
         assert os.path.exists(rgb_path)
@@ -203,29 +194,47 @@ class DataLoader:
 
 
 class ObjectLoader:
-    def __init__(self, base_path:str, data_date:str, data_type:str,):
-        self.obj_result_dir = os.path.join(base_path, data_date) + '_obj'
+    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, obj_class:str):
+        # base_path : os.path.join(os.getcwd(), 'dataset')
+        # data_date : 230822
+        # data_type : 230822_S01_obj_01_grasp_13
+        # data_trial : trial_0
+        self.obj_result_dir = os.path.join(base_path, data_date + '_obj')
         self.obj_template_dir = os.path.join(base_path, 'ObjTemplate')
 
-        # load object data
-        seq_name = data_date + '_' + data_type
 
-        obj_mesh_path = os.path.join(self.obj_template_dir, data_type) + '.obj'
+        # load object data
+        obj_class = OBJType(int(data_type.split('_')[-3]))
+        obj_mesh_path = os.path.join(self.obj_template_dir, obj_class) + '.obj'
         self.obj_mesh_data = self.read_obj(obj_mesh_path)
 
         # our ICG output
         if not CFG_MOCAP:
+            seq_name = data_date + '_' + obj_class
             obj_file_path = os.path.join(self.obj_result_dir, seq_name) + '.txt'
             self.obj_pose_data = self.read_file(obj_file_path)
+            # ICG has own main viewpoint
+            self.obj_view = self.obj_pose_data[0]
+
         if CFG_MOCAP:
-            obj_file_path = os.path.join(self.obj_result_dir, seq_name) + '.txt'
-            self.obj_pose_data = self.read_file(obj_file_path)
-        # ICG has own main viewpoint
-        self.obj_view = self.obj_pose_data[0]
+            trial_num = data_trial.split('_')[-1]
+            seq_name = data_type + '_trial_0' + str(trial_num) + '_6D.tsv'
+
+            obj_file_path = os.path.join(self.obj_result_dir, 'IR cam.TSV', seq_name)
+            self.obj_pose_data = self.read_tsv_file(obj_file_path)
 
         self.db_len = int((len(self.obj_pose_data) - 1) / 2)
 
     def read_file(self, file_path):
+        lines = []
+        with open(file_path, 'r') as file:
+            for line in file:
+                # Remove newline character at the end of each line
+                line = line.strip()
+                lines.append(line)
+        return lines
+
+    def read_tsv_file(self, file_path):
         lines = []
         with open(file_path, 'r') as file:
             for line in file:

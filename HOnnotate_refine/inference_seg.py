@@ -26,7 +26,7 @@ FLAGS = flags.FLAGS
 # flags.DEFINE_string('camID', '0', 'Cam ID') # name ,default, help
 # flags.DEFINE_integer('start', 0, 'Cam ID') # name ,default, help
 # flags.DEFINE_integer('end', 2300, 'Cam ID') # name ,default, help
-flags.DEFINE_string('db', '230612', 'target db Name') # name ,default, help
+flags.DEFINE_string('db', '230822/230822_S01_obj_01_grasp_13', 'target db Name') # name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 # flags.DEFINE_string('camID', 'mas', 'target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']

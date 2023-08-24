@@ -409,7 +409,6 @@ def main(argv):
         print("---------------start preprocess---------------")
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
             db = loadDataset(FLAGS.db, seqName)
-
             # db includes data for [mas, sub1, sub2, sub3]
             for camID in camIDset:
                 db.init_cam(camID)
