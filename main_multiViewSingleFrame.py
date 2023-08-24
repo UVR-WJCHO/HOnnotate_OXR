@@ -23,7 +23,7 @@ import time
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230612', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230802', 'target db name')   ## name ,default, help
 flags.DEFINE_string('type', 'mug', 'target sequence name')
 FLAGS(sys.argv)
 
@@ -78,7 +78,7 @@ def main(argv):
 
     for frame in range(len(mas_dataloader)):
         ## initial frames are often errorneous (banana sub2 0000~0002 is error, ...)
-        if frame < 42:
+        if frame < 60:
             continue
 
         ## Set object ICG pose as init pose on every frame? or use previous pose?
@@ -100,7 +100,7 @@ def main(argv):
         lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=0)
 
         for iter in range(CFG_NUM_ITER):
-            loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'depth_obj':0.0}
+            loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'depth_obj':0.0, 'contact':0.0}
             if CFG_WITH_OBJ:
                 obj_param = model_obj()
 
@@ -118,9 +118,8 @@ def main(argv):
                     losses = loss_func(pred=hand_param, pred_obj=None, render=flag_render,
                                        camIdx=camIdx, frame=frame)
                 else:
-                    ## TODO
                     losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
-                                       camIdx=camIdx, frame=frame)
+                                       camIdx=camIdx, frame=frame, contact_optim=iter>CFG_NUM_ITER_CONTACT_AFTER)
 
                 for k in CFG_LOSS_DICT:
                     loss_all[k] += losses[k]

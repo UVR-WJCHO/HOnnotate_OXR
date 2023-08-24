@@ -8,6 +8,15 @@ import numpy as np
 import math
 from utils import params
 
+from pytorch3d.structures import Meshes, Pointclouds
+
+from utils.lossUtils import *
+from utils.modelUtils import *
+
+from pytorch3d import _C
+from pytorch3d.structures import Meshes, Pointclouds
+from torch.autograd import Function
+from torch.autograd.function import once_differentiable
 
 def mano3DToCam3D(xyz3D, ext, main_ext):
     device = xyz3D.device
@@ -17,8 +26,8 @@ def mano3DToCam3D(xyz3D, ext, main_ext):
     ones = torch.ones((xyz3D.shape[0], 1)).to(device)
 
     # mano to world
-    xyz4Dcam = torch.concatenate([xyz3D, ones], axis=1)
-    projMat = torch.concatenate((main_ext, h), 0)
+    xyz4Dcam = torch.cat([xyz3D, ones], axis=1)
+    projMat = torch.cat((main_ext, h), 0)
     xyz4Dworld = (torch.linalg.inv(projMat) @ xyz4Dcam.T).T
 
     # world to target cam
@@ -72,3 +81,78 @@ def paint_kpts(img_path, img, kpts, circle_size = 1):
         im = cv2.addWeighted(im, 0.4, cur_im, 0.6, 0)
 
     return im
+
+
+_DEFAULT_MIN_TRIANGLE_AREA: float = 5e-3
+
+# PointFaceDistance
+class _PointFaceDistance(Function):
+    """
+    Torch autograd Function wrapper PointFaceDistance Cuda implementation
+    """
+
+    @staticmethod
+    def forward(
+        ctx,
+        points,
+        points_first_idx,
+        tris,
+        tris_first_idx,
+        max_points,
+        min_triangle_area=_DEFAULT_MIN_TRIANGLE_AREA,
+    ):
+
+        dists, idxs = _C.point_face_dist_forward(
+            points,
+            points_first_idx,
+            tris,
+            tris_first_idx,
+            max_points,
+            min_triangle_area,
+        )
+        ctx.save_for_backward(points, tris, idxs)
+        ctx.min_triangle_area = min_triangle_area
+        return dists
+
+    @staticmethod
+    @once_differentiable
+    def backward(ctx, grad_dists):
+        grad_dists = grad_dists.contiguous()
+        points, tris, idxs = ctx.saved_tensors
+        min_triangle_area = ctx.min_triangle_area
+        grad_points, grad_tris = _C.point_face_dist_backward(
+            points, tris, idxs, grad_dists, min_triangle_area
+        )
+        return grad_points, None, grad_tris, None, None, None
+
+
+point_face_distance = _PointFaceDistance.apply
+
+
+def point_mesh_face_distance(
+    meshes: Meshes,
+    pcls: Pointclouds,
+    min_triangle_area: float = _DEFAULT_MIN_TRIANGLE_AREA):
+
+    if len(meshes) != len(pcls):
+        raise ValueError("meshes and pointclouds must be equal sized batches")
+    N = len(meshes)
+
+    # packed representation for pointclouds
+    points = pcls.points_packed()  # (P, 3)
+    points_first_idx = pcls.cloud_to_packed_first_idx()
+    max_points = pcls.num_points_per_cloud().max().item()
+
+    # packed representation for faces
+    verts_packed = meshes.verts_packed()
+    faces_packed = meshes.faces_packed()
+    tris = verts_packed[faces_packed]  # (T, 3, 3)
+    tris_first_idx = meshes.mesh_to_faces_packed_first_idx()
+    max_tris = meshes.num_faces_per_mesh().max().item()
+
+    # point to face distance: shape (P,)
+    point_to_face = point_face_distance(
+        points, points_first_idx, tris, tris_first_idx, max_points, min_triangle_area)
+
+    return point_to_face
+
