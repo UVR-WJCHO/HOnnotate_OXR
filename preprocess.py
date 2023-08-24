@@ -39,12 +39,11 @@ from tqdm_multiprocess import TqdmMultiProcessPool
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230822/230822_S01_obj_01_grasp_13', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230822_cam', 'target cam db Name')   ## name ,default, help
-# flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
+flags.DEFINE_string('db', '230823', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230823_cam', 'target cam db Name')   ## name ,default, help
+
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
-# camIDset = ['sub2', 'sub3']
 FLAGS(sys.argv)
 
 ### Config ###
@@ -77,16 +76,17 @@ flag_preprocess = True
 flag_segmentation = True
 
 class loadDataset():
-    def __init__(self, db, seq):
+    def __init__(self, db, seq, trial):
         self.seq = seq
+        self.trial = trial
 
-        self.dbDir = os.path.join(baseDir, db, seq)
-        self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
+        self.dbDir = os.path.join(baseDir, db, seq, trial)
+        # self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
 
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
-        self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
-        self.depthBgDir = os.path.join(self.bgDir, 'depth')
+        # self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
+        # self.depthBgDir = os.path.join(self.bgDir, 'depth')
 
         if not os.path.exists(os.path.join(self.dbDir, 'rgb_crop')):
             os.mkdir(os.path.join(self.dbDir, 'rgb_crop'))
@@ -108,16 +108,15 @@ class loadDataset():
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'))
         
-        if not os.path.exists(os.path.join(self.dbDir, 'masked_rgb')):
-            os.mkdir(os.path.join(self.dbDir, 'masked_rgb'))
-            for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
-                os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
+        # if not os.path.exists(os.path.join(self.dbDir, 'masked_rgb')):
+        #     os.mkdir(os.path.join(self.dbDir, 'masked_rgb'))
+        #     for camID in camIDset:
+        #         os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
+        #         os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
 
-        
-        if not os.path.exists(os.path.join(self.dbDir, 'visualize')):
-            os.mkdir(os.path.join(self.dbDir, 'visualize'))
-        self.debug_vis = os.path.join(self.dbDir, 'visualize')
+        # if not os.path.exists(os.path.join(self.dbDir, 'visualize')):
+        #     os.mkdir(os.path.join(self.dbDir, 'visualize'))
+        # self.debug_vis = os.path.join(self.dbDir, 'visualize')
             
         self.rgbCropDir = None
         self.depthCropDir = None
@@ -383,9 +382,9 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.rgbCropDir, rgbName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, depthName), procImgSet[1])
 
-        vis = paint_kpts(None, procImgSet[0], processed_kpts)
-        imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
-        cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+        # vis = paint_kpts(None, procImgSet[0], processed_kpts)
+        # imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
+        # cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
@@ -397,7 +396,7 @@ class loadDataset():
 
 def preprocess_single_cam(db, tqdm_func, global_tqdm):
     with tqdm_func(total=len(db)) as progress:
-        progress.set_description(f"{db.seq} [{db.camID}]")
+        progress.set_description(f"{db.seq} - {db.trial} [{db.camID}]")
         mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.3)
         for idx in range(len(db)):
 
@@ -443,21 +442,22 @@ def main(argv):
     process_count = 8
     total_count = 0
 
-    if flag_preprocess:
-        print("---------------start preprocess---------------")
-        for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+    for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        seqDir = os.path.join(rootDir, seqName)
+        print("---------------start preprocess seq : %s ---------------" % (seqName))
+        for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
             for camID in camIDset:
-                db = loadDataset(FLAGS.db, seqName)
+                db = loadDataset(FLAGS.db, seqName, trialName)
                 db.init_cam(camID)
                 total_count += len(db)
                 tasks.append((preprocess_single_cam, (db,)))
-    
-    pool = TqdmMultiProcessPool(process_count)
-    with tqdm.tqdm(total=total_count) as global_tqdm:
-        global_tqdm.set_description("total")
-        pool.map(global_tqdm, tasks, error_callback, done_callback)
 
-    print("---------------end preprocess---------------")
+        pool = TqdmMultiProcessPool(process_count)
+        with tqdm.tqdm(total=total_count) as global_tqdm:
+            global_tqdm.set_description("total")
+            pool.map(global_tqdm, tasks, error_callback, done_callback)
+
+    print("---------------end preprocess seq : %s ---------------" % (seqName))
     print(time.ctime())
 
 if __name__ == '__main__':
