@@ -39,7 +39,7 @@ from tqdm_multiprocess import TqdmMultiProcessPool
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230822', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230822/230822_S01_obj_01_grasp_13', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230822_cam', 'target cam db Name')   ## name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 flags.DEFINE_string('camID', 'mas', 'main target camera')
@@ -446,11 +446,6 @@ def main(argv):
     if flag_preprocess:
         print("---------------start preprocess---------------")
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
-<<<<<<< HEAD
-            db = loadDataset(FLAGS.db, seqName)
-            # db includes data for [mas, sub1, sub2, sub3]
-=======
->>>>>>> 63c8c7aa1280bad47953ee09c11eb84210da3698
             for camID in camIDset:
                 db = loadDataset(FLAGS.db, seqName)
                 db.init_cam(camID)
@@ -463,6 +458,7 @@ def main(argv):
         pool.map(global_tqdm, tasks, error_callback, done_callback)
 
     print("---------------end preprocess---------------")
+    print(time.ctime())
 
 if __name__ == '__main__':
     app.run(main)
