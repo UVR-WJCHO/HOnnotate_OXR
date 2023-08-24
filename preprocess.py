@@ -154,7 +154,7 @@ class loadDataset():
             with open(os.path.join(camResultDir, "cameraParamsBA.json")) as json_file:
                 self.extrinsics = json.load(json_file)
         else: # Data 2308~
-            intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
+            intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
             self.intrinsics = intrinsics
             self.distCoeffs = dist_coeffs
             self.extrinsics = extrinsics
@@ -211,7 +211,7 @@ class loadDataset():
                 info = json.load(r)
             #info keys 'info', 'actor', 'kinect_camera', 'infrared_camera', 'images', 'object', 'calibration', 'annotations', 'Mesh'
             # 기록해 놓은 actor 정보 받아오기
-            info['info']['data_created'] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time()))
+            info['info']['date_created'] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time()))
             info['actor']['id'] = csv_dict['actor.id']
             info['actor']['sex'] = csv_dict['actor.sex']
             info['actor']['age'] = csv_dict['actor.age']
@@ -225,25 +225,31 @@ class loadDataset():
             info['kinect_camera']['height'] = "1080"
             info['kinect_camera']['width'] = "1920"
 
-            info['infrared_camera']['name'] = csv_dict['infrared_camera.name']
-            info['infrared_camera']['time'] = csv_dict['infrared_camera.time']
-            info['infrared_camera']['id'] = csv_dict['infrared_camera.id']
+            info['infrared_camera'][0]['name'] = csv_dict['infrared_camera.name']
+            info['infrared_camera'][0]['time'] = csv_dict['infrared_camera.time']
+            info['infrared_camera'][0]['id'] = csv_dict['infrared_camera.id']
             # 고정값
-            info['infrared_camera']['height'] = "1080"
-            info['infrared_camera']['width'] = "1920"
-            info['infrared_camera']['frame'] = "60"
-            info['infrared_camera']['resolution'] = "0.14"
-            info['infrared_camera']['optics'] = "S"
+            info['infrared_camera'][0]['height'] = "1080"
+            info['infrared_camera'][0]['width'] = "1920"
+            info['infrared_camera'][0]['frame'] = "60"
+            info['infrared_camera'][0]['resolution'] = "0.14"
+            info['infrared_camera'][0]['optics'] = "S"
 
             info['calibration']['sderror'] = "0.05" #TODO 확인 필요
-            info['calibration']['extrinsic'] = self.extrinsics
-            info['calibration']['intrinsic'] = self.intrinsics
+            ext_dict = {}
+            for k, v in self.extrinsics.items():
+                ext_dict[k] = v.tolist()
+            info['calibration']['extrinsic'] = ext_dict
+            intrinsics_dict = {}
+            for k, v in self.intrinsics.items():
+                intrinsics_dict[k] = v.tolist()
+            info['calibration']['intrinsic'] = intrinsics_dict
 
             info['object']['id'] = self.obj_id
             info['object']['name'] = OBJType(int(self.obj_id)).name
             info['object']['marker_count'] = csv_dict['object.marker_count']
-            info['object']['markers_data'] = csv_dict['markers_data']
-            info['object']['pose_data'] = csv_dict['pose_data']
+            info['object']['markers_data'] = csv_dict['object.markers_data']
+            info['object']['pose_data'] = csv_dict['object.pose_data']
             self.info = info
         else:
             self.info = None
@@ -262,14 +268,17 @@ class loadDataset():
         rgb = cv2.imread(rgbPath)
         depth = cv2.imread(depthPath, cv2.IMREAD_ANYDEPTH)
         if self.info != None:
+            self.info['images']['file_name'] = []
             for cam in camIDset:
                 self.info['images']['file_name'].append(os.path.join("rgb", str(cam) + '/' + str(cam) + '_' + str(idx) + '.jpg'))
                 self.info['images']['file_name'].append(os.path.join("depth", str(cam) + '/' + str(cam) + '_' + str(idx) + '.png'))
-            self.info['images']['id'] = str(self.db) + str(self.subject_id) + str(self.obj_id) + str(self.grasp_id) + str(self.trial_num)
+            self.info['images']['id'] = str(self.db) + str(self.subject_id) + str(self.obj_id) + str(self.grasp_id) + str(self.trial_num) + str(idx)
             self.info['images']['width'] = rgb.shape[1]
             self.info['images']['height'] = rgb.shape[0]
-            self.info['images']['data_created'] = dt.datetime.fromtimestamp(os.path.getctime(rgbPath)).strftime('%Y-%m-%d %H:%M')
-            self.info['frame_num'] = idx
+            self.info['images']['date_created'] = dt.datetime.fromtimestamp(os.path.getctime(rgbPath)).strftime('%Y-%m-%d %H:%M')
+            self.info['images']['frame_num'] = idx
+            with open(os.path.join(self.annotDir, "annot_%04d.json"%idx), "w") as w:
+                json.dump(self.info, w, ensure_ascii=False)
 
         return (rgb, depth)
     
@@ -478,14 +487,12 @@ class loadDataset():
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
         
-        if self.info != None:
-            with open(os.path.join(self.annotDir, "annot_%04d.json"), "w") as w:
-                json.dump(self.info, w)
 
 def preprocess_single_cam(db, tqdm_func, global_tqdm):
     with tqdm_func(total=len(db)) as progress:
         progress.set_description(f"{db.seq} - {db.trial} [{db.camID}]")
         mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.3)
+        db.init_info()
         for idx in range(len(db)):
             images = db.getItem(idx)
             images = db.undistort(images)
@@ -536,7 +543,6 @@ def main(argv):
             for camID in camIDset:
                 db = loadDataset(FLAGS.db, seqName, trialName)
                 db.init_cam(camID)
-                db.init_info()
                 total_count += len(db)
                 tasks.append((preprocess_single_cam, (db,)))
 
