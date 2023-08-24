@@ -32,8 +32,8 @@ splitEnumMap = {
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
 
-class datasetOXRMultiCamera(datasetBase):
-    def __init__(self, db, seq, camInd, isCropImg=False, isRemoveBG=False, fileListIn=None):
+class datasetNIAMultiCamera(datasetBase):
+    def __init__(self, db, seq, trial, camInd, isCropImg=False, isRemoveBG=False, fileListIn=None):
         if fileListIn is None:
             assert False, 'fileListIn is None'
         else:
@@ -41,20 +41,19 @@ class datasetOXRMultiCamera(datasetBase):
 
         self.dbDir = join(OXR_MULTI_CAMERA_DIR, db)
         self.calibDir = self.dbDir + '_cam'
-        self.handDir = self.dbDir + '_hand'
-        
-        imgDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'rgb_crop')
-        segDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'segmentation', str(camInd), 'raw_seg_results')
+
+        imgDir = join(OXR_MULTI_CAMERA_DIR, db, seq, trial, 'rgb_crop')
+        segDir = join(OXR_MULTI_CAMERA_DIR, db, seq, trial, 'segmentation', str(camInd), 'raw_seg_results')
         # metaDataDir = join(HO3D_CAMERA_DIR, split, 'meta')
 
         if sys.version_info >= (3, 0):
-            super(datasetOXRMultiCamera, self).__init__(fileList=fileList, imgDir=imgDir, segDir=segDir,
+            super(datasetNIAMultiCamera, self).__init__(fileList=fileList, imgDir=imgDir, segDir=segDir,
                                                metaDataDir=None, isSingleMetaFile=False,
-                                               imgFormat='png', segFormat='png', metaFormat='pkl')
+                                               imgFormat='jpg', segFormat='png', metaFormat='pkl')
         else:
             datasetBase.__init__(self, fileList=fileList, imgDir=imgDir, segDir=segDir,
                                                metaDataDir=None, isSingleMetaFile=False,
-                                               imgFormat='png', segFormat='png', metaFormat='pkl')
+                                               imgFormat='jpg', segFormat='png', metaFormat='pkl')
 
         self.isCropImg = isCropImg
 
@@ -154,9 +153,10 @@ class datasetOXRMultiCamera(datasetBase):
             fId = fileIn
 
         seq = fId.split('/')[0]
-        camInd = fId.split('/')[1]
-        id = fId.split('/')[2]
-        img = self.readImg(join(self.dbDir, seq, 'rgb_crop', camInd, id), True)
+        trial = fId.split('/')[1]
+        camInd = fId.split('/')[2]
+        id = fId.split('/')[3]
+        img = self.readImg(join(self.dbDir, seq, trial, 'rgb_crop', camInd, id), True)
         
         otherImgSet = dict()
         for camID in camIDset:
@@ -164,7 +164,7 @@ class datasetOXRMultiCamera(datasetBase):
                 continue
             else:
                 id_other = camID + '_' + id.split('_')[-1]
-                subimg = self.readImg(join(self.dbDir, seq, 'rgb_crop', camID, id_other), True)
+                subimg = self.readImg(join(self.dbDir, seq, trial, 'rgb_crop', camID, id_other), True)
                 otherImgSet[camID] = subimg
                 
 
@@ -226,6 +226,195 @@ class datasetOXRMultiCamera(datasetBase):
 
         return None, ds
 
+
+class datasetOXRMultiCamera(datasetBase):
+    def __init__(self, db, seq, camInd, isCropImg=False, isRemoveBG=False, fileListIn=None):
+        if fileListIn is None:
+            assert False, 'fileListIn is None'
+        else:
+            fileList = fileListIn
+
+        self.dbDir = join(OXR_MULTI_CAMERA_DIR, db)
+        self.calibDir = self.dbDir + '_cam'
+        self.handDir = self.dbDir + '_hand'
+
+        imgDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'rgb_crop')
+        segDir = join(OXR_MULTI_CAMERA_DIR, db, seq, 'segmentation', str(camInd), 'raw_seg_results')
+        # metaDataDir = join(HO3D_CAMERA_DIR, split, 'meta')
+
+        if sys.version_info >= (3, 0):
+            super(datasetOXRMultiCamera, self).__init__(fileList=fileList, imgDir=imgDir, segDir=segDir,
+                                                        metaDataDir=None, isSingleMetaFile=False,
+                                                        imgFormat='png', segFormat='png', metaFormat='pkl')
+        else:
+            datasetBase.__init__(self, fileList=fileList, imgDir=imgDir, segDir=segDir,
+                                 metaDataDir=None, isSingleMetaFile=False,
+                                 imgFormat='png', segFormat='png', metaFormat='pkl')
+
+        self.isCropImg = isCropImg
+
+        self.removeBG = isRemoveBG
+
+    def readMeta(self, fileName, seq):
+
+        ###
+        # originally, readMeta after all initial pose estimation(hand&object)
+        # doen't need for inference_seg.py
+        # need to implement for optimization (meta folder is same)
+        ###
+
+        # if not os.path.exists(fileName):
+        return {'pts2DObj': np.zeros((8, 2), dtype=np.float32),
+                'pts3DObj': np.zeros((8, 3), dtype=np.float32) + np.array([0., 0., -0.5]),
+                'pts2DHand': np.zeros((21, 2), dtype=np.float32),
+                'pts3DHand': np.zeros((21, 3), dtype=np.float32) + np.array([0., 0., -0.5])}
+
+        # pklData = loadPickleData((fileName + '.' + self.metaFormat))
+
+        # pts3DHand = pklData['JTransformed'][0]
+        # camMat = self.getCamMat(seq)
+        # camProp = camProps(ID='cam1', f=np.array([camMat[0,0], camMat[1,1]], dtype=np.float32) / dscale,
+        #                    c=np.array([camMat[0,2], camMat[1,2]], dtype=np.float32) / dscale,
+        #                    near=0.001, far=2.0, frameSize=[w, h],
+        #                    pose=np.eye(4, dtype=np.float32))
+        # pts2DHand = cv2ProjectPoints(camProp, pts3DHand, isOpenGLCoords=True)
+        # if 'objCornersTransormed' not in pklData.keys():
+        #     objID = seqToObjID[seq]
+        #     objCornersFilename = join(YCB_OBJECT_CORNERS_DIR, objID, 'corners.npy')
+        #     objCorners = np.load(objCornersFilename)
+        #     pts3DObj = np.matmul(objCorners, cv2.Rodrigues(pklData['rotObj'])[0].T) + pklData['transObj']
+        # else:
+        #     pts3DObj = pklData['objCornersTransormed']
+        # pts2DObj = cv2ProjectPoints(camProp, pts3DObj, isOpenGLCoords=True)
+
+        # return {'pts2DObj': pts2DObj, 'pts3DObj': pts3DObj,
+        #         'pts2DHand': pts2DHand, 'pts3DHand': pts3DHand}
+
+    def load_depth(self, path):
+        # PyPNG library is used since it allows to save 16-bit PNG
+        if sys.version_info >= (3, 0):
+            warnings.simplefilter("ignore", ResourceWarning)
+        r = png.Reader(filename=path)
+        if sys.version_info[0] >= 3:
+            im = np.vstack(map(np.uint16, r.asDirect()[2])).astype(np.float32)
+        else:
+            im = np.vstack(itertools.imap(np.uint16, r.asDirect()[2])).astype(np.float32)
+        return im
+
+    def getCamMat(self, camInd):
+        camMatFile = os.path.join(self.calibDir, 'cam_%s_intrinsics.txt' % (camInd))
+        # depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+
+        if not os.path.exists(camMatFile):
+            print(camMatFile)
+            raise Exception('Where is the camera intrinsics file???')
+        with open(camMatFile, 'r') as f:
+            line = f.readline()
+        line = line.strip()
+        items = line.split(',')
+        for item in items:
+            if 'fx' in item:
+                fx = float(item.split(':')[1].strip())
+            elif 'fy' in item:
+                fy = float(item.split(':')[1].strip())
+            elif 'ppx' in item:
+                ppx = float(item.split(':')[1].strip())
+            elif 'ppy' in item:
+                ppy = float(item.split(':')[1].strip())
+
+        camMat = np.array([[ppx, 0, fx], [0, ppy, fy], [0, 0, 1]])
+
+        # with open(depthScaleFile, 'r') as f:
+        #     line = f.readline()
+        # depthScale = float(line.strip())
+
+        return camMat
+
+    # def getDepthScale(self, camInd):
+    #     depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+    #
+    #     with open(depthScaleFile, 'r') as f:
+    #         line = f.readline()
+    #     depthScale = float(line.strip())
+    #
+    #     return depthScale
+
+    def createTFExample(self, itemType='hand', fileIn=None, beforeSeg=False):
+        if fileIn is None:
+            fId = self.getNextFileName()
+        else:
+            fId = fileIn
+
+        seq = fId.split('/')[0]
+        camInd = fId.split('/')[1]
+        id = fId.split('/')[2]
+        img = self.readImg(join(self.dbDir, seq, 'rgb_crop', camInd, id), True)
+
+        otherImgSet = dict()
+        for camID in camIDset:
+            if camID == camInd:
+                continue
+            else:
+                id_other = camID + '_' + id.split('_')[-1]
+                subimg = self.readImg(join(self.dbDir, seq, 'rgb_crop', camID, id_other), True)
+                otherImgSet[camID] = subimg
+
+        # if self.removeBG:
+        #     r = png.Reader(filename=join(self.dbDir, seq, 'depth_crop', camInd, id+'.png'))
+        #     dep = np.vstack(map(np.uint16, r.asDirect()[2])).astype(np.float32)
+        #     depScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+        #     with open(depScaleFile, 'r') as f:
+        #         line = f.readline()
+        #     line = line.strip()
+        #     depScale = float(line)
+        #     dep = dep*depScale
+        #     depMask = np.logical_or(dep>0.95, dep==0)
+        #     depMask = np.logical_not(depMask)
+        #     img = img*np.expand_dims(depMask, 2)
+
+        objInd = 1
+        handInd = 2
+
+        if not beforeSeg:
+            seg = self.readSeg(join(self.dbDir, seq, 'segmentation', camInd, 'raw_seg_results', id), True)
+            if seg is None:
+                seg = np.zeros((img.shape[1], img.shape[0], 3), dtype=np.uint8)
+        else:
+            seg = np.zeros((img.shape[1], img.shape[0], 3), dtype=np.uint8)
+
+        seg = cv2.resize(seg, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_NEAREST)
+
+        meta = self.readMeta(join(self.dbDir, seq, 'meta', id), seq)
+        if self.isCropImg:
+            # Get the centroid of the seg mask, and crop a window of size MPII_HO3D_CROP_SIZE around it
+            imOps = ImageOps(img, seg, np.concatenate([meta['pts2DHand'], meta['pts2DObj']], axis=0))
+            imgPatch, maskPatch, _, _, kpsAug = imOps.imgResizeAndCrop(img.shape[1], img.shape[0], MPII_HO3D_CROP_SIZE,
+                                                                       MPII_HO3D_CROP_SIZE)
+        else:
+            imgPatch = img
+            maskPatch = seg
+
+        # Convert seg into single channel image
+        newSeg = np.zeros((imgPatch.shape[0], imgPatch.shape[1]), dtype=np.uint8)
+        newSeg[maskPatch[:, :, 0] == handInd] = handInd
+        newSeg[maskPatch[:, :, 0] == objInd] = objInd
+
+        # camMat = self.getCamMat(camInd)
+        # depthScaleFile = os.path.join(self.calibDir, 'cam_%s_depth_scale.txt' % (camInd))
+        # with open(depthScaleFile, 'r') as f:
+        #     line = f.readline()
+        # depthScale = float(line.strip())
+
+        ##read the depth file
+        # depth = self.load_depth(join(self.dbDir, seq, 'depth_crop', camInd, id+'.png')) #*depthScale
+        # depthEnc = encodeDepthImg(depth, depthScale)
+
+        coordChangeMat = np.array([[1., 0., 0.], [0, -1., 0.], [0., 0., -1.]], dtype=np.float32)
+        ds = dataSample(img=imgPatch, seg=newSeg, fName=fId, dataset=datasetType.HO3D,
+                        outType=outputType.SEG | outputType.KEYPOINT_3D | outputType.KEYPOINTS_2D,
+                        camMat=None, depth=None, otherImgSet=otherImgSet, depthScale=None)
+
+        return None, ds
 
 
 class datasetHo3dMultiCamera(datasetBase):

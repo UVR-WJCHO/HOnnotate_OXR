@@ -4,7 +4,7 @@ import numpy as np
 from multiprocessing import Process, Queue
 
 
-from HOdatasets.ho3d_multicamera.dataset import datasetHo3dMultiCamera, datasetOXRMultiCamera
+from HOdatasets.ho3d_multicamera.dataset import datasetHo3dMultiCamera, datasetOXRMultiCamera, datasetNIAMultiCamera
 
 from HOdatasets.mypaths import MANO_MODEL_PATH
 # import commonAug
@@ -44,14 +44,18 @@ class datasetMix(IntEnum):
     
     OXR_MULTICAMERA = 11
 
+    NIA_MULTICAMERA = 12
 
 
-def shardProc(dummy, shard_id, dataset_split, dataset_mix, db, seq, camID, numShards, dsQueue, itemType, isRemoveBG=False, fileListIn=None):
+
+def shardProc(dummy, shard_id, dataset_split, dataset_mix, db, seq, camID, numShards, dsQueue, itemType, isRemoveBG=False, fileListIn=None, trial=None):
 
     if dataset_mix == datasetMix.HO3D_MULTICAMERA:
         dsCurr = datasetHo3dMultiCamera('', 0,  isRemoveBG=isRemoveBG, fileListIn=fileListIn)
     elif dataset_mix == datasetMix.OXR_MULTICAMERA:
         dsCurr = datasetOXRMultiCamera(db, seq, camID, isRemoveBG=isRemoveBG, fileListIn=fileListIn)
+    elif dataset_mix == datasetMix.NIA_MULTICAMERA:
+        dsCurr = datasetNIAMultiCamera(db, seq, trial, camID, isRemoveBG=isRemoveBG, fileListIn=fileListIn)
     else:
         raise NotImplementedError
 
@@ -72,12 +76,12 @@ def shardProc(dummy, shard_id, dataset_split, dataset_mix, db, seq, camID, numSh
 
 
 
-def startInputQueueRunners(dataset_mix, dataset_split, db, seq, camID, numThreads=10, queueSize=200, itemType='hand', isRemoveBG=False, fileListIn=None):
+def startInputQueueRunners(dataset_mix, dataset_split, db, seq, camID, numThreads=10, queueSize=200, itemType='hand', isRemoveBG=False, fileListIn=None, trial=None):
     dsQueue = Queue(maxsize=queueSize)
     procs = []
     for proc_index in range(numThreads):
         args = (
-            [], proc_index, dataset_split, dataset_mix, db, seq, camID, numThreads, dsQueue, itemType, isRemoveBG, fileListIn)
+            [], proc_index, dataset_split, dataset_mix, db, seq, camID, numThreads, dsQueue, itemType, isRemoveBG, fileListIn, trial)
         proc = Process(target=shardProc, args=args)
         # proc.daemon = True
 

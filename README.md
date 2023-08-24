@@ -10,7 +10,7 @@ TBD
 ```
     - Ubuntu 22.04, RTX3090, CUDA 11.8
     - python 3.9.16, torch 2.0.0
-    - mediapipe, chumpy, cython, matplotlib, numpy, opencv-python, pillow, scikit-image, scipy, tqdm
+    - mediapipe, chumpy, cython, matplotlib, numpy, opencv-python, pillow, scikit-image, scipy, tqdm, tqdm-multiprocess
 ```
 
 

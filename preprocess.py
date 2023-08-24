@@ -35,17 +35,17 @@ from utils.lossUtils import *
 import csv
 import datetime as dt
 
+# multiprocessing
+from tqdm_multiprocess import TqdmMultiProcessPool
+
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-# flags.DEFINE_string('db', '230822/230822_S01_obj_01_grasp_13', 'target db Name')   ## name ,default, help
-# flags.DEFINE_string('cam_db', '230822_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_string('db', '230612', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230612_cam', 'target cam db Name')   ## name ,default, help
-# flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
+flags.DEFINE_string('db', '230823', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230823_cam', 'target cam db Name')   ## name ,default, help
+
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
-# camIDset = ['sub2', 'sub3']
 FLAGS(sys.argv)
 
 ### Config ###
@@ -78,16 +78,17 @@ flag_preprocess = True
 flag_segmentation = True
 
 class loadDataset():
-    def __init__(self, db, seq):
+    def __init__(self, db, seq, trial):
         self.seq = seq
+        self.trial = trial
 
-        self.dbDir = os.path.join(baseDir, db, seq)
-        self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
+        self.dbDir = os.path.join(baseDir, db, seq, trial)
+        # self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
 
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
-        self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
-        self.depthBgDir = os.path.join(self.bgDir, 'depth')
+        # self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
+        # self.depthBgDir = os.path.join(self.bgDir, 'depth')
 
         if not os.path.exists(os.path.join(self.dbDir, 'rgb_crop')):
             os.mkdir(os.path.join(self.dbDir, 'rgb_crop'))
@@ -108,19 +109,19 @@ class loadDataset():
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'))
-        
-        if not os.path.exists(os.path.join(self.dbDir, 'masked_rgb')):
-            os.mkdir(os.path.join(self.dbDir, 'masked_rgb'))
-            for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
-                os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
 
         if not os.path.exists(os.path.join(self.dbDir, 'annotation')):
             os.mkdir(os.path.join(self.dbDir, 'annotation'))
         
-        if not os.path.exists(os.path.join(self.dbDir, 'visualize')):
-            os.mkdir(os.path.join(self.dbDir, 'visualize'))
-        self.debug_vis = os.path.join(self.dbDir, 'visualize')
+        # if not os.path.exists(os.path.join(self.dbDir, 'masked_rgb')):
+        #     os.mkdir(os.path.join(self.dbDir, 'masked_rgb'))
+        #     for camID in camIDset:
+        #         os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
+        #         os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
+
+        # if not os.path.exists(os.path.join(self.dbDir, 'visualize')):
+        #     os.mkdir(os.path.join(self.dbDir, 'visualize'))
+        # self.debug_vis = os.path.join(self.dbDir, 'visualize')
             
         self.rgbCropDir = None
         self.depthCropDir = None
@@ -167,7 +168,8 @@ class loadDataset():
     def __len__(self):
         return len(os.listdir(os.path.join(self.rgbDir, 'mas')))
 
-    def init_cam(self, camID, threshold=0.3):
+    def init_cam(self, camID):
+        self.camID = camID
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
         self.depthCropDir = os.path.join(self.dbDir, 'depth_crop', camID)
         self.metaDir = os.path.join(self.dbDir, 'meta', camID)
@@ -180,7 +182,6 @@ class loadDataset():
         self.croppedBgDir = os.path.join(self.dbDir, 'masked_rgb', camID, 'bg')
         
         self.debugDir = os.path.join(self.dbDir, 'debug')
-        self.mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=threshold) 
         self.K = self.intrinsics[camID]
         self.dist = self.distCoeffs[camID]
 
@@ -236,10 +237,11 @@ class loadDataset():
         info['object']['name'] = 
         self.info = info
 
-    def getItem(self, idx, camID='mas'):
+    def getItem(self, idx):
         # camID : mas, sub1, sub2, sub3
-        rgbName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.jpg'
-        depthName = str(camID) + '/' + str(camID) + '_' + str(idx) + '.png'
+        rgbName = str(self.camID) + '/' + str(self.camID) + '_' + str(idx) + '.jpg'
+        depthName = str(self.camID) + '/' + str(self.camID) + '_' + str(idx) + '.png'
+
         rgbPath = os.path.join(self.rgbDir, rgbName)
         depthPath = os.path.join(self.depthDir, depthName)
 
@@ -259,8 +261,8 @@ class loadDataset():
 
         return (rgb, depth)
     
-    def getBg(self, camID='mas'):
-        bgName = str(camID) + '_1' + '.png'
+    def getBg(self):
+        bgName = str(self.camID) + '_1' + '.png'
         rgbBgPath = os.path.join(self.rgbBgDir, bgName)
         depthBgPath = os.path.join(self.depthBgDir, bgName)
 
@@ -272,7 +274,7 @@ class loadDataset():
 
         return (rgbBg, depthBg)
 
-    def undistort(self, images, camID):
+    def undistort(self, images):
         rgb, depth = images
         image_cols, image_rows = rgb.shape[:2]
         self.new_camera, _ = cv2.getOptimalNewCameraMatrix(self.K, self.dist, (image_rows, image_cols), 1, (image_rows, image_cols))
@@ -281,20 +283,20 @@ class loadDataset():
 
         # print(self.new_camera)
         # exit(0)
-        if self.prev_cam_check != camID and self.flag_save:
-            self.prev_cam_check = camID
+        if self.prev_cam_check != self.camID and self.flag_save:
+            self.prev_cam_check = self.camID
 
             with open(self.intrinsic_undistort, "a") as f:
                 intrinsic_undistort = str(np.copy(self.new_camera))
                 f.write(intrinsic_undistort)
                 f.write("\n")
 
-            if camID == camIDset[-1]:
+            if self.camID == camIDset[-1]:
                 self.flag_save = False
 
         return (rgb, depth)
     
-    def procImg(self, images):
+    def procImg(self, images, mp_hand):
         rgb, depth = images
         image_rows, image_cols, _ = rgb.shape
         kps = np.empty((21, 3), dtype=np.float32)
@@ -303,7 +305,7 @@ class loadDataset():
 
         # 반복해서 검출 시도
         for _ in range(2):
-            results = self.mp_hand.process(cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
+            results = mp_hand.process(cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
             if results.multi_hand_landmarks and len(results.multi_hand_landmarks[0].landmark) == 21:
                 hand_landmark = results.multi_hand_landmarks[0]
                 idx_to_coordinates = {}
@@ -327,7 +329,7 @@ class loadDataset():
                     np.isnan(kps)):
                 bbox = self.prev_bbox
                 rgb_crop = rgb[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-                results = self.mp_hand.process(cv2.cvtColor(rgb_crop, cv2.COLOR_BGR2RGB))
+                results = mp_hand.process(cv2.cvtColor(rgb_crop, cv2.COLOR_BGR2RGB))
                 if results.multi_hand_landmarks:
                     hand_landmarks = results.multi_hand_landmarks[0]
                     idx_to_coordinates = {}
@@ -424,7 +426,7 @@ class loadDataset():
         # return mask[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])], com[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
         return mask, com
     
-    def segmenation(self, camID, idx, procImgSet, kps):
+    def segmenation(self, idx, procImgSet, kps):
         rgb, _ = procImgSet
 
         # rgb, _, matting, mattedRgb = procImgSet
@@ -441,28 +443,60 @@ class loadDataset():
         mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
         mask = np.where((mask==2)|(mask==0),0,1).astype('uint8')
 
-        imgName = str(camID) + '_' + format(idx, '04') + '.jpg'
+        imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.segResDir, imgName), mask * 255)
         cv2.imwrite(os.path.join(self.segVisDir, imgName), seg_image*mask[:,:,np.newaxis])
 
-    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, camID='mas'):
+    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts):
 
-        rgbName = str(camID) + '_' + format(idx, '04') + '.jpg'
-        depthName = str(camID) + '_' + format(idx, '04') + '.png'
+        rgbName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
+        depthName = str(self.camID) + '_' + format(idx, '04') + '.png'
         cv2.imwrite(os.path.join(self.rgbCropDir, rgbName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, depthName), procImgSet[1])
 
-        vis = paint_kpts(None, procImgSet[0], processed_kpts)
-        imgName = str(camID) + '_' + format(idx, '04') + '.jpg'
-        cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+        # vis = paint_kpts(None, procImgSet[0], processed_kpts)
+        # imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
+        # cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
 
-        metaName = str(camID) + '_' + format(idx, '04') + '.pkl'
+        metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
         jsonPath = os.path.join(self.metaDir, metaName)
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
+
+def preprocess_single_cam(db, tqdm_func, global_tqdm):
+    with tqdm_func(total=len(db)) as progress:
+        progress.set_description(f"{db.seq} - {db.trial} [{db.camID}]")
+        mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.3)
+        for idx in range(len(db)):
+
+            images = db.getItem(idx)
+            images = db.undistort(images)
+            output = db.procImg(images, mp_hand)
+            if output[0] is None:
+                continue
+            else:
+                bb, img2bb, bb2img, procImgSet, kps = output
+            procKps = db.translateKpts(np.copy(kps), img2bb)
+            # matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
+            # procImgSet.append(matting)
+            # procImgSet.append(mattedRgb)
+            db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
+            if flag_segmentation:
+                db.segmenation(idx, procImgSet, procKps)
+            
+            progress.update()
+            global_tqdm.update()
+
+    return True
+
+def error_callback(result):
+    print("Error!")
+
+def done_callback(result):
+    print("Done. Result: ", result)
 
 ################# depth scale value need to be update #################
 def main(argv):
@@ -476,42 +510,27 @@ def main(argv):
         - consider two-hand situation (currently assume single hand detection)
     '''
 
-    ### Preprocess ###
-    if flag_preprocess:
-        print("---------------start preprocess---------------")
-        imgID = 0
-        for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
-            db = loadDataset(FLAGS.db, seqName)
-            # db includes data for [mas, sub1, sub2, sub3]
+    tasks = []
+    process_count = 8
+    total_count = 0
+
+    for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        seqDir = os.path.join(rootDir, seqName)
+        print("---------------start preprocess seq : %s ---------------" % (seqName))
+        for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
             for camID in camIDset:
+                db = loadDataset(FLAGS.db, seqName, trialName)
                 db.init_cam(camID)
-                # bgs = db.getBg(camID)
-                # bgs = db.undistort(bgs, camID)
-                a = len(db)
+                total_count += len(db)
+                tasks.append((preprocess_single_cam, (db,)))
 
-                pbar = tqdm.tqdm(range(len(db)))
-                for idx in pbar:
-                    if camID == 'mas':
-                        db.initInfo(idx, camID)
-                        db.info['images']['id'] = imgID
-                        imgID += 1
-                    images = db.getItem(idx, camID=camID)
-                    images = db.undistort(images, camID)
+        pool = TqdmMultiProcessPool(process_count)
+        with tqdm.tqdm(total=total_count) as global_tqdm:
+            # global_tqdm.set_description("total")
+            pool.map(global_tqdm, tasks, error_callback, done_callback)
 
-                    output = db.procImg(images)
-                    if output[0] is None:
-                        continue
-                    else:
-                        bb, img2bb, bb2img, procImgSet, kps = output
-                    procKps = db.translateKpts(np.copy(kps), img2bb)
-                    # matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
-                    # procImgSet.append(matting)
-                    # procImgSet.append(mattedRgb)
-                    db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps, camID=camID)
-                    if flag_segmentation:
-                        db.segmenation(camID, idx, procImgSet, procKps)
-                    pbar.set_description("(%s in %s) : (cam %s, idx %s) in %s" % (seqIdx, lenDBTotal, camID, idx, seqName))
-        print("---------------end preprocess---------------")
+    print("---------------end preprocess seq : %s ---------------" % (seqName))
+    print(time.ctime())
 
 if __name__ == '__main__':
     app.run(main)
