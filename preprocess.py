@@ -454,7 +454,7 @@ def main(argv):
 
         pool = TqdmMultiProcessPool(process_count)
         with tqdm.tqdm(total=total_count) as global_tqdm:
-            global_tqdm.set_description("total")
+            # global_tqdm.set_description("total")
             pool.map(global_tqdm, tasks, error_callback, done_callback)
 
     print("---------------end preprocess seq : %s ---------------" % (seqName))

@@ -26,12 +26,12 @@ FLAGS = flags.FLAGS
 # flags.DEFINE_string('camID', '0', 'Cam ID') # name ,default, help
 # flags.DEFINE_integer('start', 0, 'Cam ID') # name ,default, help
 # flags.DEFINE_integer('end', 2300, 'Cam ID') # name ,default, help
-flags.DEFINE_string('db', '230822/230822_S01_obj_01_grasp_13', 'target db Name') # name ,default, help
+flags.DEFINE_string('db', '230823', 'target db Name') # name ,default, help
 # flags.DEFINE_string('seq', 'bowl_18_00', 'Sequence Name')
 # flags.DEFINE_string('camID', 'mas', 'target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
-dataset_mix = infUti.datasetMix.OXR_MULTICAMERA
+dataset_mix = infUti.datasetMix.NIA_MULTICAMERA
 w = 640
 h = 480
 numConsThreads = 1
@@ -53,14 +53,15 @@ def postProcess(dummy, consQueue, numImgs, numConsThreads):
 
             predsDict[common.SEMANTIC] = predsDict[common.SEMANTIC][0]
 
-            assert len(ds.fileName.split('/')) == 3, 'Dont know this filename format'
+            assert len(ds.fileName.split('/')) == 4, 'Dont know this filename format'
 
             seq = ds.fileName.split('/')[0]
-            camInd = ds.fileName.split('/')[1]
-            id = ds.fileName.split('/')[2]
+            trial = ds.fileName.split('/')[1]
+            camInd = ds.fileName.split('/')[2]
+            id = ds.fileName.split('/')[3]
 
-            finalSaveDir =  os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', str(camInd), 'visualization')
-            finalRawSaveDir = os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', str(camInd), 'raw_seg_results')
+            finalSaveDir =  os.path.join(baseDir, FLAGS.db, seq, trial, 'segmentation_deep', str(camInd), 'visualization')
+            finalRawSaveDir = os.path.join(baseDir, FLAGS.db, seq, trial, 'segmentation_deep', str(camInd), 'raw_seg_results')
 
 
             labelFullImg = np.zeros_like(ds.imgRaw)[:,:,0]
@@ -84,7 +85,7 @@ def postProcess(dummy, consQueue, numImgs, numConsThreads):
             return
 
 
-def runNetInLoop(fileListIn, numImgs, camID, seq):
+def runNetInLoop(fileListIn, numImgs, camID, seq, trial=None):
     myG = tf.Graph()
 
     with myG.as_default():
@@ -101,7 +102,7 @@ def runNetInLoop(fileListIn, numImgs, camID, seq):
 
     sess, g, predictions, dataPreProcDict = getNetSess(data, h, w, myG)
 
-    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_mix, splitType.TEST, FLAGS.db, seq, camID, numThreads=5, isRemoveBG=False, fileListIn=fileListIn)
+    dsQueue, dsProcs = infUti.startInputQueueRunners(dataset_mix, splitType.TEST, FLAGS.db, seq, camID, numThreads=5, isRemoveBG=False, fileListIn=fileListIn, trial=trial)
 
     # start consumer threads
     consQueue = mlp.Queue(maxsize=100)
@@ -152,28 +153,30 @@ def runNetInLoop(fileListIn, numImgs, camID, seq):
 def main(argv):
 
     rootDir = os.path.join(baseDir, FLAGS.db)
-    total_seq = len(os.listdir(rootDir))
     for seqIdx, seq in enumerate(sorted(os.listdir(rootDir))):
-        
-        d = os.path.join(rootDir, seq)
-        if os.path.isdir(d):            
-            print("(%s in %s) : %s" % (seqIdx, total_seq, seq))
-            
-            if not os.path.exists(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep')):
-                os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep'))
+
+        seqDir = os.path.join(rootDir, seq)
+        total_seq = len(os.listdir(seqDir))
+        for trialIdx, trial in enumerate(sorted(os.listdir(seqDir))):
+            d = os.path.join(seqDir, trial)
+            if os.path.isdir(d):
+                print("(%s in %s) : %s" % (trialIdx, total_seq, trial))
+
+                if not os.path.exists(os.path.join(baseDir, FLAGS.db, seq, trial, 'segmentation_deep')):
+                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, trial,'segmentation_deep'))
+                    for camID in camIDset:
+                        os.mkdir(os.path.join(baseDir, FLAGS.db, seq, trial,'segmentation_deep', camID))
+                        os.mkdir(os.path.join(baseDir, FLAGS.db, seq, trial,'segmentation_deep', camID, 'visualization'))
+                        os.mkdir(os.path.join(baseDir, FLAGS.db, seq, trial,'segmentation_deep', camID, 'raw_seg_results'))
+
                 for camID in camIDset:
-                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', camID))
-                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', camID, 'visualization'))
-                    os.mkdir(os.path.join(baseDir, FLAGS.db, seq, 'segmentation_deep', camID, 'raw_seg_results'))
-            
-            for camID in camIDset:
-                fileListIn = os.listdir(join(baseDir, FLAGS.db, seq, 'rgb_crop', camID))
-                fileListIn = [join(seq, camID, f[:-4]) for f in fileListIn if 'png' in f]
-                fileListIn = sorted(fileListIn)
+                    fileListIn = os.listdir(join(baseDir, FLAGS.db, seq, trial,'rgb_crop', camID))
+                    fileListIn = [join(seq, trial, camID, f[:-4]) for f in fileListIn if 'jpg' in f]
+                    fileListIn = sorted(fileListIn)
 
-                numImgs = len(fileListIn)
+                    numImgs = len(fileListIn)
 
-                runNetInLoop(fileListIn, numImgs, camID, seq)
+                    runNetInLoop(fileListIn, numImgs, camID, seq, trial)
 
 if __name__ == '__main__':
     app.run(main)
