@@ -130,12 +130,12 @@ class loadDataset():
         self.temp_bbox["sub3"] = [650, 200, self.bbox_width, self.bbox_height]
         self.prev_bbox = None
         self.wrist_px = None
-        self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "230612_cameraInfo.txt"))
+        self.intrinsics = LoadCameraMatrix(os.path.join(camResultDir, "cameraInfo.txt"))
         self.distCoeffs = {}
-        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_intrinsic.json"))
-        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_intrinsic.json"))
-        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_intrinsic.json"))
-        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_intrinsic.json"))
+        self.distCoeffs["mas"] = LoadDistortionParam(os.path.join(camResultDir, "mas_camInfo.json"))
+        self.distCoeffs["sub1"] = LoadDistortionParam(os.path.join(camResultDir, "sub1_camInfo.json"))
+        self.distCoeffs["sub2"] = LoadDistortionParam(os.path.join(camResultDir, "sub2_camInfo.json"))
+        self.distCoeffs["sub3"] = LoadDistortionParam(os.path.join(camResultDir, "sub3_camInfo.json"))
 
         self.intrinsic_undistort = os.path.join(camResultDir, "cameraInfo_undistort.txt")
         self.prev_cam_check = None
@@ -150,7 +150,7 @@ class loadDataset():
         self.prev_idx_to_coord = None
 
     def __len__(self):
-        return len(os.listdir(os.path.join(self.rgbDir)))
+        return len(os.listdir(os.path.join(self.rgbDir, 'mas')))
 
     def init_cam(self, camID, threshold=0.3):
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
@@ -415,7 +415,9 @@ def main(argv):
                 db.init_cam(camID)
                 # bgs = db.getBg(camID)
                 # bgs = db.undistort(bgs, camID)
-                pbar = tqdm.tqdm(range(int(len(db) / 4)))
+                a = len(db)
+
+                pbar = tqdm.tqdm(range(len(db)))
                 for idx in pbar:
                     images = db.getItem(idx, camID=camID)
                     images = db.undistort(images, camID)

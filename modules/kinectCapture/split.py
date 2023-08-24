@@ -47,7 +47,7 @@ def main():
         start_idx = split_list[i]
         end_idx   = split_list[i+1]
         
-        sub_name = 'trial_' + str(i)
+        sub_name = 'trial_' + str(i+1)
         
         os.makedirs(os.path.join(input_folder, sub_name), exist_ok=True)
         os.makedirs(os.path.join(input_folder, sub_name, 'rgb'), exist_ok=True)

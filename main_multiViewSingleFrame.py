@@ -43,6 +43,9 @@ def main(argv):
         print("")
 
 
+    imgId = 0
+
+
     ## Load data of each camera, save pkl file for second run.
     print("loading data... %s %s " % (FLAGS.db, FLAGS.type))
     mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.type, 'mas')
