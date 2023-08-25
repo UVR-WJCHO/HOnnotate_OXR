@@ -96,7 +96,10 @@ class DataLoader:
                 pickle.dump(self.sample_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     def get_sample(self, index):
-        return self.sample_dict[index]
+        if len(self.sample_dict) <= index:
+            return None
+        else:
+            return self.sample_dict[index]
 
     def load_sample(self, index):
         sample = {}

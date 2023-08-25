@@ -132,8 +132,6 @@ def main(argv):
         cfg_lr_init = CFG_LR_INIT
 
         for frame in range(len(mas_dataloader)):
-            if trialIdx == 0 and frame < 25:
-                continue
             detected_cams = []
             for camIdx, camID in enumerate(CFG_CAMID_SET):
                 if dataloader_set[camIdx][frame] is not None:
@@ -156,7 +154,8 @@ def main(argv):
             ## Initialize optimizer
             # TODO : skipped shape lr in model_params. check lr ratio with above definition
             if not CFG_WITH_OBJ:
-                optimizer = torch.optim.Adam(model.parameters(), lr=cfg_lr_init)
+                params_hand = set_lr_forHand(model, cfg_lr_init)
+                optimizer = torch.optim.Adam(params_hand)
             else:
                 params_hand = set_lr_forHand(model, cfg_lr_init)
                 params_obj = set_lr_forObj(model_obj, CFG_LR_INIT_OBJ)
@@ -243,8 +242,7 @@ def main(argv):
             ### save annotation per frame as json format
             save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, CFG_MANO_SIDE)
 
-            print("end frame")
-            cv2.waitKey(0)
+            print("end %s - frame %s " % (trialName, frame))
 
 
 if __name__ == "__main__":

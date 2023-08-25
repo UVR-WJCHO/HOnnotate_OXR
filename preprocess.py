@@ -111,8 +111,9 @@ class loadDataset():
         ### copy and paste object pose tsv ###
         self.dbDir_obj = os.path.join(baseDir, FLAGS.obj_db, 'IR cam.TSV')
         obj_tsv_original = os.path.join(self.dbDir_obj, seq + '_trial_0' + str(self.trial_num) + '_6D.tsv')
-        obj_tsv_result = os.path.join(self.dbDir_result, seq + '_trial_0' + str(self.trial_num) + '_6D.tsv')
-        shutil.copyfile(obj_tsv_original, obj_tsv_result)
+        if os.path.exists(obj_tsv_original):
+            obj_tsv_result = os.path.join(self.dbDir_result, seq + '_trial_0' + str(self.trial_num) + '_6D.tsv')
+            shutil.copyfile(obj_tsv_original, obj_tsv_result)
 
         self.dbDir = os.path.join(baseDir, db, seq, trial)
         # self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
@@ -245,7 +246,7 @@ class loadDataset():
                 csv_dict[row[0]] = row[1]
         #====================================================
         #Sequence 내 공동정보 저장
-        with open(os.path.join(os.getcwd(), 'info_template.json')) as r:
+        with open(os.path.join(os.getcwd(), 'annotation_template.json')) as r:
             info = json.load(r)
         #info keys 'info', 'actor', 'kinect_camera', 'infrared_camera', 'images', 'object', 'calibration', 'annotations', 'Mesh'
         # 기록해 놓은 actor 정보 받아오기
@@ -527,21 +528,19 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
             images = db.getItem(idx, save_idx)
             images = db.undistort(images)
             output = db.procImg(images, mp_hand)
-            if output[0] is None:
-                continue
-            else:
+
+            if not output[0] is None:
                 bb, img2bb, bb2img, procImgSet, kps = output
-            procKps = db.translateKpts(np.copy(kps), img2bb)
-            # matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
-            # procImgSet.append(matting)
-            # procImgSet.append(mattedRgb)
-            db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
-            if flag_segmentation:
-                db.segmenation(save_idx, procImgSet, procKps)
-            
+                procKps = db.translateKpts(np.copy(kps), img2bb)
+                # matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
+                # procImgSet.append(matting)
+                # procImgSet.append(mattedRgb)
+                db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
+                if flag_segmentation:
+                    db.segmenation(save_idx, procImgSet, procKps)
+
             progress.update()
             global_tqdm.update()
-
             save_idx += 1
 
     return True
@@ -550,7 +549,7 @@ def error_callback(result):
     print("Error!")
 
 def done_callback(result):
-    # print("Done. Result: ", result)
+    print("Done. Result: ", result)
     return
 
 ################# depth scale value need to be update #################
