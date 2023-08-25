@@ -59,6 +59,7 @@ Background matting을 위해 pretrained model 다운
 """
 camResultDir = os.path.join(baseDir, FLAGS.cam_db)
 
+image_cols, image_rows = 1080, 1920
 
 mp_drawing = mp.solutions.drawing_utils
 mp_hands = mp.solutions.hands
@@ -159,14 +160,24 @@ class loadDataset():
             self.distCoeffs = dist_coeffs
             self.extrinsics = extrinsics
 
-        self.intrinsic_undistort = os.path.join(camResultDir, "cameraInfo_undistort.txt")
-        self.prev_cam_check = None
-        if os.path.isfile(self.intrinsic_undistort):
-            self.flag_save = False
-        else:
-            self.flag_save = True
-            with open(self.intrinsic_undistort, "w") as f:
-                print("creating undistorted intrinsic of each cam")
+        self.intrinsic_undistort_path = os.path.join(camResultDir, "cameraInfo_undistort.txt")
+
+        flag_save = False
+        if not os.path.isfile(self.intrinsic_undistort_path):
+            f = open(self.intrinsic_undistort_path, "w")
+            print("creating undistorted intrinsic of each cam")
+            flag_save = True
+
+        self.intrinsic_undistort = {}
+        for cam in CFG_CAMID_SET:
+            new_camera, _ = cv2.getOptimalNewCameraMatrix(self.intrinsics[cam], self.distCoeffs[cam], (image_rows, image_cols), 1, (image_rows, image_cols))
+            self.intrinsic_undistort[cam] = new_camera
+            if flag_save:
+                new_camera = str(np.copy(new_camera))
+                f.write(new_camera)
+                f.write("\n")
+        
+        if flag_save: f.close()
 
         self.prev_kps = None
         self.prev_idx_to_coord = None
@@ -190,6 +201,7 @@ class loadDataset():
         self.debugDir = os.path.join(self.dbDir, 'debug')
         self.K = self.intrinsics[camID]
         self.dist = self.distCoeffs[camID]
+        self.new_camera = self.intrinsic_undistort[camID]
 
         self.prev_bbox = self.temp_bbox[camID]
 
@@ -297,23 +309,8 @@ class loadDataset():
 
     def undistort(self, images):
         rgb, depth = images
-        image_cols, image_rows = rgb.shape[:2]
-        self.new_camera, _ = cv2.getOptimalNewCameraMatrix(self.K, self.dist, (image_rows, image_cols), 1, (image_rows, image_cols))
         rgb = cv2.undistort(rgb, self.K, self.dist, None, self.new_camera)
         depth = cv2.undistort(depth, self.K, self.dist, None, self.new_camera)
-
-        # print(self.new_camera)
-        # exit(0)
-        if self.prev_cam_check != self.camID and self.flag_save:
-            self.prev_cam_check = self.camID
-
-            with open(self.intrinsic_undistort, "a") as f:
-                intrinsic_undistort = str(np.copy(self.new_camera))
-                f.write(intrinsic_undistort)
-                f.write("\n")
-
-            if self.camID == camIDset[-1]:
-                self.flag_save = False
 
         return (rgb, depth)
     
@@ -518,7 +515,8 @@ def error_callback(result):
     print("Error!")
 
 def done_callback(result):
-    print("Done. Result: ", result)
+    # print("Done. Result: ", result)
+    return
 
 ################# depth scale value need to be update #################
 def main(argv):
