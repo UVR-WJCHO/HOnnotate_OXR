@@ -132,7 +132,7 @@ def main(argv):
         cfg_lr_init = CFG_LR_INIT
 
         for frame in range(len(mas_dataloader)):
-            if trialIdx == 0 and frame < 16:
+            if trialIdx == 0 and frame < 25:
                 continue
             detected_cams = []
             for camIdx, camID in enumerate(CFG_CAMID_SET):

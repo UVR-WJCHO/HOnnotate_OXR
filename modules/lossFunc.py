@@ -274,11 +274,11 @@ class MultiViewLossFunc(nn.Module):
             depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
             seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
 
-        blend_gt_name = "blend_gt_" + camID + frame
-        blend_pred_name = "blend_pred_" + camID + frame
-        blend_pred_seg_name = "blend_pred_seg_" + camID + frame
-        blend_depth_name = "blend_depth_" + camID + frame
-        blend_seg_name = "blend_seg_" + camID + frame
+        blend_gt_name = "blend_gt_" + camID + str(frame)
+        blend_pred_name = "blend_pred_" + camID + str(frame)
+        blend_pred_seg_name = "blend_pred_seg_" + camID + str(frame)
+        blend_depth_name = "blend_depth_" + camID + str(frame)
+        blend_seg_name = "blend_seg_" + camID + str(frame)
 
         # try:
         #     cv2.imshow(blend_gt_name, img_blend_gt)
