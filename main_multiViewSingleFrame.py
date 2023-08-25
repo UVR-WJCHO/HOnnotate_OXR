@@ -31,10 +31,10 @@ flags.DEFINE_string('objClass', 'banana', 'target object name')
 FLAGS(sys.argv)
 
 def save_annotation(targetDir, trialName, frame):
-    anno_path = os.join(targetDir, trialName, 'annotation', 'anno_' + str(frame) + '.json')
+    anno_path = os.path.join(targetDir, trialName, 'annotation', f'annot_{frame:04}.json')
     ### load current annotation(include updated meta info.)
     with open(anno_path, 'r') as file:
-        anno = json.load(anno_path)
+        anno = json.load(file)
 
     ### update annotation
     # anno[annotations], anno[Mesh]
@@ -83,8 +83,8 @@ def main(argv):
         loss_func.set_main_cam(main_cam_idx=0)
 
 
-        if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
-            raise ValueError("The number of data is not same between cameras")
+        # if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
+        #     raise ValueError("The number of data is not same between cameras")
 
         ## Initialize hand model
         model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE)
@@ -101,12 +101,12 @@ def main(argv):
         cfg_lr_init = CFG_LR_INIT
 
         for frame in range(len(mas_dataloader)):
-            detected = 0
+            detected_cams = []
             for camIdx, camID in enumerate(CFG_CAMID_SET):
                 if dataloader_set[camIdx][frame] is not None:
-                    detected += 1
+                    detected_cams.append(camIdx)
             
-            if detected < 3:
+            if len(detected_cams) < 3:
                 print('skip frame ', frame)
                 continue
 
@@ -139,13 +139,9 @@ def main(argv):
                     obj_param = model_obj()
 
                 num_skip = 0
-                for camIdx, camID in enumerate(CFG_CAMID_SET):
+                for camIdx in detected_cams:
+                    camID = CFG_CAMID_SET[camIdx]
                     # skip non-detected camera
-                    if dataloader_set[camIdx][frame] is None:
-                        num_skip += 1
-                        print("skip cam ", camID)
-                        continue
-
                     if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
                         num_skip += 1
                         print("skip cam ", camID)
@@ -197,7 +193,8 @@ def main(argv):
 
 
             ### visualization results of frame
-            for camIdx, camID in enumerate(CFG_CAMID_SET):
+            for camIdx in detected_cams:
+                camID = CFG_CAMID_SET[camIdx]
                 hand_param = model()
 
                 if not CFG_WITH_OBJ:
