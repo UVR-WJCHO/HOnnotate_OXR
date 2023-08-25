@@ -67,6 +67,7 @@ def main(argv):
 
         ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
         mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
+        mas_M = np.eye(4)[:3]
         mas_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, mas_M, mas_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
         sub1_K, _, sub1_D = sub1_dataloader.cam_parameter
         sub1_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, mas_M, sub1_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
