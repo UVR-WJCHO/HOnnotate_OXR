@@ -62,9 +62,10 @@ class DataLoader:
         self.data_type = data_type
         self.data_trial = data_trial
         self.base_path = os.path.join(base_path, data_date, data_type, data_trial)
+        self.base_path_result = os.path.join(base_path, data_date + '_result', data_type, data_trial)
 
-        self.rgb_raw_path = os.path.join(self.base_path, 'rgb')
-        self.depth_raw_path = os.path.join(self.base_path, 'depth')
+        self.rgb_raw_path = os.path.join(self.base_path_result, 'rgb')
+        self.depth_raw_path = os.path.join(self.base_path_result, 'depth')
         self.rgb_path = os.path.join(self.base_path, 'rgb_crop')
         self.depth_path = os.path.join(self.base_path, 'depth_crop')
         self.seg_path = os.path.join(self.base_path, 'segmentation')
@@ -72,7 +73,7 @@ class DataLoader:
 
 
 
-        self.cam_path = os.path.join(base_path, data_date+"_"+'cam')
+        self.cam_path = os.path.join(base_path, data_date+"_cam")
 
         # #Get data from files
         self.cam_parameter = self.load_cam_parameters()

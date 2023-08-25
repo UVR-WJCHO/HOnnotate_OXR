@@ -5,10 +5,10 @@ from enum import IntEnum
 ## Config
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 
-CFG_LR_INIT = 0.2
+CFG_LR_INIT = 0.4
 CFG_LR_INIT_OBJ = 0.001
 
-CFG_NUM_ITER = 10
+CFG_NUM_ITER = 700
 CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')

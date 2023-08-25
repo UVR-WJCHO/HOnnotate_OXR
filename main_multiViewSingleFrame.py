@@ -25,8 +25,8 @@ import json
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230824', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230824_S01_obj_14_grasp_04', 'target sequence name')
+flags.DEFINE_string('db', '230823', 'target db name')   ## name ,default, help
+flags.DEFINE_string('seq', '230823_S01_obj_09_grasp_05', 'target sequence name')
 flags.DEFINE_string('objClass', 'banana', 'target object name')
 FLAGS(sys.argv)
 
@@ -82,6 +82,8 @@ def main(argv):
         flag_render = True
 
     targetDir = os.path.join(CFG_DATA_DIR, FLAGS.db, FLAGS.seq)
+    targetDir_result = os.path.join(CFG_DATA_DIR, FLAGS.db + '_result', FLAGS.seq)
+
     for trialIdx, trialName in enumerate(sorted(os.listdir(targetDir))):
         ## Load data of each camera, save pkl file for second run.
         print("loading data... %s %s " % (FLAGS.seq, trialName))
@@ -226,16 +228,18 @@ def main(argv):
                 camID = CFG_CAMID_SET[camIdx]
                 hand_param = model()
 
+                save_path = os.path.join(targetDir_result, trialName, 'visualization', camID)
+                os.makedirs(save_path, exist_ok=True)
                 if not CFG_WITH_OBJ:
                     loss_func.visualize(pred=hand_param, pred_obj=None, camIdx=camIdx, frame=frame,
-                                        save_path=CFG_SAVE_PATH, camID=camID, flag_obj=False, flag_crop=True)
+                                        save_path=save_path, camID=camID, flag_obj=False, flag_crop=True)
                 else:
                     obj_param = model_obj()
                     loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                                        save_path=CFG_SAVE_PATH, camID=camID, flag_obj=True, flag_crop=True)
+                                        save_path=save_path, camID=camID, flag_obj=True, flag_crop=True)
 
             ### save annotation per frame as json format
-            save_annotation(targetDir, trialName, frame,  FLAGS.seq, hand_param, CFG_MANO_SIDE)
+            save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, CFG_MANO_SIDE)
 
             print("end frame")
             cv2.waitKey(0)

@@ -42,8 +42,8 @@ from tqdm_multiprocess import TqdmMultiProcessPool
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230824', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230824_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230823', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230823_cam', 'target cam db Name')   ## name ,default, help
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -513,6 +513,8 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
         save_idx = 0
         for idx in range(len(db)):
             if idx % 2 != 0:
+                progress.update()
+                global_tqdm.update()
                 continue
             images = db.getItem(idx, save_idx)
             images = db.undistort(images)
@@ -566,15 +568,15 @@ def main(argv):
             for camID in camIDset:
                 db = loadDataset(FLAGS.db, seqName, trialName)
                 db.init_cam(camID)
-                total_count += len(db) / 2
+                total_count += len(db)
                 tasks.append((preprocess_single_cam, (db,)))
 
         pool = TqdmMultiProcessPool(process_count)
         with tqdm.tqdm(total=total_count) as global_tqdm:
-            # global_tqdm.set_description("total")
+            global_tqdm.set_description(f"{seqName} - total : ")
             pool.map(global_tqdm, tasks, error_callback, done_callback)
 
-    print("---------------end preprocess seq : %s ---------------" % (seqName))
+        print("---------------end preprocess seq : %s ---------------" % (seqName))
     print(time.ctime())
 
 if __name__ == '__main__':
