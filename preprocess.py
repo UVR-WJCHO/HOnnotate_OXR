@@ -38,12 +38,14 @@ from config import *
 
 # multiprocessing
 from tqdm_multiprocess import TqdmMultiProcessPool
+import shutil
 
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230823', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230823_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('obj_db', '230823_obj', 'target cam db Name')   ## name ,default, help
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -91,7 +93,7 @@ class loadDataset():
         self.trial = trial
         self.trial_num = trial.split('_')[1]
 
-        # create separate result dirs
+        ### create separate result dirs ###
         self.dbDir_result = os.path.join(baseDir, db+'_result', seq, trial)
         for camID in camIDset:
             self.rgbDir_result = os.path.join(self.dbDir_result, 'rgb', camID)
@@ -105,6 +107,12 @@ class loadDataset():
         os.makedirs(self.annotDir, exist_ok=True)
         for camID in camIDset:
             os.makedirs(os.path.join(self.annotDir, camID), exist_ok=True)
+
+        ### copy and paste object pose tsv ###
+        self.dbDir_obj = os.path.join(baseDir, FLAGS.obj_db, 'IR cam.TSV')
+        obj_tsv_original = os.path.join(self.dbDir_obj, seq + '_trial_0' + str(self.trial_num) + '_6D.tsv')
+        obj_tsv_result = os.path.join(self.dbDir_result, seq + '_trial_0' + str(self.trial_num) + '_6D.tsv')
+        shutil.copyfile(obj_tsv_original, obj_tsv_result)
 
         self.dbDir = os.path.join(baseDir, db, seq, trial)
         # self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
