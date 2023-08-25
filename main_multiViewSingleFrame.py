@@ -41,7 +41,7 @@ def save_annotation(targetDir, trialName, frame, seq, pred, side):
     anno_base_path = os.path.join(targetDir, trialName, 'annotation')
     anno_path_list = []
     for camID in cam_list:
-        anno_path_list.append(os.path.join(anno_base_path, camID ,f'annot_{frame:04}.json'))
+        anno_path_list.append(os.path.join(anno_base_path, camID ,f'anno_{frame:04}.json'))
 
     for anno_path in anno_path_list:
         anno = None

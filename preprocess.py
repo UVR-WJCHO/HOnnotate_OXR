@@ -83,15 +83,31 @@ class loadDataset():
     def __init__(self, db, seq, trial):
         self.seq = seq # 230612_S01_obj_01_grasp_01
         self.db = db
+        assert len(seq.split('_')) == 6, 'invalid sequence name, ex. 230612_S01_obj_01_grasp_01'
+
         self.subject_id = seq.split('_')[1][1:]
         self.obj_id = seq.split('_')[3]
         self.grasp_id = seq.split('_')[5]
         self.trial = trial
         self.trial_num = trial.split('_')[1]
 
+        # create separate result dirs
+        self.dbDir_result = os.path.join(baseDir, db+'_result', seq, trial)
+        for camID in camIDset:
+            self.rgbDir_result = os.path.join(self.dbDir_result, 'rgb', camID)
+            self.depthDir_result = os.path.join(self.dbDir_result, 'depth', camID)
+            os.makedirs(self.rgbDir_result, exist_ok=True)
+            os.makedirs(self.depthDir_result, exist_ok=True)
+        self.rgbDir_result = os.path.join(self.dbDir_result, 'rgb')
+        self.depthDir_result = os.path.join(self.dbDir_result, 'depth')
+
+        self.annotDir = os.path.join(self.dbDir_result, 'annotation')
+        os.makedirs(self.annotDir, exist_ok=True)
+        for camID in camIDset:
+            os.makedirs(os.path.join(self.annotDir, camID), exist_ok=True)
+
         self.dbDir = os.path.join(baseDir, db, seq, trial)
         # self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
-
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
         # self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
@@ -116,11 +132,6 @@ class loadDataset():
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'))
                 os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'))
-
-        if not os.path.exists(os.path.join(self.dbDir, 'annotation')):
-            os.mkdir(os.path.join(self.dbDir, 'annotation'))
-            for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'annotation', camID))
         
         # if not os.path.exists(os.path.join(self.dbDir, 'masked_rgb')):
         #     os.mkdir(os.path.join(self.dbDir, 'masked_rgb'))
@@ -190,7 +201,10 @@ class loadDataset():
 
     def init_cam(self, camID):
         #### calib err - 230825 ###
-        print("calib err:", self.calib_err)
+        #print("calib err:", self.calib_err)
+
+
+
         self.camID = camID
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
         self.depthCropDir = os.path.join(self.dbDir, 'depth_crop', camID)
@@ -211,7 +225,7 @@ class loadDataset():
         self.prev_bbox = self.temp_bbox[camID]
 
     def init_info(self):
-        self.annotDir = os.path.join(self.dbDir, 'annotation', self.camID)
+        self.annotCamDir = os.path.join(self.annotDir, self.camID)
         #====================================================
         # Dummy data 임시
         input = "./dummy_annotation_meta.csv"
@@ -264,7 +278,7 @@ class loadDataset():
         info['object']['pose_data'] = csv_dict['object.pose_data']
         self.info = info
 
-    def getItem(self, idx):
+    def getItem(self, idx, save_idx):
         # camID : mas, sub1, sub2, sub3
         rgbName = str(self.camID) + '/' + str(self.camID) + '_' + str(idx) + '.jpg'
         depthName = str(self.camID) + '/' + str(self.camID) + '_' + str(idx) + '.png'
@@ -277,13 +291,24 @@ class loadDataset():
 
         rgb = cv2.imread(rgbPath)
         depth = cv2.imread(depthPath, cv2.IMREAD_ANYDEPTH)
-        self.info['images']['file_name'] = [os.path.join("rgb", str(self.camID) + '/' + str(self.camID) + '_' + str(idx) + '.jpg'), os.path.join("depth", str(self.camID) + '/' + str(self.camID) + '_' + str(idx) + '.png')]
-        self.info['images']['id'] = str(self.db) + str(self.subject_id) + str(self.obj_id) + str(self.grasp_id) + str(self.trial_num) + str(camIDset.index(self.camID)) + str(idx)
+
+        ### move sampled img
+        rgbName_sampled = str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.jpg'
+        depthName_sampled = str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.png'
+        rgbPath_sampled = os.path.join(self.rgbDir_result, rgbName_sampled)
+        depthPath_sampled = os.path.join(self.depthDir_result, depthName_sampled)
+
+        cv2.imwrite(rgbPath_sampled, rgb)
+        cv2.imwrite(depthPath_sampled, depth)
+
+
+        self.info['images']['file_name'] = [os.path.join("rgb", str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.jpg'), os.path.join("depth", str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.png')]
+        self.info['images']['id'] = str(self.db+'_result') + str(self.subject_id) + str(self.obj_id) + str(self.grasp_id) + str(self.trial_num) + str(camIDset.index(self.camID)) + str(idx)
         self.info['images']['width'] = rgb.shape[1]
         self.info['images']['height'] = rgb.shape[0]
         self.info['images']['date_created'] = dt.datetime.fromtimestamp(os.path.getctime(rgbPath)).strftime('%Y-%m-%d %H:%M')
-        self.info['images']['frame_num'] = idx
-        with open(os.path.join(self.annotDir, "anno_%04d.json"%idx), "w") as w:
+        self.info['images']['frame_num'] = save_idx
+        with open(os.path.join(self.annotCamDir, "anno_%04d.json"%save_idx), "w") as w:
             json.dump(self.info, w, ensure_ascii=False)
 
         return (rgb, depth)
@@ -484,8 +509,12 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
         progress.set_description(f"{db.seq} - {db.trial} [{db.camID}]")
         mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.3)
         db.init_info()
+
+        save_idx = 0
         for idx in range(len(db)):
-            images = db.getItem(idx)
+            if idx % 2 != 0:
+                continue
+            images = db.getItem(idx, save_idx)
             images = db.undistort(images)
             output = db.procImg(images, mp_hand)
             if output[0] is None:
@@ -496,12 +525,14 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
             # matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
             # procImgSet.append(matting)
             # procImgSet.append(mattedRgb)
-            db.postProcess(idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
+            db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
             if flag_segmentation:
-                db.segmenation(idx, procImgSet, procKps)
+                db.segmenation(save_idx, procImgSet, procKps)
             
             progress.update()
             global_tqdm.update()
+
+            save_idx += 1
 
     return True
 
@@ -535,7 +566,7 @@ def main(argv):
             for camID in camIDset:
                 db = loadDataset(FLAGS.db, seqName, trialName)
                 db.init_cam(camID)
-                total_count += len(db)
+                total_count += len(db) / 2
                 tasks.append((preprocess_single_cam, (db,)))
 
         pool = TqdmMultiProcessPool(process_count)
