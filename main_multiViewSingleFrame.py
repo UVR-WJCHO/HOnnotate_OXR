@@ -101,6 +101,15 @@ def main(argv):
         cfg_lr_init = CFG_LR_INIT
 
         for frame in range(len(mas_dataloader)):
+            detected = 0
+            for camIdx, camID in enumerate(CFG_CAMID_SET):
+                if dataloader_set[camIdx][frame] is not None:
+                    detected += 1
+            
+            if detected < 3:
+                print('skip frame ', frame)
+                continue
+
             best_kps_loss = torch.inf
             ealry_stopping_patience = 0
 
@@ -132,6 +141,11 @@ def main(argv):
                 num_skip = 0
                 for camIdx, camID in enumerate(CFG_CAMID_SET):
                     # skip non-detected camera
+                    if dataloader_set[camIdx][frame] is None:
+                        num_skip += 1
+                        print("skip cam ", camID)
+                        continue
+
                     if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
                         num_skip += 1
                         print("skip cam ", camID)

@@ -103,6 +103,9 @@ class DataLoader:
         # get meta data
         meta = self.get_meta(index)
 
+        if meta is None:
+            return None
+
         bb = np.asarray(meta['bb']).astype(int)
         sample['bb'] = np.copy(bb)
         sample['img2bb'] = meta['img2bb']
@@ -157,8 +160,10 @@ class DataLoader:
         assert os.path.exists(rgb_path)
         assert os.path.exists(depth_path)
 
-        rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
-        depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
+        # rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
+        # depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
+        rgb_raw = None
+        depth_raw = None
 
         rgb = np.asarray(cv2.imread(rgb_path))
         depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
@@ -170,13 +175,20 @@ class DataLoader:
             seg = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
         seg = np.where(seg>1, 1, 0)
 
-        seg_obj = np.asarray(cv2.imread(seg_obj_path, cv2.IMREAD_UNCHANGED))
-        seg_obj[seg_obj == 2] = 0  # bg:0, obj:1, hand:2
+        if os.path.exists(seg_obj_path):
+            seg_obj = np.asarray(cv2.imread(seg_obj_path, cv2.IMREAD_UNCHANGED))
+            seg_obj[seg_obj == 2] = 0  # bg:0, obj:1, hand:2
+        else:
+            seg_obj = None
 
         return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
     
     def get_meta(self, idx):
         meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)
+
+        if not os.path.exists(meta_path):
+            return None
+        
         with open(meta_path, 'rb') as f:
             meta = pickle.load(f)
 
