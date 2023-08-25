@@ -10,7 +10,7 @@ from utils.modelUtils import *
 
 
 class HandModel(nn.Module):
-    def __init__(self, mano_path, device, batch_size, initial_rot=torch.zeros(3), initial_pose=torch.zeros(45), initial_shape=torch.zeros(1, 10)):
+    def __init__(self, mano_path, device, batch_size, initial_rot=torch.zeros(3), initial_pose=torch.zeros(45), initial_shape=torch.zeros(1, 10), side="right"):
         super(HandModel, self).__init__()
 
         self.device = device
@@ -18,7 +18,7 @@ class HandModel(nn.Module):
         self.wrist_idx = 0
         self.mcp_idx = 9
         self.key_bone_len = 10.0
-        self.mano_layer = ManoLayer(side='right', mano_root=mano_path, use_pca=False, flat_hand_mean=False,
+        self.mano_layer = ManoLayer(side=side, mano_root=mano_path, use_pca=False, flat_hand_mean=False,
                                     center_idx=0, ncomps=45, root_rot_mode="axisang", joint_rot_mode="axisang").to(device)
 
         # initial pose parameters

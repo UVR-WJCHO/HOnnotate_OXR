@@ -133,7 +133,7 @@ class DataLoader:
         return rgb_raw, depth_raw, seg, seg_obj
 
     def load_cam_parameters(self):
-        _, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
+        _, dist_coeffs, extrinsics, _ = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
         intrinsics = LoadCameraMatrix_undistort(
             os.path.join(self.cam_path, 'cameraInfo_undistort.txt'))
 

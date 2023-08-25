@@ -73,13 +73,13 @@
               "pose_data" : ["930,62,274"] 
     },
     "calibration": {
-        "sderror": "오차율",
+        "error": "오차율",
         "extrinsic": "키넥트 카메라 외부 파라미터",
         "intrinsic": "키넥트 카메라 내부 파라미터"
     },
     "annotations": [
       {
-        "id": "12482733",
+        "id": "Joint 주석 id",
         "image_id": "4290970",
         "class_id": "65",
         "class_name": "grasp",

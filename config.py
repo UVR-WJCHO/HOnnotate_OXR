@@ -8,10 +8,11 @@ CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 CFG_LR_INIT = 0.2
 CFG_LR_INIT_OBJ = 0.001
 
-CFG_NUM_ITER = 500
+CFG_NUM_ITER = 10
 CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
+CFG_MANO_SIDE = 'right'
 
 CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth','depth_obj'] #  'seg',
 CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')

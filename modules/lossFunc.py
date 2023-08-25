@@ -294,4 +294,6 @@ class MultiViewLossFunc(nn.Module):
         cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
         cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
 
+        return pred['joints'], 
+
 

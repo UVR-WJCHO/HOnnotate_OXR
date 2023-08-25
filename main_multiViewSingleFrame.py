@@ -25,26 +25,54 @@ import json
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230822', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230822_S01_obj_01_grasp_13', 'target sequence name')
+flags.DEFINE_string('db', '230824', 'target db name')   ## name ,default, help
+flags.DEFINE_string('seq', '230824_S01_obj_14_grasp_04', 'target sequence name')
 flags.DEFINE_string('objClass', 'banana', 'target object name')
 FLAGS(sys.argv)
 
-def save_annotation(targetDir, trialName, frame):
-    anno_path = os.path.join(targetDir, trialName, 'annotation', f'annot_{frame:04}.json')
-    ### load current annotation(include updated meta info.)
-    with open(anno_path, 'r') as file:
-        anno = json.load(file)
+def save_annotation(targetDir, trialName, frame, seq, pred, side):
+    #seq ='230822_S01_obj_01_grasp_13'
+    db = seq.split('_')[0]
+    subject_id = seq.split('_')[1][1:]
+    obj_id = seq.split('_')[3]
+    grasp_id = seq.split('_')[5]
+    trial_num = trialName.split('_')[1]
+    cam_list = ['mas', 'sub1', 'sub2', 'sub3']
+    anno_base_path = os.path.join(targetDir, trialName, 'annotation')
+    anno_path_list = []
+    for camID in cam_list:
+        anno_path_list.append(os.path.join(anno_base_path, camID ,f'annot_{frame:04}.json'))
 
-    ### update annotation
-    # anno[annotations], anno[Mesh]
-    anno['annotations'][0]['id'] = None
-    anno['Mesh'][0]['id'] = None
+    for anno_path in anno_path_list:
+        anno = None
+        ### load current annotation(include updated meta info.)
+        with open(anno_path, 'r') as file:
+            anno = json.load(file)
+        imgID = anno['images']['id']
+        ### update annotation
+        # anno[annotations], anno[Mesh]
+        anno['annotations'][0]['id'] = str(db) + str(subject_id) + str(obj_id) + str(grasp_id) + str(trial_num) + str(frame)
+        anno['annotations'][0]['image_id'] = imgID
+        anno['annotations'][0]['class_id'] = grasp_id
+        anno['annotations'][0]['class_name'] = GRASPType(int(grasp_id)).name
+        anno['annotations'][0]['type'] = "K"
+        anno['annotations'][0]['data'] = pred['joints'].tolist()
+        anno['Mesh'][0]['id'] = str(db) + str(subject_id) + str(obj_id) + str(grasp_id) + str(trial_num) + str(frame)
+        anno['Mesh'][0]['image_id'] = imgID
+        anno['Mesh'][0]['class_id'] = grasp_id
+        anno['Mesh'][0]['class_name'] = GRASPType(int(grasp_id)).name
+        anno['Mesh'][0]['object_name'] = OBJType(int(obj_id)).name
+        # anno['Mesh'][0]['object_file'] = "['3_apple.obj']" #TODO object file 받기
+        anno['Mesh'][0]['object_mat'] = np.eye(4, 4).tolist()
+        anno['Mesh'][0]['mano_side'] = side
+        anno['Mesh'][0]['mano_trans'] = pred['rot'].tolist()
+        anno['Mesh'][0]['mano_pose'] = pred['pose'].tolist()
+        anno['Mesh'][0]['mano_betas'] = pred['shape'].tolist()
 
 
-    ### save full annotation
-    with open(anno_path, 'w', encoding='utf-8') as file:
-        json.dump(anno, file, indent='\t')
+        ### save full annotation
+        with open(anno_path, 'w', encoding='utf-8') as file:
+            json.dump(anno, file, indent='\t', ensure_ascii=False)
 
 
 
@@ -88,7 +116,7 @@ def main(argv):
         #     raise ValueError("The number of data is not same between cameras")
 
         ## Initialize hand model
-        model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE)
+        model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE, side=CFG_MANO_SIDE)
         model.change_grads(root=True, rot=True, pose=True, shape=True)
 
         if CFG_WITH_OBJ:
@@ -207,7 +235,7 @@ def main(argv):
                                         save_path=CFG_SAVE_PATH, camID=camID, flag_obj=True, flag_crop=True)
 
             ### save annotation per frame as json format
-            save_annotation(targetDir, trialName, frame)
+            save_annotation(targetDir, trialName, frame,  FLAGS.seq, hand_param, CFG_MANO_SIDE)
 
             print("end frame")
             cv2.waitKey(0)
