@@ -77,6 +77,7 @@ def LoadCameraParams(jsonFile):
     intrinsic = camParamsDict['intrinsic']
     distCoeffs = camParamsDict['dist']
     extrinsic = camParamsDict['extrinsic']
+    err = camParamsDict['err']
 
     for key, value in intrinsic.items():
         intrinsic[key] = np.asarray(value)
@@ -85,4 +86,4 @@ def LoadCameraParams(jsonFile):
     for key, value in extrinsic.items():
         extrinsic[key] = np.asarray(value)
 
-    return intrinsic, distCoeffs, extrinsic
+    return intrinsic, distCoeffs, extrinsic, err

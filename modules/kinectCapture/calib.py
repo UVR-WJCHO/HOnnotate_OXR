@@ -109,10 +109,11 @@ class Calibration():
         for idx, camera in enumerate(self.cameras):
             cameraParams[idx] = self.cameraParams[camera].ravel()
 
-        result = BundleAdjustment(self.cameras, self.objPoints, self.imgPointsLeft, self.imgPointsRight, cameraParams, self.intrinsic)
+        result, err = BundleAdjustment(self.cameras, self.objPoints, self.imgPointsLeft, self.imgPointsRight, cameraParams, self.intrinsic)
 
         self.cameraParamsBA = result.x[:self.numCameras * 12].reshape(self.numCameras, 12)
         self.objPointsBA = result.x[self.numCameras * 12:]
+        self.err = err
 
     def Save(self):
         cameraParamsBA = {camera: self.cameraParamsBA[i].tolist() for i, camera in enumerate(self.cameras)}
@@ -120,7 +121,8 @@ class Calibration():
         cameraParams = {
             "intrinsic": {camera: self.intrinsic[camera].tolist() for camera in self.intrinsic},
             "dist": {camera: self.distCoeffs[camera].tolist() for camera in self.distCoeffs},
-            "extrinsic": cameraParamsBA
+            "extrinsic": cameraParamsBA,
+            "err": self.err
         }
 
         with open(os.path.join(self.resultDir, "cameraParams.json"), "w") as fp:

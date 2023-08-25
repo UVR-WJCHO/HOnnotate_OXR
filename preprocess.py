@@ -42,8 +42,8 @@ from tqdm_multiprocess import TqdmMultiProcessPool
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230824', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230824_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230823', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230823_cam', 'target cam db Name')   ## name ,default, help
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -155,10 +155,11 @@ class loadDataset():
             with open(os.path.join(camResultDir, "cameraParamsBA.json")) as json_file:
                 self.extrinsics = json.load(json_file)
         else: # Data 2308~
-            intrinsics, dist_coeffs, extrinsics = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
+            intrinsics, dist_coeffs, extrinsics, err = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
             self.intrinsics = intrinsics
             self.distCoeffs = dist_coeffs
             self.extrinsics = extrinsics
+            self.calib_err = err
 
         self.intrinsic_undistort_path = os.path.join(camResultDir, "cameraInfo_undistort.txt")
 
@@ -186,6 +187,11 @@ class loadDataset():
         return len(os.listdir(os.path.join(self.rgbDir, 'mas')))
 
     def init_cam(self, camID):
+        #### calib err - 230825 ###
+        print("calib err:", self.calib_err)
+
+
+
         self.camID = camID
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
         self.depthCropDir = os.path.join(self.dbDir, 'depth_crop', camID)

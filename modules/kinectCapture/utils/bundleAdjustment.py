@@ -70,9 +70,11 @@ def BundleAdjustment(cameras, objPointsList, imgPointsLeft, imgPointsRight, came
     t1 = time.time()
 
     print("Optimization took {0:.0f} seconds".format(t1 - t0))
+
+
     reprojectionError = np.sqrt(res.fun.mean())
     print(f"reprojection error is {reprojectionError}")
     # plt.plot(np.sqrt(res.fun))
     # plt.show()
 
-    return res
+    return res, reprojectionError
