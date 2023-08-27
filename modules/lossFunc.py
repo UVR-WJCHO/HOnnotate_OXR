@@ -258,19 +258,20 @@ class MultiViewLossFunc(nn.Module):
 
         rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
         rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
-
         rgb_seg = (rgb_input * seg_input[..., None]).astype(np.uint8)
-
-        img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
-        img_blend_pred = cv2.addWeighted(rgb_input, 0.7, rgb_2d_pred, 0.5, 0)
-        img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
-        depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
-        seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
 
         seg_mask = np.copy(seg_mesh)
         seg_mask[seg_mesh>0] = 1
+        rgb_2d_pred *= seg_mask[..., None]
+
+        img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
+        img_blend_pred = cv2.addWeighted(rgb_input, 1.0, rgb_2d_pred, 0.4, 0)
+        img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
+
+        depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
+        seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
         depth_gap *= seg_mask
-        seg_gap = seg_gap * seg_mask * 255
+        seg_gap *= seg_mask * 255
 
         if not flag_crop:
             # resize images to (360, 640)
@@ -300,6 +301,5 @@ class MultiViewLossFunc(nn.Module):
         # cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
         cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
 
-        return pred['joints'], 
 
 

@@ -136,7 +136,7 @@ def main(argv):
 
         for frame in range(len(mas_dataloader)):
             ### {YYMMDD} folder의 visualizeMP 결과를 확인해서, mediapipe input을 GT로 사용가능한 첫 프레임을 지정.
-            if trialIdx == 0 and frame < 89:  # for 230823_S01_obj_09_grasp_05, trial_0
+            if trialIdx == 0 and frame < 31:  # for 230823_S01_obj_09_grasp_05, trial_0
                 continue
 
             detected_cams = []
@@ -149,6 +149,7 @@ def main(argv):
                 continue
 
             best_kps_loss = torch.inf
+            prev_kps_loss = 0
             ealry_stopping_patience = 0
             ealry_stopping_patience_v2 = 0
 
@@ -215,7 +216,7 @@ def main(argv):
                 logging.info(''.join(logs))
 
                 ### sparse criterion on converge for v1 db release, need to be tight ###
-                if abs(best_kps_loss - cur_kpt_loss) < 0.3:
+                if abs(prev_kps_loss - cur_kpt_loss) < 0.3:
                     ealry_stopping_patience_v2 += 1
 
                 if cur_kpt_loss < best_kps_loss:
@@ -229,6 +230,8 @@ def main(argv):
                 if ealry_stopping_patience_v2 > CFG_PATIENCE_v2:
                     logging.info('Early stopping(converged) at iter %d' % iter)
                     break
+
+                prev_kps_loss = cur_kpt_loss
 
             ### temp draw loss graph
             # plt.plot(list(kps_loss.keys()), list(kps_loss.values()))
