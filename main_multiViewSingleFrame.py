@@ -77,6 +77,9 @@ def save_annotation(targetDir, trialName, frame, seq, pred, side):
 
 
 def main(argv):
+    logging.get_absl_handler().setFormatter(None)
+
+
     flag_render = False
     if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
         flag_render = True
@@ -147,6 +150,7 @@ def main(argv):
 
             best_kps_loss = torch.inf
             ealry_stopping_patience = 0
+            ealry_stopping_patience_v2 = 0
 
             ## initial frames are often errorneous, check
 
@@ -206,9 +210,13 @@ def main(argv):
                 lr_scheduler.step()
                 cur_kpt_loss = loss_all['kpts2d'].item() / num_done
                 kps_loss[iter] = cur_kpt_loss
-                logs = ["Iter: {}, Loss: {}".format(iter, total_loss.item())]
+                logs = ["Iter: {}, Loss: {:.4f}".format(iter, total_loss.item())]
                 logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
                 logging.info(''.join(logs))
+
+
+                if (best_kps_loss - cur_kpt_loss) < 0.5:
+                    ealry_stopping_patience_v2 += 1
 
                 if cur_kpt_loss < best_kps_loss:
                     best_kps_loss = cur_kpt_loss
@@ -217,9 +225,11 @@ def main(argv):
                     ealry_stopping_patience += 1
 
                 if cur_kpt_loss < CFG_LOSS_THRESHOLD and ealry_stopping_patience > CFG_PATIENCE:
-                    logging.info('Early stopping at iter %d' % iter)
+                    logging.info('Early stopping(less than THRESHOLD) at iter %d' % iter)
                     break
-
+                if ealry_stopping_patience_v2 > CFG_PATIENCE_v2:
+                    logging.info('Early stopping(converged) at iter %d' % iter)
+                    break
 
             ### temp draw loss graph
             # plt.plot(list(kps_loss.keys()), list(kps_loss.values()))
