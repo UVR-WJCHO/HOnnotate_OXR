@@ -96,10 +96,11 @@ class loadDataset():
         ### create separate result dirs ###
         self.dbDir_result = os.path.join(baseDir, db+'_result', seq, trial)
         for camID in camIDset:
-            self.rgbDir_result = os.path.join(self.dbDir_result, 'rgb', camID)
-            self.depthDir_result = os.path.join(self.dbDir_result, 'depth', camID)
-            os.makedirs(self.rgbDir_result, exist_ok=True)
-            os.makedirs(self.depthDir_result, exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir_result, 'rgb', camID), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir_result, 'depth', camID), exist_ok=True)
+            # os.makedirs(os.path.join(self.dbDir_result, 'rgb_crop', camID), exist_ok=True)
+            # os.makedirs(os.path.join(self.dbDir_result, 'depth_crop', camID), exist_ok=True)
+
         self.rgbDir_result = os.path.join(self.dbDir_result, 'rgb')
         self.depthDir_result = os.path.join(self.dbDir_result, 'depth')
 
@@ -217,6 +218,10 @@ class loadDataset():
         self.camID = camID
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
         self.depthCropDir = os.path.join(self.dbDir, 'depth_crop', camID)
+
+        # self.rgbCropDir_result = os.path.join(self.dbDir_result, 'rgb_crop', camID)
+        # self.depthCropDir_result = os.path.join(self.dbDir_result, 'depth_crop', camID)
+
         self.metaDir = os.path.join(self.dbDir, 'meta', camID)
         segDir = os.path.join(self.dbDir, 'segmentation', camID)
         self.segVisDir = os.path.join(segDir, 'visualization')
@@ -306,7 +311,6 @@ class loadDataset():
         depthName_sampled = str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.png'
         rgbPath_sampled = os.path.join(self.rgbDir_result, rgbName_sampled)
         depthPath_sampled = os.path.join(self.depthDir_result, depthName_sampled)
-
         cv2.imwrite(rgbPath_sampled, rgb)
         cv2.imwrite(depthPath_sampled, depth)
 
@@ -502,6 +506,8 @@ class loadDataset():
         depthName = str(self.camID) + '_' + format(idx, '04') + '.png'
         cv2.imwrite(os.path.join(self.rgbCropDir, rgbName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, depthName), procImgSet[1])
+        # cv2.imwrite(os.path.join(self.rgbCropDir_result, rgbName), procImgSet[0])
+        # cv2.imwrite(os.path.join(self.rgbCropDir_result, depthName), procImgSet[1])
 
         vis = paint_kpts(None, procImgSet[0], processed_kpts)
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
