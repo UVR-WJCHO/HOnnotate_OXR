@@ -136,7 +136,7 @@ def main(argv):
 
         for frame in range(len(mas_dataloader)):
             ### {YYMMDD} folder의 visualizeMP 결과를 확인해서, mediapipe input을 GT로 사용가능한 첫 프레임을 지정.
-            if trialIdx == 0 and frame < 31:  # for 230823_S01_obj_09_grasp_05, trial_0
+            if trialIdx == 0 and frame < 89:  # for 230823_S01_obj_09_grasp_05, trial_0
                 continue
 
             detected_cams = []
@@ -214,13 +214,12 @@ def main(argv):
                 logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
                 logging.info(''.join(logs))
 
-
-                if (best_kps_loss - cur_kpt_loss) < 0.5:
+                ### sparse criterion on converge for v1 db release, need to be tight ###
+                if abs(best_kps_loss - cur_kpt_loss) < 0.3:
                     ealry_stopping_patience_v2 += 1
 
                 if cur_kpt_loss < best_kps_loss:
                     best_kps_loss = cur_kpt_loss
-
                 if cur_kpt_loss < CFG_LOSS_THRESHOLD:
                     ealry_stopping_patience += 1
 
