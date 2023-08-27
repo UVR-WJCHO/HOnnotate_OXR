@@ -18,11 +18,11 @@ def mano3DToCam3D(xyz3D, ext, main_ext):
 
     # mano to world
     xyz4Dcam = torch.concatenate([xyz3D, ones], axis=1)
-    projMat = torch.concatenate((main_ext, h), 0)
-    xyz4Dworld = (torch.linalg.inv(projMat) @ xyz4Dcam.T).T
+    # projMat = torch.concatenate((main_ext, h), 0)
+    # xyz4Dworld = (torch.linalg.inv(projMat) @ xyz4Dcam.T).T
 
     # world to target cam
-    xyz3Dcam2 = xyz4Dworld @ ext.T  # [:, :3]
+    xyz3Dcam2 = xyz4Dcam @ ext.T  # [:, :3]
 
     return xyz3Dcam2
 

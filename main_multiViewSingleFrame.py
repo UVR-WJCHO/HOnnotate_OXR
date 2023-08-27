@@ -259,7 +259,7 @@ def main(argv):
             save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, CFG_MANO_SIDE)
 
             print("end %s - frame %s " % (trialName, frame))
-
+    print("end time : ", time.ctime())
 
 if __name__ == "__main__":
     app.run(main)
