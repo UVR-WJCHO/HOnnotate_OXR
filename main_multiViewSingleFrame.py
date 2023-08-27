@@ -135,6 +135,7 @@ def main(argv):
         cfg_lr_init = CFG_LR_INIT
 
         for frame in range(len(mas_dataloader)):
+            t1 = time.time()
             ### {YYMMDD} folder의 visualizeMP 결과를 확인해서, mediapipe input을 GT로 사용가능한 첫 프레임을 지정.
             if trialIdx == 0 and frame < 31:  # for 230823_S01_obj_09_grasp_05, trial_0
                 continue
@@ -216,7 +217,7 @@ def main(argv):
                 logging.info(''.join(logs))
 
                 ### sparse criterion on converge for v1 db release, need to be tight ###
-                if abs(prev_kps_loss - cur_kpt_loss) < 0.3:
+                if abs(prev_kps_loss - cur_kpt_loss) < 0.5:
                     ealry_stopping_patience_v2 += 1
 
                 if cur_kpt_loss < best_kps_loss:
@@ -257,8 +258,8 @@ def main(argv):
 
             ### save annotation per frame as json format
             save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, CFG_MANO_SIDE)
-
-            print("end %s - frame %s " % (trialName, frame))
+            t2 = time.time()
+            print("end %s - frame %s, processed %s" % (trialName, frame, t2 - t1))
     print("end time : ", time.ctime())
 
 if __name__ == "__main__":
