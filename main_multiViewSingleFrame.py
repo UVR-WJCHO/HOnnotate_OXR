@@ -211,7 +211,7 @@ def main(argv):
                 lr_scheduler.step()
                 cur_kpt_loss = loss_all['kpts2d'].item() / num_done
                 kps_loss[iter] = cur_kpt_loss
-                logs = ["Iter: {}, Loss: {:.4f}".format(iter, total_loss.item())]
+                logs = ["[{} - frame {}] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
                 logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
                 logging.info(''.join(logs))
 
