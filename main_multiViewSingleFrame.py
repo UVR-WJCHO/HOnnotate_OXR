@@ -132,13 +132,17 @@ def main(argv):
         cfg_lr_init = CFG_LR_INIT
 
         for frame in range(len(mas_dataloader)):
+            ### {YYMMDD} folder의 visualizeMP 결과를 확인해서, mediapipe input을 GT로 사용가능한 첫 프레임을 지정.
+            if frame < 31:  # for 230823_S01_obj_09_grasp_05
+                continue
+
             detected_cams = []
             for camIdx, camID in enumerate(CFG_CAMID_SET):
                 if dataloader_set[camIdx][frame] is not None:
                     detected_cams.append(camIdx)
             
             if len(detected_cams) < 3:
-                print('skip frame ', frame)
+                print('detected hand is less than 3, skip the frame ', frame)
                 continue
 
             best_kps_loss = torch.inf
@@ -208,11 +212,11 @@ def main(argv):
 
                 if cur_kpt_loss < best_kps_loss:
                     best_kps_loss = cur_kpt_loss
-                else:
-                    if cur_kpt_loss < CFG_LOSS_THRESHOLD:
-                        ealry_stopping_patience += 1
 
-                if ealry_stopping_patience > CFG_PATIENCE and cur_kpt_loss < CFG_LOSS_THRESHOLD:
+                if cur_kpt_loss < CFG_LOSS_THRESHOLD:
+                    ealry_stopping_patience += 1
+
+                if cur_kpt_loss < CFG_LOSS_THRESHOLD and ealry_stopping_patience > CFG_PATIENCE:
                     logging.info('Early stopping at iter %d' % iter)
                     break
 
