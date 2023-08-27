@@ -27,6 +27,8 @@ import json
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230823', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230823_S01_obj_09_grasp_05', 'target sequence name')
+flags.DEFINE_integer('initNum', 31, 'initial frame num of trial_0, check mediapipe results')
+
 flags.DEFINE_string('objClass', 'banana', 'target object name')
 FLAGS(sys.argv)
 
@@ -137,7 +139,7 @@ def main(argv):
         for frame in range(len(mas_dataloader)):
             t1 = time.time()
             ### {YYMMDD} folder의 visualizeMP 결과를 확인해서, mediapipe input을 GT로 사용가능한 첫 프레임을 지정.
-            if trialIdx == 0 and frame < 31:  # for 230823_S01_obj_09_grasp_05, trial_0
+            if trialIdx == 0 and frame < FLAGS.initNum:  # for 230823_S01_obj_09_grasp_05, trial_0
                 continue
 
             detected_cams = []

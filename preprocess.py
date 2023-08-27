@@ -558,7 +558,7 @@ def error_callback(result):
     print("Error!")
 
 def done_callback(result):
-    print("Done. Result: ", result)
+    # print("Done. Result: ", result)
     return
 
 ################# depth scale value need to be update #################
