@@ -132,10 +132,6 @@ def main(argv):
         cfg_lr_init = CFG_LR_INIT
 
         for frame in range(len(mas_dataloader)):
-            if frame <26:
-                continue
-
-
             detected_cams = []
             for camIdx, camID in enumerate(CFG_CAMID_SET):
                 if dataloader_set[camIdx][frame] is not None:
