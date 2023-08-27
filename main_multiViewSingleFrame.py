@@ -133,7 +133,7 @@ def main(argv):
 
         for frame in range(len(mas_dataloader)):
             ### {YYMMDD} folder의 visualizeMP 결과를 확인해서, mediapipe input을 GT로 사용가능한 첫 프레임을 지정.
-            if frame < 31:  # for 230823_S01_obj_09_grasp_05
+            if trialIdx == 0 and frame < 31:  # for 230823_S01_obj_09_grasp_05, trial_0
                 continue
 
             detected_cams = []
