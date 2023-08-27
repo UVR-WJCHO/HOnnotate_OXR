@@ -148,9 +148,9 @@ class loadDataset():
         #         os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
         #         os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
 
-        # if not os.path.exists(os.path.join(self.dbDir, 'visualize')):
-        #     os.mkdir(os.path.join(self.dbDir, 'visualize'))
-        # self.debug_vis = os.path.join(self.dbDir, 'visualize')
+        if not os.path.exists(os.path.join(self.dbDir, 'visualizeMP')):
+            os.mkdir(os.path.join(self.dbDir, 'visualizeMP'))
+        self.debug_vis = os.path.join(self.dbDir, 'visualizeMP')
             
         self.rgbCropDir = None
         self.depthCropDir = None
@@ -202,8 +202,8 @@ class loadDataset():
         
         if flag_save: f.close()
 
-        self.prev_kps = None
-        self.prev_idx_to_coord = None
+        # self.prev_kps = None
+        # self.prev_idx_to_coord = None
 
     def __len__(self):
         return len(os.listdir(os.path.join(self.rgbDir, 'mas')))
@@ -397,16 +397,19 @@ class loadDataset():
 
         idx_to_coord = idx_to_coordinates
 
-        # 크롭 후에도 검출이 안된다면 이전 키포인트를 그대로 사용
-        if idx_to_coord is not None:
-            self.prev_idx_to_coord = idx_to_coord
-            self.prev_kps = kps
-        else:
-            if self.prev_kps is None:
-                return [None]
-            else:
-                idx_to_coord = self.prev_idx_to_coord
-                kps = self.prev_kps
+        ### 크롭 후에도 검출이 안된다면 이전 키포인트를 그대로 사용 -- 이게 실수.
+        # if idx_to_coord is not None:
+        #     self.prev_idx_to_coord = idx_to_coord
+        #     self.prev_kps = kps
+        # else:
+        #     if self.prev_kps is None:
+        #         return [None]
+        #     else:
+        #         idx_to_coord = self.prev_idx_to_coord
+        #         kps = self.prev_kps
+
+        if idx_to_coord is None:
+            return [None]
 
         bbox = self.extractBbox(idx_to_coord, image_rows, image_cols)
         rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
@@ -500,9 +503,9 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.rgbCropDir, rgbName), procImgSet[0])
         cv2.imwrite(os.path.join(self.depthCropDir, depthName), procImgSet[1])
 
-        # vis = paint_kpts(None, procImgSet[0], processed_kpts)
-        # imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
-        # cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+        vis = paint_kpts(None, procImgSet[0], processed_kpts)
+        imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
+        cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}

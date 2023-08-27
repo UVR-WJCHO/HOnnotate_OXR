@@ -86,11 +86,17 @@ class MultiViewLossFunc(nn.Module):
 
         loss = {}
         if 'kpts2d' in self.loss_dict:
-            pred_kpts2d = projectPoints(joints_cam, self.Ks)
+            if camIdx == 0 and frame == 26:
+                loss['kpts2d'] = torch.zeros(1).to(self.device)
+            else:
+                pred_kpts2d = projectPoints(joints_cam, self.Ks)
 
-            # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d.repeat(self.bs, 1, 1).to(self.device))
-            loss_kpts2d = torch.sum(((pred_kpts2d - self.gt_kpts2d) ** 2).reshape(self.bs, -1), -1)
-            loss['kpts2d'] = loss_kpts2d
+                # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d.repeat(self.bs, 1, 1).to(self.device))
+                loss_kpts2d = torch.sum(((pred_kpts2d - self.gt_kpts2d) ** 2).reshape(self.bs, -1), -1)
+                loss['kpts2d'] = loss_kpts2d
+
+                debug_pred = np.squeeze(pred_kpts2d.cpu().detach().numpy())
+                debug_gt = np.squeeze(self.gt_kpts2d.cpu().detach().numpy())
 
         if 'reg' in self.loss_dict:
             pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
@@ -256,7 +262,7 @@ class MultiViewLossFunc(nn.Module):
         rgb_seg = (rgb_input * seg_input[..., None]).astype(np.uint8)
 
         img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
-        img_blend_pred = cv2.addWeighted(rgb_input, 0.5, rgb_2d_pred, 0.7, 0)
+        img_blend_pred = cv2.addWeighted(rgb_input, 0.7, rgb_2d_pred, 0.5, 0)
         img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
         depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
         seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
@@ -274,24 +280,24 @@ class MultiViewLossFunc(nn.Module):
             depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
             seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
 
-        blend_gt_name = "blend_gt_" + camID + str(frame)
-        blend_pred_name = "blend_pred_" + camID + str(frame)
-        blend_pred_seg_name = "blend_pred_seg_" + camID + str(frame)
-        blend_depth_name = "blend_depth_" + camID + str(frame)
-        blend_seg_name = "blend_seg_" + camID + str(frame)
+        blend_gt_name = "blend_gt_" + camID + "_" + str(frame)
+        blend_pred_name = "blend_pred_" + camID + "_" + str(frame)
+        blend_pred_seg_name = "blend_pred_seg_" + camID + "_" + str(frame)
+        blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
+        blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
 
         # try:
         #     cv2.imshow(blend_gt_name, img_blend_gt)
         #     cv2.imshow(blend_pred_name, img_blend_pred)
-        #     cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-        #     cv2.imshow(blend_depth_name, depth_gap)
+        #     # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+        #     # cv2.imshow(blend_depth_name, depth_gap)
         #     # cv2.imshow(blend_seg_name, seg_gap)
         #     cv2.waitKey(1)
         # except:
         #     print("headless server")
 
         cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
-        cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
+        # cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
         cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
 
         return pred['joints'], 
