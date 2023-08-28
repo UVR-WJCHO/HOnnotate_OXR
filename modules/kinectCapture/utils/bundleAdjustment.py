@@ -65,7 +65,7 @@ def BundleAdjustment(cameras, objPointsList, imgPointsLeft, imgPointsRight, came
     A = BundleAdjustmentSparsity(numCameras, numPoints, cameraIndices, pointIndices)
 
     t0 = time.time()
-    res = least_squares(Fun, x0, jac_sparsity=A, verbose=1, x_scale='jac', ftol=1e-5, method='trf',
+    res = least_squares(Fun, x0, jac_sparsity=A, verbose=2, x_scale='jac', xtol=1e-6, ftol=1e-4, method='trf',
                         args=(intrinsic, numCameras, numPoints, cameraIndices, pointIndices, imgPoints))
     t1 = time.time()
 
