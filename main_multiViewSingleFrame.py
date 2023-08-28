@@ -81,6 +81,7 @@ def save_annotation(targetDir, trialName, frame, seq, pred, side):
 def main(argv):
     logging.get_absl_handler().setFormatter(None)
 
+    save_num = 0
 
     flag_render = False
     if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
@@ -262,7 +263,10 @@ def main(argv):
             save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, CFG_MANO_SIDE)
             t2 = time.time()
             print("end %s - frame %s, processed %s" % (trialName, frame, t2 - t1))
+
+            save_num += 1
     print("end time : ", time.ctime())
+    print("total processed frames : ", save_num)
 
 if __name__ == "__main__":
     app.run(main)
