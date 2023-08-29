@@ -29,7 +29,7 @@ flags.DEFINE_string('db', '230823', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230823_S01_obj_09_grasp_05', 'target sequence name')
 flags.DEFINE_integer('initNum', 31, 'initial frame num of trial_0, check mediapipe results')
 
-flags.DEFINE_string('objClass', 'banana', 'target object name')
+flags.DEFINE_string('objClass', '02_potted_meat_can', 'target object name')
 FLAGS(sys.argv)
 
 def save_annotation(targetDir, trialName, frame, seq, pred, side):

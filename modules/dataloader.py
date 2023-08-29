@@ -216,11 +216,11 @@ class ObjectLoader:
         # data_type : 230822_S01_obj_01_grasp_13
         # data_trial : trial_0
         self.obj_result_dir = os.path.join(base_path, data_date + '_obj')
-        self.obj_template_dir = os.path.join(base_path, 'ObjTemplate')
+        self.obj_template_dir = os.path.join(base_path, 'ObjTemplate', obj_class)
 
 
         # load object data
-        obj_class = OBJType(int(data_type.split('_')[-3]))
+        # obj_class = OBJType(int(data_type.split('_')[-3]))
         obj_mesh_path = os.path.join(self.obj_template_dir, obj_class) + '.obj'
         self.obj_mesh_data = self.read_obj(obj_mesh_path)
 
