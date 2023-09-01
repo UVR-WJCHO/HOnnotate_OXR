@@ -76,7 +76,7 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ks = torch.FloatTensor(main_Ks).to(self.device)
         self.main_Ms = torch.FloatTensor(main_Ms).to(self.device)
 
-    def forward(self, pred, pred_obj, render, camIdx, frame):
+    def forward(self, pred, pred_obj, render, camIdx, frame, contact=False):
         # set gt data of current index & camera status
         self.set_gt(camIdx, frame)
         self.set_cam(camIdx)
@@ -201,6 +201,23 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.imshow("depth_gap_vis", depth_gap_vis)
                     # cv2.waitKey(0)
 
+        if 'contact' in self.loss_dict:
+            if contact:
+                hand_verts = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms, self.main_Ms), 0)
+                obj_verts = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms, self.main_Ms_obj), 0)
+
+                hand_pcd = Pointclouds(points=hand_verts)
+                obj_mesh = Meshes(verts=obj_verts.detach(), faces=pred_obj['faces']) # optimize only hand meshes
+
+                inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
+                contact_mask = inter_dist < CFG_CONTACT_THRESH
+
+                loss['contact'] = inter_dist[contact_mask].sum()
+            else:
+                loss['contact'] = torch.tensor([0.0], requires_grad=True).cuda()
+
+
+
         return loss
 
     def visualize(self, pred, pred_obj, camIdx, frame, save_path, camID, flag_obj=False, flag_crop=False):
@@ -301,5 +318,12 @@ class MultiViewLossFunc(nn.Module):
         # cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
         cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
 
+        # save meshes
+        import trimesh
+        hand_verts = mano3DToCam3D(pred['verts'], self.Ms, self.main_Ms)
+        hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
+        hand.export(os.path.join(save_path, f'mesh_hand_{camID}_{frame}.obj'))
 
-
+        obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms, self.main_Ms_obj)
+        obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
+        obj.export(os.path.join(save_path, f'mesh_obj_{camID}_{frame}.obj'))

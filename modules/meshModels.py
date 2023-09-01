@@ -125,7 +125,7 @@ class ObjModel(nn.Module):
 
         # Append 1 to each coordinate to convert them to homogeneous coordinates
         h = torch.ones((obj_verts.shape[0], 1)).to(self.device)
-        homogeneous_points = torch.concatenate((obj_verts, h), 1)
+        homogeneous_points = torch.cat((obj_verts, h), 1)
 
         # Apply matrix multiplication
         transformed_points = homogeneous_points @ obj_mat.T

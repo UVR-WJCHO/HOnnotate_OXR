@@ -179,7 +179,7 @@ def main(argv):
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
             kps_loss = {}
             for iter in range(CFG_NUM_ITER):
-                loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'depth_obj':0.0}
+                loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'depth_obj':0.0, 'contact': 0.0}
                 if CFG_WITH_OBJ:
                     obj_param = model_obj()
 
@@ -200,7 +200,7 @@ def main(argv):
                     else:
                         ## TODO
                         losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
-                                           camIdx=camIdx, frame=frame)
+                                           camIdx=camIdx, frame=frame, contact=iter>(CFG_NUM_ITER-CFG_NUM_ITER_CONTACT))
 
                     for k in CFG_LOSS_DICT:
                         loss_all[k] += losses[k]
