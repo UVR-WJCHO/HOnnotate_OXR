@@ -14,7 +14,7 @@ CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 CFG_MANO_SIDE = 'right'
 
-CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth','depth_obj'] #  'seg',
+CFG_LOSS_DICT = ['kpts2d', 'reg', 'contact']#, 'depth','depth_obj'] #  'seg',
 CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 
@@ -23,13 +23,16 @@ CFG_IMG_HEIGHT = 1080
 CFG_CROP_IMG_WIDTH = 640
 CFG_CROP_IMG_HEIGHT = 480
 
-CFG_WITH_OBJ = False
-CFG_MOCAP = True
+CFG_WITH_OBJ = True
+CFG_MOCAP = False
 
 CFG_LOSS_THRESHOLD = 3500
 CFG_PATIENCE = 30
 
 CFG_PATIENCE_v2 = 50
+
+CFG_NUM_ITER_CONTACT = 100 # use contact loss for the last 100 iters 
+CFG_CONTACT_THRESH = 8
 
 
 class GRASPType(IntEnum):
