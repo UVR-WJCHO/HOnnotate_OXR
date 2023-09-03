@@ -235,17 +235,19 @@ class ObjectLoader:
         trial_num = data_trial.split('_')[-1]
         obj_file_name = data_type + '_0' + str(trial_num) + '.pkl'
         with open(os.path.join(self.obj_pose_dir, obj_file_name), 'rb') as f:
-            self.marker_pose_data = pickle.load(f)
+            marker_pose_data = pickle.load(f)
 
-        self.db_len = int(len(self.marker_pose_data) - 1)
-        self.marker_num = self.marker_pose_data['marker_num']
+        self.db_len = int(len(marker_pose_data) - 1)
+        self.marker_num = marker_pose_data['marker_num']
 
         # load 3mm marker extrinsic (valid only 230823)
         assert data_date == '230823', 'for other samples, check world_coordinate.png from world_calib.py'
         obj_cam_ext = np.load(os.path.join(base_path, data_date + '_cam', '1-world.npy'))
         self.obj_cam_ext = np.concatenate((obj_cam_ext, h), axis=0)
 
-        self.obj_pose_data = self.transform_marker_pose(self.marker_pose_data)
+        # TODO
+        marker_pose_cam = self.transform_marker_pose(marker_pose_data)
+        self.obj_pose_data = self.fit_markerToObj(marker_pose_cam)
 
 
     def read_obj(self, file_path):
@@ -271,9 +273,13 @@ class ObjectLoader:
 
 
     def transform_marker_pose(self, marker_poses):
-        obj_pose_data = {}
+        marker_pose_cam = {}
         # transform marker pose origin to master cam
-        
+
+        return marker_pose_cam
+
+    def fit_markerToObj(self, marker_pose_cam):
+        obj_pose_data = {}
 
         return obj_pose_data
 
