@@ -24,7 +24,6 @@ CFG_CROP_IMG_WIDTH = 640
 CFG_CROP_IMG_HEIGHT = 480
 
 CFG_WITH_OBJ = True
-CFG_MOCAP = False
 
 CFG_LOSS_THRESHOLD = 3500
 CFG_PATIENCE = 30
@@ -91,7 +90,7 @@ class OBJType(IntEnum):
     flat_screwdriver = 13
     hammer = 14
     baseball = 15
-    golfball = 16
+    golf_ball = 16
     credit_card = 17
     dice = 18
     dist_lid = 19
@@ -99,7 +98,7 @@ class OBJType(IntEnum):
     mouse = 21
     tape = 22
     master_chef_can = 23
-    scrub_cleanser_bottle = 24
+    Scrub_cleanser_bottle = 24
     large_marker = 25
     stapler = 26
     note = 27

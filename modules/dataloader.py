@@ -12,6 +12,7 @@ import torch.nn as nn
 from glob import glob
 from config import *
 from tqdm import tqdm
+from pytorch3d.io import load_obj
 
 
 '''
@@ -42,6 +43,8 @@ TODO:
     - 데이터 폴더 구조 정리
     - data_type 따로 안넣어줘도 되도록
 '''
+
+h = np.array([[0,0,0,1]])
 
 def split_ext(fpath:str):
     '''
@@ -210,54 +213,40 @@ class DataLoader:
 
 
 class ObjectLoader:
-    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, obj_class:str):
+    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str):
         # base_path : os.path.join(os.getcwd(), 'dataset')
         # data_date : 230822
         # data_type : 230822_S01_obj_01_grasp_13
         # data_trial : trial_0
-        self.obj_result_dir = os.path.join(base_path, data_date + '_obj')
-        self.obj_template_dir = os.path.join(base_path, 'ObjTemplate', obj_class)
+        self.obj_dir = os.path.join(base_path, data_date + '_obj')
+        self.obj_pose_dir = os.path.join(self.obj_dir, data_type[:-9])
 
+        obj_type = data_type.split('_')[3]
+        obj_class = obj_type + '_' + str(OBJType(int(obj_type)).name)
+        self.obj_template_dir = os.path.join(base_path, 'obj_scanned_models', obj_class)
 
-        # load object data
-        # obj_class = OBJType(int(data_type.split('_')[-3]))
+        # load object mesh data (new scanned object need to be load through pytorch3d 'load_obj'
         obj_mesh_path = os.path.join(self.obj_template_dir, obj_class) + '.obj'
-        self.obj_mesh_data = self.read_obj(obj_mesh_path)
+        # self.obj_mesh_data = self.read_obj(obj_mesh_path)
+        self.obj_mesh_data = {}
+        self.obj_mesh_data['verts'], self.obj_mesh_data['faces'], _ = load_obj(obj_mesh_path)
 
-        # our ICG output
-        if not CFG_MOCAP:
-            seq_name = data_date + '_' + obj_class
-            obj_file_path = os.path.join(self.obj_result_dir, seq_name) + '.txt'
-            self.obj_pose_data = self.read_file(obj_file_path)
-            # ICG has own main viewpoint
-            self.obj_view = self.obj_pose_data[0]
+        # mocap output
+        trial_num = data_trial.split('_')[-1]
+        obj_file_name = data_type + '_0' + str(trial_num) + '.pkl'
+        with open(os.path.join(self.obj_pose_dir, obj_file_name), 'rb') as f:
+            self.marker_pose_data = pickle.load(f)
 
-        if CFG_MOCAP:
-            trial_num = data_trial.split('_')[-1]
-            seq_name = data_type + '_trial_0' + str(trial_num) + '_6D.tsv'
+        self.db_len = int(len(self.marker_pose_data) - 1)
+        self.marker_num = self.marker_pose_data['marker_num']
 
-            obj_file_path = os.path.join(self.obj_result_dir, 'IR cam.TSV', seq_name)
-            self.obj_pose_data = self.read_tsv_file(obj_file_path)
+        # load 3mm marker extrinsic (valid only 230823)
+        assert data_date == '230823', 'for other samples, check world_coordinate.png from world_calib.py'
+        obj_cam_ext = np.load(os.path.join(base_path, data_date + '_cam', '1-world.npy'))
+        self.obj_cam_ext = np.concatenate((obj_cam_ext, h), axis=0)
 
-        self.db_len = int((len(self.obj_pose_data) - 1) / 2)
+        self.obj_pose_data = self.transform_marker_pose(self.marker_pose_data)
 
-    def read_file(self, file_path):
-        lines = []
-        with open(file_path, 'r') as file:
-            for line in file:
-                # Remove newline character at the end of each line
-                line = line.strip()
-                lines.append(line)
-        return lines
-
-    def read_tsv_file(self, file_path):
-        lines = []
-        with open(file_path, 'r') as file:
-            for line in file:
-                # Remove newline character at the end of each line
-                line = line.strip()
-                lines.append(line)
-        return lines
 
     def read_obj(self, file_path):
         verts = []
@@ -280,11 +269,18 @@ class ObjectLoader:
         obj_data = {'verts': verts, 'faces': faces}
         return obj_data
 
+
+    def transform_marker_pose(self, marker_poses):
+        obj_pose_data = {}
+        # transform marker pose origin to master cam
+        
+
+        return obj_pose_data
+
     def __getitem__(self, index: int):
         try:
-            sample = self.obj_pose_data[index * 2 + 2].split(',')
-            sample = [float(x) for x in sample]
-            sample = np.asarray([sample[x:x + 4] for x in range(0, len(sample), 4)])
+            sample = self.obj_pose_data[str(index)]
+            sample = np.asarray(sample)
         except ExecError:
             raise "Error at load object index {}".format(index)
         return sample

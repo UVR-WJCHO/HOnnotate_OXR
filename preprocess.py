@@ -123,34 +123,15 @@ class loadDataset():
         # self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
         # self.depthBgDir = os.path.join(self.bgDir, 'depth')
 
-        if not os.path.exists(os.path.join(self.dbDir, 'rgb_crop')):
-            os.mkdir(os.path.join(self.dbDir, 'rgb_crop'))
-            for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'rgb_crop', camID))
-        if not os.path.exists(os.path.join(self.dbDir, 'depth_crop')):
-            os.mkdir(os.path.join(self.dbDir, 'depth_crop'))
-            for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'depth_crop', camID))
-        if not os.path.exists(os.path.join(self.dbDir, 'meta')):
-            os.mkdir(os.path.join(self.dbDir, 'meta'))
-            for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'meta', camID))
-        
-        if not os.path.exists(os.path.join(self.dbDir, 'segmentation')):
-            os.mkdir(os.path.join(self.dbDir, 'segmentation'))
-            for camID in camIDset:
-                os.mkdir(os.path.join(self.dbDir, 'segmentation', camID))
-                os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'))
-                os.mkdir(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'))
-        
-        # if not os.path.exists(os.path.join(self.dbDir, 'masked_rgb')):
-        #     os.mkdir(os.path.join(self.dbDir, 'masked_rgb'))
-        #     for camID in camIDset:
-        #         os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID))
-        #         os.mkdir(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'))
+        for camID in camIDset:
+            os.makedirs(os.path.join(self.dbDir, 'rgb_crop', camID), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'depth_crop', camID), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'meta', camID), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'), exist_ok=True)
+            # os.makedirs(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'), exist_ok=True)
 
-        if not os.path.exists(os.path.join(self.dbDir, 'visualizeMP')):
-            os.mkdir(os.path.join(self.dbDir, 'visualizeMP'))
+        os.makedirs(os.path.join(self.dbDir, 'visualizeMP'), exist_ok=True)
         self.debug_vis = os.path.join(self.dbDir, 'visualizeMP')
             
         self.rgbCropDir = None
@@ -184,27 +165,75 @@ class loadDataset():
             self.extrinsics = extrinsics
             self.calib_err = err
 
+        # set save path for cameraInfo_undistort
         self.intrinsic_undistort_path = os.path.join(camResultDir, "cameraInfo_undistort.txt")
-
-        flag_save = False
-        if not os.path.isfile(self.intrinsic_undistort_path):
-            f = open(self.intrinsic_undistort_path, "w")
-            print("creating undistorted intrinsic of each cam")
-            flag_save = True
 
         self.intrinsic_undistort = {}
         for cam in CFG_CAMID_SET:
             new_camera, _ = cv2.getOptimalNewCameraMatrix(self.intrinsics[cam], self.distCoeffs[cam], (image_rows, image_cols), 1, (image_rows, image_cols))
             self.intrinsic_undistort[cam] = new_camera
-            if flag_save:
-                new_camera = str(np.copy(new_camera))
-                f.write(new_camera)
-                f.write("\n")
-        
-        if flag_save: f.close()
 
-        # self.prev_kps = None
-        # self.prev_idx_to_coord = None
+        if not os.path.isfile(self.intrinsic_undistort_path):
+            print("creating undistorted intrinsic of each cam")
+            with open(self.intrinsic_undistort_path, "w") as f:
+                for cam in CFG_CAMID_SET:
+                    new_camera = str(np.copy(self.intrinsic_undistort[cam]))
+                    f.write(new_camera)
+                    f.write("\n")
+
+        ### object pose ###
+        self.obj_db_Dir = os.path.join(baseDir, FLAGS.obj_db)
+
+        obj_name = self.seq[:-9] # 230612_S01_obj_01
+        self.obj_data_Dir = os.path.join(self.obj_db_Dir, obj_name)
+
+        self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
+        obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
+
+        # load 3mm marker pose
+        obj_origin_data = os.path.join(self.obj_db_Dir, '3mm.txt')
+        assert os.path.isfile(obj_origin_data), "no 3mm pose data"
+        with open(obj_origin_data, "r", encoding='euc-kr') as f:
+            for i in range(5):
+                _ = f.readline()
+            line = f.readline().strip()
+            line = line.split('\t')
+            origin_x = float(line[1]) * 1000.       # 3mm.txt is m scale, other poses are mm scale
+            origin_y = float(line[2]) * 1000.
+            origin_z = float(line[3]) * 1000.
+
+
+        obj_data = {}
+        if not os.path.isfile(obj_pose_data):
+            print("no obj pose data")
+            self.flag_obj = False
+        else:
+            self.flag_obj = True
+            with open(obj_pose_data, "r") as f:
+                line = f.readline().strip().split(' ')
+                _ = f.readline()
+                marker_num = int(float(line[0]))
+
+                obj_data['marker_num'] = marker_num
+                frame = 0
+                while True:
+                    line = f.readline().strip()
+                    if not line:
+                        break
+                    line = line.split(' ')
+                    line = [value for value in line if value != '']
+                    marker_pose = np.zeros((marker_num, 3))
+                    for i in range(marker_num):
+                        marker_pose[i, 0] = float(line[i*3 + 1]) - origin_x
+                        marker_pose[i, 1] = float(line[i*3 + 2]) - origin_y
+                        marker_pose[i, 2] = float(line[i*3 + 3]) - origin_z
+                    obj_data[str(frame)] = marker_pose
+                    frame += 1
+
+            self.obj_data_all = obj_data
+            self.obj_data_sampled = {}
+            self.obj_data_sampled['marker_num'] = self.obj_data_all['marker_num']
+
 
     def __len__(self):
         return len(os.listdir(os.path.join(self.rgbDir, 'mas')))
@@ -291,6 +320,17 @@ class loadDataset():
         info['object']['markers_data'] = csv_dict['object.markers_data']
         info['object']['pose_data'] = csv_dict['object.pose_data']
         self.info = info
+
+    def updateObjdata(self, idx, save_idx):
+        if str(idx) in self.obj_data_all:
+            self.obj_data_sampled[str(save_idx)] = self.obj_data_all[str(idx)]
+        else:
+            self.obj_data_sampled[str(save_idx)] = None
+
+    def saveObjdata(self):
+        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'.pkl'), 'wb') as f:
+            pickle.dump(self.obj_data_sampled, f, pickle.HIGHEST_PROTOCOL)
+
 
     def getItem(self, idx, save_idx):
         # camID : mas, sub1, sub2, sub3
@@ -400,17 +440,6 @@ class loadDataset():
                 break
 
         idx_to_coord = idx_to_coordinates
-
-        ### 크롭 후에도 검출이 안된다면 이전 키포인트를 그대로 사용 -- 이게 실수.
-        # if idx_to_coord is not None:
-        #     self.prev_idx_to_coord = idx_to_coord
-        #     self.prev_kps = kps
-        # else:
-        #     if self.prev_kps is None:
-        #         return [None]
-        #     else:
-        #         idx_to_coord = self.prev_idx_to_coord
-        #         kps = self.prev_kps
 
         if idx_to_coord is None:
             return [None]
@@ -548,9 +577,15 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
                 if flag_segmentation:
                     db.segmenation(save_idx, procImgSet, procKps)
 
+                if db.flag_obj:
+                    db.updateObjdata(idx, save_idx)
+
             progress.update()
             global_tqdm.update()
             save_idx += 1
+
+        if db.flag_obj:
+            db.saveObjdata()
 
     return True
 

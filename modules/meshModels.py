@@ -97,12 +97,14 @@ class ObjModel(nn.Module):
         self.device = device
         self.batch_size = batch_size
 
-        template_verts,  template_faces = obj_template['verts'], obj_template['faces']
-        template_faces = np.asarray(template_faces)
-        self.template_faces = torch.unsqueeze(torch.FloatTensor(template_faces), axis=0).to(self.device)
+        template_verts, template_faces = obj_template['verts'], obj_template['faces']
+        # template_faces = np.array([np.array(x) for x in template_faces])
+        # self.template_faces = torch.unsqueeze(torch.FloatTensor(template_faces), axis=0).to(self.device)
+        # template_verts = np.asarray(template_verts)[:, :3]
+        # self.template_verts = torch.FloatTensor(template_verts).to(self.device)
 
-        template_verts = np.asarray(template_verts)[:, :3]
-        self.template_verts = torch.FloatTensor(template_verts).to(self.device)
+        self.template_faces = template_faces.verts_idx.to(self.device)
+        self.template_verts = template_verts.to(self.device)
 
         # only obj_pose is trainable [bs, 4, 4]
         obj_pose = torch.tensor(obj_init_pose, dtype=torch.float32)[:-1, :]

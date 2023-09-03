@@ -26,10 +26,9 @@ import json
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230823', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230823_S01_obj_09_grasp_05', 'target sequence name')
+flags.DEFINE_string('seq', '230823_S01_obj_07_grasp_12', 'target sequence name')
 flags.DEFINE_integer('initNum', 31, 'initial frame num of trial_0, check mediapipe results')
 
-flags.DEFINE_string('objClass', '02_potted_meat_can', 'target object name')
 FLAGS(sys.argv)
 
 def save_annotation(targetDir, trialName, frame, seq, pred, side):
@@ -99,7 +98,7 @@ def main(argv):
         sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub3')
 
         if CFG_WITH_OBJ:
-            obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, FLAGS.objClass)
+            obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName)
 
         ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
         mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
@@ -128,12 +127,10 @@ def main(argv):
         model.change_grads(root=True, rot=True, pose=True, shape=True)
 
         if CFG_WITH_OBJ:
-            obj_init_pose = obj_dataloader[0]   # numpy (4, 4) format
             obj_template_mesh = obj_dataloader.obj_mesh_data
-            model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh, obj_init_pose)
-            ## Set object's main camera extrinsic
-            obj_main_cam_idx = CFG_CAMID_SET.index(obj_dataloader.obj_view)
-            loss_func.set_object_main_extrinsic(obj_main_cam_idx)
+            model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh)
+            ## Set object's main camera extrinsic as mas
+            loss_func.set_object_main_extrinsic(0)
 
         cfg_lr_init = CFG_LR_INIT
 
