@@ -1,7 +1,7 @@
 import os
 import sys
 sys.path.insert(0,os.path.join(os.getcwd()))
-
+sys.path.insert(0,os.path.join(os.getcwd(), 'modules'))
 import torch
 import torch.nn as nn
 import numpy as np
@@ -20,7 +20,7 @@ from absl import logging
 
 from config import *
 import time
-import json
+
 
 
 ## FLAGS
@@ -30,50 +30,6 @@ flags.DEFINE_string('seq', '230823_S01_obj_07_grasp_12', 'target sequence name')
 flags.DEFINE_integer('initNum', 31, 'initial frame num of trial_0, check mediapipe results')
 
 FLAGS(sys.argv)
-
-def save_annotation(targetDir, trialName, frame, seq, pred, side):
-    #seq ='230822_S01_obj_01_grasp_13'
-    db = seq.split('_')[0]
-    subject_id = seq.split('_')[1][1:]
-    obj_id = seq.split('_')[3]
-    grasp_id = seq.split('_')[5]
-    trial_num = trialName.split('_')[1]
-    cam_list = ['mas', 'sub1', 'sub2', 'sub3']
-    anno_base_path = os.path.join(targetDir, trialName, 'annotation')
-    anno_path_list = []
-    for camID in cam_list:
-        anno_path_list.append(os.path.join(anno_base_path, camID ,f'anno_{frame:04}.json'))
-
-    for anno_path in anno_path_list:
-        anno = None
-        ### load current annotation(include updated meta info.)
-        with open(anno_path, 'r') as file:
-            anno = json.load(file)
-        imgID = anno['images']['id']
-        ### update annotation
-        # anno[annotations], anno[Mesh]
-        anno['annotations'][0]['id'] = str(db) + str(subject_id) + str(obj_id) + str(grasp_id) + str(trial_num) + str(frame)
-        anno['annotations'][0]['image_id'] = imgID
-        anno['annotations'][0]['class_id'] = grasp_id
-        anno['annotations'][0]['class_name'] = GRASPType(int(grasp_id)).name
-        anno['annotations'][0]['type'] = "K"
-        anno['annotations'][0]['data'] = pred['joints'].tolist()
-        anno['Mesh'][0]['id'] = str(db) + str(subject_id) + str(obj_id) + str(grasp_id) + str(trial_num) + str(frame)
-        anno['Mesh'][0]['image_id'] = imgID
-        anno['Mesh'][0]['class_id'] = grasp_id
-        anno['Mesh'][0]['class_name'] = GRASPType(int(grasp_id)).name
-        anno['Mesh'][0]['object_name'] = OBJType(int(obj_id)).name
-        # anno['Mesh'][0]['object_file'] = "['3_apple.obj']" #TODO object file 받기
-        anno['Mesh'][0]['object_mat'] = np.eye(4, 4).tolist()
-        anno['Mesh'][0]['mano_side'] = side
-        anno['Mesh'][0]['mano_trans'] = pred['rot'].tolist()
-        anno['Mesh'][0]['mano_pose'] = pred['pose'].tolist()
-        anno['Mesh'][0]['mano_betas'] = pred['shape'].tolist()
-
-
-        ### save full annotation
-        with open(anno_path, 'w', encoding='utf-8') as file:
-            json.dump(anno, file, indent='\t', ensure_ascii=False)
 
 
 
@@ -198,6 +154,9 @@ def main(argv):
                         ## TODO
                         losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
                                            camIdx=camIdx, frame=frame, contact=iter>(CFG_NUM_ITER-CFG_NUM_ITER_CONTACT))
+
+                        loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
+                                            camID=camID, flag_obj=True, flag_crop=True)
 
                     for k in CFG_LOSS_DICT:
                         loss_all[k] += losses[k]

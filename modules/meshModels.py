@@ -103,7 +103,7 @@ class ObjModel(nn.Module):
         # template_verts = np.asarray(template_verts)[:, :3]
         # self.template_verts = torch.FloatTensor(template_verts).to(self.device)
 
-        self.template_faces = template_faces.verts_idx.to(self.device)
+        self.template_faces = template_faces.to(self.device).unsqueeze(0)
         self.template_verts = template_verts.to(self.device)
 
         # only obj_pose is trainable [bs, 4, 4]

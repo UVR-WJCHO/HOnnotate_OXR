@@ -2,6 +2,7 @@ import os
 from shutil import ExecError
 import sys
 sys.path.insert(0,os.path.join(os.getcwd(), '../', 'utils'))
+
 from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraMatrix_undistort, LoadCameraParams
 import numpy as np
 import cv2
@@ -12,7 +13,12 @@ import torch.nn as nn
 from glob import glob
 from config import *
 from tqdm import tqdm
+
+from utils.dataUtils import *
+import modules.common.transforms as tf
+
 from pytorch3d.io import load_obj
+from pytorch3d.structures import Meshes
 
 
 '''
@@ -214,6 +220,7 @@ class DataLoader:
 
 class ObjectLoader:
     def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # base_path : os.path.join(os.getcwd(), 'dataset')
         # data_date : 230822
         # data_type : 230822_S01_obj_01_grasp_13
@@ -229,7 +236,8 @@ class ObjectLoader:
         obj_mesh_path = os.path.join(self.obj_template_dir, obj_class) + '.obj'
         # self.obj_mesh_data = self.read_obj(obj_mesh_path)
         self.obj_mesh_data = {}
-        self.obj_mesh_data['verts'], self.obj_mesh_data['faces'], _ = load_obj(obj_mesh_path)
+        self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
+        self.obj_mesh_data['faces'] = faces.verts_idx
 
         # mocap output
         trial_num = data_trial.split('_')[-1]
@@ -245,8 +253,8 @@ class ObjectLoader:
         obj_cam_ext = np.load(os.path.join(base_path, data_date + '_cam', '1-world.npy'))
         obj_cam_ext = np.concatenate((obj_cam_ext, h), axis=0)
         # TODO
-        marker_pose_cam = self.transform_marker_pose(marker_data, obj_cam_ext)
-        self.obj_pose_data = self.fit_markerToObj(marker_pose_cam)
+        marker_data_cam = self.transform_marker_pose(marker_data, obj_cam_ext)
+        self.obj_pose_data = self.fit_markerToObj(marker_data_cam, obj_type, self.obj_mesh_data)
 
 
     def read_obj(self, file_path):
@@ -294,8 +302,40 @@ class ObjectLoader:
 
         return marker_data_cam
 
-    def fit_markerToObj(self, marker_pose_cam):
+    def fit_markerToObj(self, marker_data_cam, obj_type, obj_mesh):
         obj_pose_data = {}
+        vertIDpermarker = vertPermarker[str(OBJType(int(obj_type)).name)]
+
+        obj_verts = obj_mesh['verts']
+        # obj_faces = obj_mesh['faces']
+
+        verts_pose_cam = obj_verts[vertIDpermarker, :]
+
+        for key in tqdm(marker_data_cam):
+            obj_init_pose = generate_pose([0,0,0],[0,0,0])
+
+            marker_pose = marker_data_cam[key]
+            verts_pose = apply_transform(obj_init_pose, verts_pose_cam)
+
+            marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
+            verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
+
+            R, t = tf.batch_solve_rigid_tf(marker_pose, verts_pose)
+
+            R = R[0]
+            t = t[0]
+
+            pose_calc = np.eye(4)
+            pose_calc[:3, :3] = R[:3, :3]
+            pose_calc[0, 3] = t[0]
+            pose_calc[1, 3] = t[1]
+            pose_calc[2, 3] = t[2]
+
+            # verts_all = apply_transform(pose_calc, obj_verts)
+            # verts_all = torch.FloatTensor(verts_all)
+            # mesh = Meshes(verts=[verts_all], faces=[obj_faces]).to(self.device)
+
+            obj_pose_data[key] = pose_calc
 
         return obj_pose_data
 
@@ -309,6 +349,8 @@ class ObjectLoader:
 
     def __len__(self):
         return self.db_len
+
+
 
 
 if __name__ == "__main__":

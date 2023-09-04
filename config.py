@@ -34,6 +34,13 @@ CFG_NUM_ITER_CONTACT = 100 # use contact loss for the last 100 iters
 CFG_CONTACT_THRESH = 8
 
 
+vertPermarker = {
+    "mug" : [1282, 1329, 965, 756],
+}
+
+
+
+
 class GRASPType(IntEnum):
     '''
     Enum for different datatypes
