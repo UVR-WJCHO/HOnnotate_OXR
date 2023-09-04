@@ -252,6 +252,7 @@ class ObjectLoader:
         assert data_date == '230823', 'for other samples, check world_coordinate.png from world_calib.py'
         obj_cam_ext = np.load(os.path.join(base_path, data_date + '_cam', '1-world.npy'))
         obj_cam_ext = np.concatenate((obj_cam_ext, h), axis=0)
+
         # TODO
         marker_data_cam = self.transform_marker_pose(marker_data, obj_cam_ext)
         self.obj_pose_data = self.fit_markerToObj(marker_data_cam, obj_type, self.obj_mesh_data)
