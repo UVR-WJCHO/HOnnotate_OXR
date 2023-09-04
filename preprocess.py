@@ -559,7 +559,7 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
 
         save_idx = 0
         for idx in range(len(db)):
-            if idx % 2 != 0:
+            if idx % 3 != 0:
                 progress.update()
                 global_tqdm.update()
                 continue
