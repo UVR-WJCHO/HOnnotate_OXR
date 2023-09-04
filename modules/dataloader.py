@@ -219,12 +219,15 @@ class DataLoader:
 
 
 class ObjectLoader:
-    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str):
+    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, mas_param):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # base_path : os.path.join(os.getcwd(), 'dataset')
         # data_date : 230822
         # data_type : 230822_S01_obj_01_grasp_13
         # data_trial : trial_0
+        self.mas_K, self.mas_M, self.mas_D = mas_param
+
+        self.base_path = base_path
         self.obj_dir = os.path.join(base_path, data_date + '_obj')
         self.obj_pose_dir = os.path.join(self.obj_dir, data_type[:-9])
 
@@ -283,23 +286,41 @@ class ObjectLoader:
     def transform_marker_pose(self, marker_data, obj_cam_ext):
         marker_data_cam = {}
         # transform marker pose origin to master cam
-        mas_ext = np.eye(4)[:3]
-
+        mas_ext = self.mas_M
         marker_num = marker_data['marker_num']
         for key in marker_data:
             if key == 'marker_num':
                 continue
             marker_poses_mocap = marker_data[key]   # (4,3)
 
-            ones = np.ones((marker_poses_mocap.shape[0], 1))
-            xyz4Dmocap = np.concatenate([marker_poses_mocap, ones], axis=1)
+            # ones = np.ones((marker_poses_mocap.shape[0], 1))
+            # xyz4Dmocap = np.concatenate([marker_poses_mocap, ones], axis=1)
+            # projMat = np.concatenate((mas_ext, h), 0)
+            # xyz4Dworld = (np.linalg.inv(projMat) @ xyz4Dmocap.T).T
+            # xyz4Dcam = xyz4Dworld @ obj_cam_ext.T
+            # marker_data_cam[key] = xyz4Dcam[:, :3]
 
-            projMat = np.concatenate((mas_ext, h), 0)
-            xyz4Dworld = (np.linalg.inv(projMat) @ xyz4Dmocap.T).T
+            coord_homo = np.concatenate((marker_poses_mocap.T, np.ones((1, marker_num))), axis=0)
+            world_coord = obj_cam_ext @ coord_homo  # camera's coordinate
+            projection = mas_ext.reshape(3, 4)
+            projection = np.concatenate((projection, h), axis=0)
+            projection = np.linalg.inv(projection)
+            world_coord = projection @ world_coord  # master's coordinate
+            world_coord = world_coord[:3].T
+            marker_data_cam[key] = world_coord
 
-            xyz4Dcam = xyz4Dworld @ obj_cam_ext.T
 
-            marker_data_cam[key] = xyz4Dcam[:, :3]
+            ### debug ###
+            image = cv2.imread(os.path.join(self.base_path, '230823', '230823_S01_obj_07_grasp_12', 'trial_0', 'rgb', 'mas', 'mas_31.jpg'))
+            projection = mas_ext.reshape(3,4)
+            reprojected, _ = cv2.projectPoints(world_coord, projection[:, :3],
+                                               projection[:, 3:], self.mas_K, self.mas_D)
+            reprojected = np.squeeze(reprojected)
+            for k in range(4):
+                point = reprojected[k, :]
+                image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0,0,255))
+                cv2.imshow("debug", image)
+                cv2.waitKey(0)
 
         return marker_data_cam
 
@@ -321,7 +342,7 @@ class ObjectLoader:
             marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
             verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
 
-            R, t = tf.batch_solve_rigid_tf(marker_pose, verts_pose)
+            R, t = tf.batch_solve_rigid_tf(verts_pose, marker_pose)
 
             R = R[0]
             t = t[0]

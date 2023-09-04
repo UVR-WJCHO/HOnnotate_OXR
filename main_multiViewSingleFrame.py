@@ -53,8 +53,6 @@ def main(argv):
         sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub2')
         sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub3')
 
-        if CFG_WITH_OBJ:
-            obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName)
 
         ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
         mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
@@ -69,6 +67,10 @@ def main(argv):
 
         dataloader_set = [mas_dataloader, sub1_dataloader, sub2_dataloader, sub3_dataloader]
         renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
+
+
+        if CFG_WITH_OBJ:
+            obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, mas_dataloader.cam_parameter)
 
         ## Initialize loss function
         loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT)
