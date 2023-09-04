@@ -56,14 +56,14 @@ def main(argv):
 
         ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
         mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
-        mas_M = np.eye(4)[:3]
-        mas_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, mas_M, mas_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+        default_M = np.eye(4)[:3]
+        mas_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, mas_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
         sub1_K, _, sub1_D = sub1_dataloader.cam_parameter
-        sub1_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, mas_M, sub1_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+        sub1_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub1_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
         sub2_K, _, sub2_D = sub2_dataloader.cam_parameter
-        sub2_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, mas_M, sub2_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+        sub2_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub2_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
         sub3_K, _, sub3_D = sub3_dataloader.cam_parameter
-        sub3_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, mas_M, sub3_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+        sub3_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub3_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
 
         dataloader_set = [mas_dataloader, sub1_dataloader, sub2_dataloader, sub3_dataloader]
         renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
