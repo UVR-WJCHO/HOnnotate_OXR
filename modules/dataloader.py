@@ -252,8 +252,8 @@ class ObjectLoader:
         self.marker_num = marker_data['marker_num']
 
         # load 3mm marker extrinsic (valid only 230823)
-        assert data_date == '230823', 'for other samples, check world_coordinate.png from world_calib.py'
-        obj_cam_ext = np.load(os.path.join(base_path, data_date + '_cam', '1-world.npy'))
+        # assert data_date == '230823', 'for other samples, check world_coordinate.png from world_calib.py'
+        obj_cam_ext = np.load(os.path.join(base_path, data_date + '_cam', '3-world.npy'))
         obj_cam_ext = np.concatenate((obj_cam_ext, h), axis=0)
 
         # TODO
@@ -314,7 +314,8 @@ class ObjectLoader:
             # world_coord_v2 = xyz4Dcam[:, :3]
             # world_coord = np.copy(world_coord_v2)
             img_name = 'mas_' + str(key) + '.jpg'
-            image = cv2.imread(os.path.join(self.base_path, '230823_result', '230823_S01_obj_07_grasp_12', 'trial_0', 'rgb', 'mas', img_name))
+            seq_name = '230905_result'
+            image = cv2.imread(os.path.join(self.base_path, seq_name, '230905_S01_obj_30_grasp_01', 'trial_0', 'rgb', 'mas', img_name))
             projection = mas_ext.reshape(3,4)
             reprojected, _ = cv2.projectPoints(world_coord, projection[:, :3],
                                                projection[:, 3:], self.mas_K, self.mas_D)
@@ -322,7 +323,7 @@ class ObjectLoader:
             for k in range(4):
                 point = reprojected[k, :]
                 image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0,0,255))
-            cv2.imshow("debug", image)
+            cv2.imshow(seq_name, image)
             cv2.waitKey(0)
 
         return marker_data_cam

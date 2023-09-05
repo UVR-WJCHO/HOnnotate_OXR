@@ -19,6 +19,9 @@ from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, 
 
 #temp
 import matplotlib.pyplot as plt
+from skimage.io import imread, imshow
+from skimage.color import rgb2gray, rgb2hsv
+from skimage.filters import threshold_otsu
 
 
 # others
@@ -41,11 +44,15 @@ from tqdm_multiprocess import TqdmMultiProcessPool
 import shutil
 
 
+flag_debug = False
+
+
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230823', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230823_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_string('obj_db', '230823_obj', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('obj_db', '230905_obj', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('obj_coord', '3', 'target cam coord idx in world_calib.py')   ## name ,default, help
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -84,7 +91,7 @@ flag_segmentation = True
 class loadDataset():
     def __init__(self, db, seq, trial):
         self.seq = seq # 230612_S01_obj_01_grasp_01
-        self.db = db
+        self.db = db    # 230905
         assert len(seq.split('_')) == 6, 'invalid sequence name, ex. 230612_S01_obj_01_grasp_01'
 
         self.subject_id = seq.split('_')[1][1:]
@@ -98,8 +105,6 @@ class loadDataset():
         for camID in camIDset:
             os.makedirs(os.path.join(self.dbDir_result, 'rgb', camID), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir_result, 'depth', camID), exist_ok=True)
-            # os.makedirs(os.path.join(self.dbDir_result, 'rgb_crop', camID), exist_ok=True)
-            # os.makedirs(os.path.join(self.dbDir_result, 'depth_crop', camID), exist_ok=True)
 
         self.rgbDir_result = os.path.join(self.dbDir_result, 'rgb')
         self.depthDir_result = os.path.join(self.dbDir_result, 'depth')
@@ -117,7 +122,7 @@ class loadDataset():
             shutil.copyfile(obj_tsv_original, obj_tsv_result)
 
         self.dbDir = os.path.join(baseDir, db, seq, trial)
-        # self.bgDir = os.path.join(baseDir, FLAGS.db) + '_background'
+        # self.bgDir = os.path.join(baseDir, db) + '_bg'
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
         self.depthDir = os.path.join(self.dbDir, 'depth')
         # self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
@@ -189,6 +194,10 @@ class loadDataset():
 
         self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
         obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
+        self.obj_cam_ext = np.load(os.path.join(camResultDir, str(FLAGS.obj_coord) + '-world.npy'))
+
+        self.h = np.array([[0, 0, 0, 1]])
+        self.obj_cam_ext = np.concatenate((self.obj_cam_ext, self.h), axis=0)
 
         # load 3mm marker pose
         obj_origin_data = os.path.join(self.obj_db_Dir, '3mm.txt')
@@ -202,19 +211,20 @@ class loadDataset():
             origin_y = float(line[2]) * 1000.
             origin_z = float(line[3]) * 1000.
 
-
         obj_data = {}
-        if not os.path.isfile(obj_pose_data):
-            print("no obj pose data")
-            self.flag_obj = False
-        else:
-            self.flag_obj = True
+        self.marker_sampled = {}
+        self.marker_cam_sampled = {}
+        self.obj_pose_sampled = {}
+
+        assert os.path.isfile(obj_pose_data),"no obj pose data"
+
+        if not flag_debug:
             with open(obj_pose_data, "r") as f:
                 line = f.readline().strip().split(' ')
                 _ = f.readline()
-                marker_num = int(float(line[0]))
+                self.marker_num = int(float(line[0]))
 
-                obj_data['marker_num'] = marker_num
+                obj_data['marker_num'] = self.marker_num
                 frame = 0
                 while True:
                     line = f.readline().strip()
@@ -222,8 +232,8 @@ class loadDataset():
                         break
                     line = line.split(' ')
                     line = [value for value in line if value != '']
-                    marker_pose = np.zeros((marker_num, 3))
-                    for i in range(marker_num):
+                    marker_pose = np.zeros((self.marker_num, 3))
+                    for i in range(self.marker_num):
                         marker_pose[i, 0] = float(line[i*3 + 1]) - origin_x
                         marker_pose[i, 1] = float(line[i*3 + 2]) - origin_y
                         marker_pose[i, 2] = float(line[i*3 + 3]) - origin_z
@@ -231,8 +241,31 @@ class loadDataset():
                     frame += 1
 
             self.obj_data_all = obj_data
-            self.obj_data_sampled = {}
-            self.obj_data_sampled['marker_num'] = self.obj_data_all['marker_num']
+            self.marker_sampled['marker_num'] = self.obj_data_all['marker_num']
+        else:
+            with open(obj_pose_data, "r", encoding='euc-kr') as f:
+                for i in range(5):
+                    _ = f.readline()
+                marker_num = 4
+                obj_data['marker_num'] = marker_num
+                frame = 0
+                while True:
+                    line = f.readline().strip()
+                    if not line:
+                        break
+                    line = line.split('\t')
+                    line = [value for value in line if value != '']
+                    marker_pose = np.zeros((marker_num, 3))
+                    for i in range(marker_num):
+                        marker_pose[i, 0] = float(line[i * 3 + 1])*1000. - origin_x
+                        marker_pose[i, 1] = float(line[i * 3 + 2])*1000. - origin_y
+                        marker_pose[i, 2] = float(line[i * 3 + 3])*1000. - origin_z
+                    obj_data[str(frame)] = marker_pose
+                    frame += 1
+            self.obj_data_all = obj_data
+            self.marker_sampled['marker_num'] = self.obj_data_all['marker_num']
+
+        self.marker_proj = np.zeros((self.marker_num, 2))
 
 
     def __len__(self):
@@ -241,8 +274,6 @@ class loadDataset():
     def init_cam(self, camID):
         #### calib err - 230825 ###
         #print("calib err:", self.calib_err)
-
-
 
         self.camID = camID
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
@@ -257,8 +288,8 @@ class loadDataset():
         self.segResDir = os.path.join(segDir, 'raw_seg_results')
 
         #for background matting
-        self.maskedRgbDir = os.path.join(self.dbDir, 'masked_rgb', camID)
-        self.croppedBgDir = os.path.join(self.dbDir, 'masked_rgb', camID, 'bg')
+        # self.maskedRgbDir = os.path.join(self.dbDir, 'masked_rgb', camID)
+        # self.croppedBgDir = os.path.join(self.dbDir, 'masked_rgb', camID, 'bg')
         
         self.debugDir = os.path.join(self.dbDir, 'debug')
         self.K = self.intrinsics[camID]
@@ -323,13 +354,49 @@ class loadDataset():
 
     def updateObjdata(self, idx, save_idx):
         if str(idx) in self.obj_data_all:
-            self.obj_data_sampled[str(save_idx)] = self.obj_data_all[str(idx)]
+            self.marker_sampled[str(save_idx)] = self.obj_data_all[str(idx)]
+            marker_data = np.copy(self.obj_data_all[str(idx)])
+
+            marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
+            self.marker_cam_sampled[str(save_idx)] = marker_data_cam
+
         else:
-            self.obj_data_sampled[str(save_idx)] = None
+            self.marker_sampled[str(save_idx)] = None
+            self.marker_cam_sampled[str(save_idx)] = None
+
+    def transform_marker_pose(self, marker_poses_mocap):
+        obj_cam_ext = self.obj_cam_ext
+        # transform marker pose origin to master cam
+        extr = self.extrinsics[self.camID]
+        intr = self.intrinsics[self.camID]
+        distC = self.distCoeffs[self.camID]
+
+        coord_homo = np.concatenate((marker_poses_mocap.T, np.ones((1, self.marker_num))), axis=0)
+        world_coord = obj_cam_ext @ coord_homo  # camera's coordinate
+        projection = extr.reshape(3, 4)
+        projection = np.concatenate((projection, self.h), axis=0)
+        projection = np.linalg.inv(projection)
+        world_coord = projection @ world_coord  # master's coordinate
+        world_coord = world_coord[:3].T
+
+        ### debug ###
+        projection = extr.reshape(3, 4)
+        reprojected, _ = cv2.projectPoints(world_coord, projection[:, :3],
+                                           projection[:, 3:], intr, distC)
+        reprojected = np.squeeze(reprojected)
+
+        image = self.debug
+        for k in range(4):
+            point = reprojected[k, :]
+            image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
+        cv2.imshow("debug marker to cam", image)
+        cv2.waitKey(0)
+
+        return world_coord, reprojected
 
     def saveObjdata(self):
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'.pkl'), 'wb') as f:
-            pickle.dump(self.obj_data_sampled, f, pickle.HIGHEST_PROTOCOL)
+            pickle.dump(self.marker_sampled, f, pickle.HIGHEST_PROTOCOL)
 
 
     def getItem(self, idx, save_idx):
@@ -363,6 +430,9 @@ class loadDataset():
         self.info['images']['frame_num'] = save_idx
         with open(os.path.join(self.annotCamDir, "anno_%04d.json"%save_idx), "w") as w:
             json.dump(self.info, w, ensure_ascii=False)
+
+
+        self.debug = rgb.copy()
 
         return (rgb, depth)
     
@@ -508,8 +578,8 @@ class loadDataset():
         # return mask[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])], com[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
         return mask, com
     
-    def segmenation(self, idx, procImgSet, kps):
-        rgb, _ = procImgSet
+    def segmenation(self, idx, procImgSet, kps, img2bb):
+        rgb, depth = procImgSet
 
         # rgb, _, matting, mattedRgb = procImgSet
         seg_image = np.uint8(rgb.copy())
@@ -523,7 +593,75 @@ class loadDataset():
         bgdModel = np.zeros((1,65),np.float64)
         fgdModel = np.zeros((1,65),np.float64)
         mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
-        mask = np.where((mask==2)|(mask==0),0,1).astype('uint8')
+        mask_hand = np.where((mask==2)|(mask==0),0,1).astype('uint8')
+
+        # image_temp = np.uint8(rgb.copy())
+        # gray = rgb2gray(image_temp)
+        # th_otsu = threshold_otsu(gray)
+        # binary_otsu = gray < th_otsu
+        # if camID == 'mas':
+        #     mask_otsu = np.ones(seg_image.shape[:2], np.uint8)
+        #     mask_otsu = np.where(binary_otsu, 0, mask_otsu)
+        # elif camID == 'sub1':
+        #     mask_otsu = np.zeros(seg_image.shape[:2], np.uint8)
+        #     mask_otsu = np.where(binary_otsu, 1, mask_otsu)
+
+        # mask_fg = np.ones(seg_image.shape[:2], np.uint8)
+        # mask_fg = np.where(depth > 1000, 0, mask_fg)
+        # mask_fg = np.where(depth < 200, 0, mask_fg)
+        # mask_fg = np.where(depth == 0, 0, mask_fg)
+        # mask_fg = cv2.medianBlur(mask_fg, 3)
+
+        # image_temp = np.uint8(rgb.copy())
+        # lower_table = np.array([0, 00, 0])
+        # upper_table = np.array([65, 50, 40])
+        # mask_table = cv2.inRange(image_temp, lower_table, upper_table)
+        # mask_table = np.where(mask_table>0, 1, mask_table)
+        # mask_obj = mask_otsu.copy()
+        # mask_obj = np.where(depth > 1000, 0, mask_obj)
+        # mask_obj = np.where(depth < 400, 0, mask_obj)
+        # mask_obj = np.where(mask_hand > 0, 0, mask_obj)
+        # mask_obj = cv2.medianBlur(mask_obj, 3)
+
+
+        seg_image = np.uint8(rgb.copy())
+        debug_image = np.uint8(rgb.copy())
+        mask_obj = np.ones(seg_image.shape[:2], np.uint8) * 2
+
+        procKps = self.translateKpts(self.marker_proj, img2bb)
+        ps = []
+        for i in range(procKps.shape[0]):
+            ps.append(np.asarray(procKps[i, :], dtype=int))
+
+        for p in ps:
+            for p_ in ps:
+                cv2.line(debug_image, p, p_, (255, 0, 0), 2)
+
+        for p in ps:
+            for p_ in ps:
+                cv2.line(mask_obj, p, p_, cv2.GC_FGD, 2)
+        for lineIndex in lineIndices:
+            for j in range(len(lineIndex) - 1):
+                point1 = np.int32(kps[lineIndex[j], :2])
+                point2 = np.int32(kps[lineIndex[j + 1], :2])
+                cv2.line(mask_obj, point1, point2, cv2.GC_BGD, 1)
+        bgdModel = np.zeros((1, 65), np.float64)
+        fgdModel = np.zeros((1, 65), np.float64)
+        mask_obj, bgdModel, fgdModel = cv2.grabCut(seg_image, mask_obj, None, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
+        mask_obj = np.where((mask_obj == 2) | (mask_obj == 0), 0, 1).astype('uint8')
+        mask_obj = cv2.medianBlur(mask_obj, 3)
+        mask_obj = np.where(mask_hand > 0, 0, mask_obj)
+
+
+        cv2.imshow("rgb", rgb / 255.0)
+        cv2.imshow("mask_hand", mask_hand * 255.0)
+        # cv2.imshow("mask_fg", mask_fg * 255)
+        # cv2.imshow("mask_table", mask_table * 255)
+        cv2.imshow("debug_image", debug_image / 255.0)
+        cv2.imshow("mask_obj", mask_obj * 255)
+        # cv2.imshow("rgb_obj", np.uint8(rgb.copy()) * mask_obj[:, :, np.newaxis] / 255.0)
+        cv2.waitKey(0)
+
 
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.segResDir, imgName), mask * 255)
@@ -574,18 +712,18 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
                 # procImgSet.append(matting)
                 # procImgSet.append(mattedRgb)
                 db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
-                if flag_segmentation:
-                    db.segmenation(save_idx, procImgSet, procKps)
 
-                if db.flag_obj:
-                    db.updateObjdata(idx, save_idx)
+                db.updateObjdata(idx, save_idx)
+
+                if flag_segmentation:
+                    db.segmenation(save_idx, procImgSet, procKps, img2bb)
+
 
             progress.update()
             global_tqdm.update()
             save_idx += 1
 
-        if db.flag_obj:
-            db.saveObjdata()
+        db.saveObjdata()
 
     return True
 
@@ -609,7 +747,7 @@ def main(argv):
     '''
 
     tasks = []
-    process_count = 8
+    process_count = 4
     total_count = 0
 
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):

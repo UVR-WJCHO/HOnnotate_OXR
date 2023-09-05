@@ -25,9 +25,9 @@ import time
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230823', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230823_S01_obj_07_grasp_12', 'target sequence name')
-flags.DEFINE_integer('initNum', 31, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
+flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
+flags.DEFINE_integer('initNum', 1, 'initial frame num of trial_0, check mediapipe results')
 
 FLAGS(sys.argv)
 
