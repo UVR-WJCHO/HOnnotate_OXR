@@ -53,6 +53,7 @@ flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_string('obj_db', '230905_obj', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_string('obj_coord', '3', 'target cam coord idx in world_calib.py')   ## name ,default, help
+flags.DEFINE_string('obj_cam', 'mas', 'target cam in world_calib.py')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -195,6 +196,7 @@ class loadDataset():
         self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
         obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
         self.obj_cam_ext = np.load(os.path.join(camResultDir, str(FLAGS.obj_coord) + '-world.npy'))
+        self.obj_cam = str(FLAGS.obj_cam)
 
         self.h = np.array([[0, 0, 0, 1]])
         self.obj_cam_ext = np.concatenate((self.obj_cam_ext, self.h), axis=0)
@@ -367,20 +369,20 @@ class loadDataset():
     def transform_marker_pose(self, marker_poses_mocap):
         obj_cam_ext = self.obj_cam_ext
         # transform marker pose origin to master cam
-        extr = self.extrinsics[self.camID]
+        extr = self.extrinsics[self.obj_cam]
         intr = self.intrinsics[self.camID]
         distC = self.distCoeffs[self.camID]
 
         coord_homo = np.concatenate((marker_poses_mocap.T, np.ones((1, self.marker_num))), axis=0)
-        world_coord = obj_cam_ext @ coord_homo  # camera's coordinate
+        world_coord = obj_cam_ext @ coord_homo # master's coordinate
         projection = extr.reshape(3, 4)
         projection = np.concatenate((projection, self.h), axis=0)
         projection = np.linalg.inv(projection)
-        world_coord = projection @ world_coord  # master's coordinate
+        world_coord = projection @ world_coord # camera's coordinate
         world_coord = world_coord[:3].T
 
         ### debug ###
-        projection = extr.reshape(3, 4)
+        projection = self.extrinsics[self.camID].reshape(3, 4)
         reprojected, _ = cv2.projectPoints(world_coord, projection[:, :3],
                                            projection[:, 3:], intr, distC)
         reprojected = np.squeeze(reprojected)
@@ -389,7 +391,8 @@ class loadDataset():
         for k in range(4):
             point = reprojected[k, :]
             image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
-        cv2.imshow("debug marker to cam", image)
+
+        cv2.imshow(f"debug marker to cam {self.camID}", image)
         cv2.waitKey(0)
 
         return world_coord, reprojected
