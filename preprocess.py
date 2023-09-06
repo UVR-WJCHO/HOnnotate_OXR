@@ -81,7 +81,7 @@ numConsThreads = 1
 w = 640
 h = 480
 
-segIndices = [1,5,9,13,17]
+segIndices = [1,5,9,13,17,1]
 palmIndices = [0,1,5,9,13,17,0]
 thumbIndices = [0,1,2,3,4]
 indexIndices = [5,6,7,8]
@@ -379,24 +379,21 @@ class loadDataset():
         return world_coord, reprojected
 
     def fit_markerToObj(self, marker_pose, obj_type, obj_mesh):
+        # generate initial obj pose (4, 4)
+        obj_init_pose = generate_pose([0,0,0],[0,0,0])
 
         vertIDpermarker = CFG_vertspermarker[str(OBJType(int(obj_type)).name)]
         obj_verts = obj_mesh['verts']
-        # obj_faces = obj_mesh['faces']
-        obj_verts_sample = obj_verts[vertIDpermarker, :]
+        verts_pose = obj_verts[vertIDpermarker, :]
+        verts_pose = apply_transform(obj_init_pose, verts_pose)
 
-        # generate initial obj pose (4, 4)
-        obj_init_pose = generate_pose([0,0,0],[0,0,0])
-        verts_pose = apply_transform(obj_init_pose, obj_verts_sample)
-
-        marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
         verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
+        marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
 
         R, t = tf.batch_solve_rigid_tf(verts_pose, marker_pose)
 
         R = R[0]
         t = t[0]
-
         pose_calc = np.eye(4)
         pose_calc[:3, :3] = R[:3, :3]
         pose_calc[0, 3] = t[0]
@@ -565,13 +562,13 @@ class loadDataset():
         kps[:, :2] = np.dot(img2bb, uv1.transpose(1, 0)).transpose(1, 0)[:, :2]
         return kps
 
-    def segmenation(self, idx, procImgSet, kps, img2bb):
+    def segmentation(self, idx, procImgSet, kps, img2bb):
         rgb, depth = procImgSet
 
-        procKps = self.translateKpts(self.marker_proj, img2bb)
+        obj_kps = self.translateKpts(self.marker_proj, img2bb)
         ps = []
-        for i in range(procKps.shape[0]):
-            ps.append(np.asarray(procKps[i, :], dtype=int))
+        for i in range(obj_kps.shape[0]):
+            ps.append(np.asarray(obj_kps[i, :], dtype=int))
 
         hsv_image = np.uint8(rgb.copy())
         hsv = cv2.cvtColor(hsv_image, cv2.COLOR_BGR2HSV)
@@ -586,12 +583,15 @@ class loadDataset():
         # debug_image = seg_image.copy()
         mask = np.ones(seg_image.shape[:2], np.uint8) * 2
         # hand kpt for foreground
-        for i in range(len(segIndices)):
+        for i in range(len(segIndices) - 1):
             point1 = np.int32(kps[0, :2])
             point2 = np.int32(kps[segIndices[i], :2])
-
+            point3 = np.int32(kps[segIndices[i+1], :2])
             cv2.line(mask, point1, point2, cv2.GC_FGD, 1)
+            cv2.line(mask, point3, point2, cv2.GC_FGD, 1)
+
             # cv2.line(debug_image, point1, point2, (255, 0, 0), 2)
+            # cv2.line(debug_image, point3, point2, (255, 0, 0), 2)
 
         # object marker for background
         for p in ps:
@@ -603,19 +603,36 @@ class loadDataset():
         fgdModel = np.zeros((1,65),np.float64)
         mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
         mask_hand = np.where((mask==2)|(mask==0),0,1).astype('uint8')
-
         mask_hand = np.where(depth > 1000, 0, mask_hand)
 
-        # cv2.imshow("rgb", rgb / 255.0)
-        # cv2.imshow("mask_hand", mask_hand * 255.0)
-        # cv2.imshow("rgb_hand", np.uint8(rgb.copy()) * mask_hand[:, :, np.newaxis] / 255.0)
-        # cv2.imshow("debug_image", debug_image / 255.0)
-        # cv2.waitKey(0)
+        # extract obj mask
+        # mask_obj = np.ones(seg_image.shape[:2], np.uint8) * 2
+        # for p in ps:
+        #     for p_ in ps:
+        #         cv2.line(mask_obj, p, p_, cv2.GC_FGD, 2)
+        # bgdModel = np.zeros((1, 65), np.float64)
+        # fgdModel = np.zeros((1, 65), np.float64)
+        # mask_obj, bgdModel, fgdModel = cv2.grabCut(seg_image, mask_obj, None, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
+        # mask_obj = np.where((mask_obj == 2) | (mask_obj == 0), 0, 1).astype('uint8')
+        # mask_obj = np.where(depth > 1000, 0, mask_obj)
+        #
+        # mask_both = np.logical_and(mask_hand, mask_obj)
+        # value_both = np.sum(mask_both)
+        #
+        # if self.camID == 'sub2':
+        #     print("value both : ", value_both)
+        #     cv2.imshow("rgb", rgb / 255.0)
+        #     cv2.imshow("debug_image", debug_image / 255.0)
+        #     cv2.imshow("mask_hand", mask_hand * 255.0)
+        #     cv2.imshow("mask_obj", mask_obj * 255.0)
+        #     # cv2.imshow("rgb_hand", np.uint8(rgb.copy()) * mask_hand[:, :, np.newaxis] / 255.0)
+        #     cv2.waitKey(1)
 
 
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.segResDir, imgName), mask_hand * 255)
         cv2.imwrite(os.path.join(self.segVisDir, imgName), rgb*mask_hand[:,:,np.newaxis])
+
 
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts):
 
@@ -647,8 +664,6 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
 
         save_idx = 0
         for idx in range(len(db)):
-            if idx < 5:
-                continue
             if idx % 3 != 0:
                 progress.update()
                 global_tqdm.update()
@@ -665,7 +680,7 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
                 db.updateObjdata(idx, save_idx)
 
                 if flag_segmentation:
-                    db.segmenation(save_idx, procImgSet, procKps, img2bb)
+                    db.segmentation(save_idx, procImgSet, procKps, img2bb)
 
             progress.update()
             global_tqdm.update()
@@ -695,7 +710,7 @@ def main(argv):
     '''
 
     tasks = []
-    process_count = 1
+    process_count = 4
     total_count = 0
 
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
