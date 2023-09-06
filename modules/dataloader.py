@@ -243,7 +243,12 @@ class ObjectLoader:
         self.obj_mesh_data['faces'] = faces.verts_idx
 
         # load from results of preprocess.py
-        self.obj_init_pose = None
+        obj_pose_data_name = data_type + '_0' + data_trial[-1] + '_obj_pose.pkl'
+        obj_pose_data_path = os.path.join(self.obj_pose_dir, obj_pose_data_name)
+        with open(obj_pose_data_path, 'rb') as f:
+            self.obj_init_pose = pickle.load(f)
+
+
 
 
     def read_obj(self, file_path):

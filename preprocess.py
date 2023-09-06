@@ -48,7 +48,8 @@ from utils.dataUtils import *
 from pytorch3d.io import load_obj
 import modules.common.transforms as tf
 
-flag_debug = False
+
+
 
 
 ### FLAGS ###
@@ -93,6 +94,9 @@ lineIndices = [palmIndices, thumbIndices, indexIndices, middleIndices, ringIndic
 ### Manual Flags (remove after debug) ###
 flag_preprocess = True
 flag_segmentation = True
+
+
+num_global = 0
 
 class loadDataset():
     def __init__(self, db, seq, trial):
@@ -339,8 +343,8 @@ class loadDataset():
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
-            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
-            self.obj_pose_sampled[str(save_idx)] = obj_pose_data
+            # obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
+            # self.obj_pose_sampled[str(save_idx)] = obj_pose_data
 
         else:
             self.marker_sampled[str(save_idx)] = None
@@ -368,13 +372,12 @@ class loadDataset():
                                            projection[:, 3:], intr, distC)
         reprojected = np.squeeze(reprojected)
 
-        image = self.debug
-        for k in range(4):
-            point = reprojected[k, :]
-            image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
-
-            # cv2.imshow(f"debug marker to cam {self.camID}", image)
-            # cv2.waitKey(0)
+        # image = self.debug
+        # for k in range(self.marker_num):
+        #     point = reprojected[k, :]
+        #     image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
+        #     cv2.imshow(f"debug marker to cam {self.camID}", image)
+        #     cv2.waitKey(0)
 
         return world_coord, reprojected
 
@@ -654,7 +657,8 @@ class loadDataset():
         jsonPath = os.path.join(self.metaDir, metaName)
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
-        
+
+
 
 def preprocess_single_cam(db, tqdm_func, global_tqdm):
     with tqdm_func(total=len(db)) as progress:
@@ -710,9 +714,9 @@ def main(argv):
     '''
 
     tasks = []
-    process_count = 4
+    process_count = 8
     total_count = 0
-
+    t1 = time.time()
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
         seqDir = os.path.join(rootDir, seqName)
         print("---------------start preprocess seq : %s ---------------" % (seqName))
@@ -729,7 +733,20 @@ def main(argv):
             pool.map(global_tqdm, tasks, error_callback, done_callback)
 
         print("---------------end preprocess seq : %s ---------------" % (seqName))
-    print(time.ctime())
+
+    proc_time = round((time.time() - t1) / 60., 2)
+    print("total process time : %s min" % (str(proc_time)))
+
+    total_num = 0
+    for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        seqDir = os.path.join(rootDir, seqName)
+        for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+            for camID in camIDset:
+                anno_dir = os.path.join(baseDir, FLAGS.db+'_result', seqName, trialName, 'annotation', camID)
+                num_anno = len(os.listdir(anno_dir))
+                total_num += num_anno
+
+        print("total json num in seq %s : %s" % (seqName, total_num))
 
 if __name__ == '__main__':
     app.run(main)
