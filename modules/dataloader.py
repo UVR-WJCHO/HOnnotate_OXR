@@ -242,24 +242,8 @@ class ObjectLoader:
         self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
         self.obj_mesh_data['faces'] = faces.verts_idx
 
-        # mocap output
-        trial_num = data_trial.split('_')[-1]
-        obj_file_name = data_type + '_0' + str(trial_num) + '.pkl'
-        with open(os.path.join(self.obj_pose_dir, obj_file_name), 'rb') as f:
-            marker_data = pickle.load(f)
-
-        self.db_len = int(len(marker_data) - 1)
-        self.marker_num = marker_data['marker_num']
-
-        # load 3mm marker extrinsic (valid only 230823)
-        # assert data_date == '230823', 'for other samples, check world_coordinate.png from world_calib.py'
-        obj_cam_ext = np.load(os.path.join(base_path, data_date + '_cam', '3-world.npy'))
-        obj_cam_ext = np.concatenate((obj_cam_ext, h), axis=0)
-
-        # TODO
-        # move to preprocess.py
-        marker_data_cam = self.transform_marker_pose(marker_data, obj_cam_ext)
-        self.obj_pose_data = self.fit_markerToObj(marker_data_cam, obj_type, self.obj_mesh_data)
+        # load from results of preprocess.py
+        self.obj_init_pose = None
 
 
     def read_obj(self, file_path):
@@ -284,88 +268,6 @@ class ObjectLoader:
         return obj_data
 
 
-    def transform_marker_pose(self, marker_data, obj_cam_ext):
-        marker_data_cam = {}
-        # transform marker pose origin to master cam
-        mas_ext = self.mas_M
-        marker_num = marker_data['marker_num']
-        for key in marker_data:
-            if key == 'marker_num':
-                continue
-            marker_poses_mocap = marker_data[key]   # (4,3)
-
-            # ones = np.ones((marker_poses_mocap.shape[0], 1))
-            # xyz4Dmocap = np.concatenate([marker_poses_mocap, ones], axis=1)
-            # projMat = np.concatenate((mas_ext, h), 0)
-            # xyz4Dworld = (np.linalg.inv(projMat) @ xyz4Dmocap.T).T
-            # xyz4Dcam = xyz4Dworld @ obj_cam_ext.T
-            # marker_data_cam[key] = xyz4Dcam[:, :3]
-
-            coord_homo = np.concatenate((marker_poses_mocap.T, np.ones((1, marker_num))), axis=0)
-            world_coord = obj_cam_ext @ coord_homo  # camera's coordinate
-            projection = mas_ext.reshape(3, 4)
-            projection = np.concatenate((projection, h), axis=0)
-            projection = np.linalg.inv(projection)
-            world_coord = projection @ world_coord  # master's coordinate
-            world_coord = world_coord[:3].T
-            marker_data_cam[key] = world_coord
-
-
-            ### debug ###
-            # world_coord_v2 = xyz4Dcam[:, :3]
-            # world_coord = np.copy(world_coord_v2)
-            img_name = 'mas_' + str(key) + '.jpg'
-            seq_name = '230905_result'
-            image = cv2.imread(os.path.join(self.base_path, seq_name, '230905_S01_obj_30_grasp_01', 'trial_0', 'rgb', 'mas', img_name))
-            projection = mas_ext.reshape(3,4)
-            reprojected, _ = cv2.projectPoints(world_coord, projection[:, :3],
-                                               projection[:, 3:], self.mas_K, self.mas_D)
-            reprojected = np.squeeze(reprojected)
-            for k in range(4):
-                point = reprojected[k, :]
-                image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0,0,255))
-            cv2.imshow(seq_name, image)
-            cv2.waitKey(0)
-
-        return marker_data_cam
-
-    def fit_markerToObj(self, marker_data_cam, obj_type, obj_mesh):
-        obj_pose_data = {}
-        vertIDpermarker = vertPermarker[str(OBJType(int(obj_type)).name)]
-
-        obj_verts = obj_mesh['verts']
-        # obj_faces = obj_mesh['faces']
-
-        verts_pose_cam = obj_verts[vertIDpermarker, :]
-
-        for key in tqdm(marker_data_cam):
-            obj_init_pose = generate_pose([0,0,0],[0,0,0])
-
-            marker_pose = marker_data_cam[key]
-            verts_pose = apply_transform(obj_init_pose, verts_pose_cam)
-
-            marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
-            verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
-
-            R, t = tf.batch_solve_rigid_tf(verts_pose, marker_pose)
-
-            R = R[0]
-            t = t[0]
-
-            pose_calc = np.eye(4)
-            pose_calc[:3, :3] = R[:3, :3]
-            pose_calc[0, 3] = t[0]
-            pose_calc[1, 3] = t[1]
-            pose_calc[2, 3] = t[2]
-
-            # verts_all = apply_transform(pose_calc, obj_verts)
-            # verts_all = torch.FloatTensor(verts_all)
-            # mesh = Meshes(verts=[verts_all], faces=[obj_faces]).to(self.device)
-
-            obj_pose_data[key] = pose_calc
-
-        return obj_pose_data
-
     def __getitem__(self, index: int):
         try:
             sample = self.obj_pose_data[str(index)]
@@ -375,7 +277,7 @@ class ObjectLoader:
         return sample
 
     def __len__(self):
-        return self.db_len
+        return self.obj_init_pose.shape[0]
 
 
 

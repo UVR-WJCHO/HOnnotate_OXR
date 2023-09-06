@@ -334,18 +334,18 @@ class loadDataset():
     def updateObjdata(self, idx, save_idx):
         if str(idx) in self.obj_data_all:
             self.marker_sampled[str(save_idx)] = self.obj_data_all[str(idx)]
-            marker_data = np.copy(self.obj_data_all[str(idx)])
 
+            marker_data = np.copy(self.obj_data_all[str(idx)])
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
-            # TODO
             obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
             self.obj_pose_sampled[str(save_idx)] = obj_pose_data
 
         else:
             self.marker_sampled[str(save_idx)] = None
             self.marker_cam_sampled[str(save_idx)] = None
+            self.obj_pose_sampled[str(save_idx)] = None
 
     def transform_marker_pose(self, marker_poses_mocap):
         obj_cam_ext = self.obj_cam_ext
@@ -368,27 +368,26 @@ class loadDataset():
                                            projection[:, 3:], intr, distC)
         reprojected = np.squeeze(reprojected)
 
-        # image = self.debug
-        # for k in range(4):
-        #     point = reprojected[k, :]
-        #     image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
-        #
-        # cv2.imshow(f"debug marker to cam {self.camID}", image)
-        # cv2.waitKey(0)
+        image = self.debug
+        for k in range(4):
+            point = reprojected[k, :]
+            image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
+
+            # cv2.imshow(f"debug marker to cam {self.camID}", image)
+            # cv2.waitKey(0)
 
         return world_coord, reprojected
 
     def fit_markerToObj(self, marker_pose, obj_type, obj_mesh):
-        vertIDpermarker = CFG_vertspermarker[str(OBJType(int(obj_type)).name)]
 
+        vertIDpermarker = CFG_vertspermarker[str(OBJType(int(obj_type)).name)]
         obj_verts = obj_mesh['verts']
         # obj_faces = obj_mesh['faces']
+        obj_verts_sample = obj_verts[vertIDpermarker, :]
 
-        verts_pose_cam = obj_verts[vertIDpermarker, :]
-
+        # generate initial obj pose (4, 4)
         obj_init_pose = generate_pose([0,0,0],[0,0,0])
-
-        verts_pose = apply_transform(obj_init_pose, verts_pose_cam)
+        verts_pose = apply_transform(obj_init_pose, obj_verts_sample)
 
         marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
         verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
@@ -404,18 +403,28 @@ class loadDataset():
         pose_calc[1, 3] = t[1]
         pose_calc[2, 3] = t[2]
 
-        # verts_all = apply_transform(pose_calc, obj_verts)
+        verts_debug = np.squeeze(verts_pose.numpy())
+        verts_debug = apply_transform(pose_calc, verts_debug)
+        marker_debug = np.squeeze(marker_pose.numpy())
+
+        err = np.sum(abs(verts_debug - marker_debug), axis=1)
+        err = np.average(err)
+        assert err < 100, f"wrong marker-vert fitting with err {err}, check vert idx"
         # verts_all = torch.FloatTensor(verts_all)
         # mesh = Meshes(verts=[verts_all], faces=[obj_faces]).to(self.device)
 
         return pose_calc
 
 
-
     def saveObjdata(self):
-        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'.pkl'), 'wb') as f:
+        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker.pkl'), 'wb') as f:
             pickle.dump(self.marker_sampled, f, pickle.HIGHEST_PROTOCOL)
 
+        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker_cam.pkl'), 'wb') as f:
+            pickle.dump(self.marker_cam_sampled, f, pickle.HIGHEST_PROTOCOL)
+
+        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_obj_pose.pkl'), 'wb') as f:
+            pickle.dump(self.obj_pose_sampled, f, pickle.HIGHEST_PROTOCOL)
 
     def getItem(self, idx, save_idx):
         # camID : mas, sub1, sub2, sub3

@@ -36,9 +36,9 @@ CFG_CONTACT_THRESH = 8
 
 CFG_vertspermarker = {
     "mug" : [1282, 1329, 965, 756],
-    "cardboard_box" : [18, 763, 42, 776],
+    "cardboard_box" : [61,785,8,804],
 }
-
+#[18, 763, 42, 776]
 
 
 
