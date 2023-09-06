@@ -34,8 +34,9 @@ CFG_NUM_ITER_CONTACT = 100 # use contact loss for the last 100 iters
 CFG_CONTACT_THRESH = 8
 
 
-vertPermarker = {
+CFG_vertspermarker = {
     "mug" : [1282, 1329, 965, 756],
+    "cardboard_box" : [18, 763, 42, 776],
 }
 
 

@@ -1,6 +1,7 @@
 import os
 import sys
 
+sys.path.insert(0,os.path.join(os.getcwd(), 'modules'))
 sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine'))
 sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine/models'))
 sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine/models/slim'))
@@ -45,7 +46,7 @@ import shutil
 from utils.dataUtils import *
 # import modules.common.transforms as tf
 from pytorch3d.io import load_obj
-
+import modules.common.transforms as tf
 
 flag_debug = False
 
@@ -80,7 +81,8 @@ numConsThreads = 1
 w = 640
 h = 480
 
-palmIndices = [0,5,9,13,17,0]
+segIndices = [1,5,9,13,17]
+palmIndices = [0,1,5,9,13,17,0]
 thumbIndices = [0,1,2,3,4]
 indexIndices = [5,6,7,8]
 middleIndices = [9,10,11,12]
@@ -117,13 +119,6 @@ class loadDataset():
         os.makedirs(self.annotDir, exist_ok=True)
         for camID in camIDset:
             os.makedirs(os.path.join(self.annotDir, camID), exist_ok=True)
-
-        ### copy and paste object pose tsv ###
-        self.dbDir_obj = os.path.join(baseDir, FLAGS.obj_db, 'IR cam.TSV')
-        obj_tsv_original = os.path.join(self.dbDir_obj, seq + '_trial_0' + str(self.trial_num) + '_6D.tsv')
-        if os.path.exists(obj_tsv_original):
-            obj_tsv_result = os.path.join(self.dbDir_result, seq + '_trial_0' + str(self.trial_num) + '_6D.tsv')
-            shutil.copyfile(obj_tsv_original, obj_tsv_result)
 
         self.dbDir = os.path.join(baseDir, db, seq, trial)
         self.rgbDir = os.path.join(self.dbDir, 'rgb')
@@ -167,7 +162,6 @@ class loadDataset():
 
         # set save path for cameraInfo_undistort
         self.intrinsic_undistort_path = os.path.join(camResultDir, "cameraInfo_undistort.txt")
-
         self.intrinsic_undistort = {}
         for cam in CFG_CAMID_SET:
             new_camera, _ = cv2.getOptimalNewCameraMatrix(self.intrinsics[cam], self.distCoeffs[cam], (image_rows, image_cols), 1, (image_rows, image_cols))
@@ -182,13 +176,15 @@ class loadDataset():
                     f.write("\n")
 
         ### object pose ###
+        self.marker_sampled = {}
+        self.marker_cam_sampled = {}
+        self.obj_pose_sampled = {}
+
         self.obj_db_Dir = os.path.join(baseDir, FLAGS.obj_db)
 
-        obj_name = self.seq[:-9] # 230612_S01_obj_01
-        self.obj_data_Dir = os.path.join(self.obj_db_Dir, obj_name)
+        obj_dir_name = self.seq[:-9] # 230612_S01_obj_01
+        self.obj_data_Dir = os.path.join(self.obj_db_Dir, obj_dir_name)
 
-        self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
-        obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
         self.obj_cam_ext = np.load(os.path.join(camResultDir, str(FLAGS.obj_coord) + '-world.npy'))
         self.obj_cam = str(FLAGS.obj_cam)
 
@@ -207,13 +203,12 @@ class loadDataset():
             origin_y = float(line[2]) * 1000.
             origin_z = float(line[3]) * 1000.
 
-        obj_data = {}
-        self.marker_sampled = {}
-        self.marker_cam_sampled = {}
-        self.obj_pose_sampled = {}
-
         # load marker set pose
+        self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
+        obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
         assert os.path.isfile(obj_pose_data),"no obj pose data"
+
+        obj_data = {}
         with open(obj_pose_data, "r") as f:
             line = f.readline().strip().split(' ')
             _ = f.readline()
@@ -345,8 +340,8 @@ class loadDataset():
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
             # TODO
-            # obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
-            # self.obj_pose_sampled[str(save_idx)] = obj_pose_data
+            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
+            self.obj_pose_sampled[str(save_idx)] = obj_pose_data
 
         else:
             self.marker_sampled[str(save_idx)] = None
@@ -384,7 +379,7 @@ class loadDataset():
         return world_coord, reprojected
 
     def fit_markerToObj(self, marker_pose, obj_type, obj_mesh):
-        vertIDpermarker = vertPermarker[str(OBJType(int(obj_type)).name)]
+        vertIDpermarker = CFG_vertspermarker[str(OBJType(int(obj_type)).name)]
 
         obj_verts = obj_mesh['verts']
         # obj_faces = obj_mesh['faces']
@@ -458,19 +453,6 @@ class loadDataset():
         self.debug = rgb.copy()
 
         return (rgb, depth)
-    
-    def getBg(self):
-        bgName = str(self.camID) + '_4'
-        rgbBgPath = os.path.join(self.rgbBgDir, str(self.camID), bgName + '.jpg')
-        depthBgPath = os.path.join(self.depthBgDir, str(self.camID), bgName + '.png')
-
-        assert os.path.exists(rgbBgPath), 'rgb background image does not exist'
-        assert os.path.exists(depthBgPath), 'depth background image does not exist'
-
-        rgbBg = cv2.imread(rgbBgPath)
-        depthBg = cv2.imread(depthBgPath, cv2.IMREAD_ANYDEPTH)
-
-        return (rgbBg, depthBg)
 
     def undistort(self, images):
         rgb, depth = images
@@ -573,84 +555,58 @@ class loadDataset():
         uv1 = np.concatenate((kps[:, :2], np.ones_like(kps[:, :1])), 1)
         kps[:, :2] = np.dot(img2bb, uv1.transpose(1, 0)).transpose(1, 0)[:, :2]
         return kps
-    
-    def backgroundMatting(self, imgs, bgs, bbox):
-        src, depth = imgs #non cropped image
-        bgr, _ = bgs #non cropped backbround
-        cv2.imwrite(os.path.join(self.croppedBgDir, 'bg.png'), bgr)
-        model = torch.jit.load(bgmModelPath).cuda().eval()
-        src = src[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-        bgr = bgr[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-        src = cv2.cvtColor(src, cv2.COLOR_BGR2RGB)
-        bgr = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
-        src = Image.fromarray(src)
-        bgr = Image.fromarray(bgr)
-        src = to_tensor(src).cuda().unsqueeze(0)
-        bgr = to_tensor(bgr).cuda().unsqueeze(0)
-        if src.size(2) <= 2048 and src.size(3) <= 2048:
-            model.backbone_scale = 1/4
-            model.refine_sample_pixels = 80_000
-        else:
-            model.backbone_scale = 1/8
-            model.refine_sample_pixels = 320_000
-        pha, fgr = model(src, bgr)[:2]
-        mask = pha[0].permute(1, 2, 0).cpu().numpy()*255
-        com = pha * fgr + (1 - pha) * torch.tensor([120/255, 255/255, 155/255], device='cuda').view(1, 3, 1, 1)
-        com = com.permute(0, 2, 3, 1).cpu().numpy()[0] * 255
-        com = cv2.cvtColor(com.astype(np.uint8), cv2.COLOR_RGB2BGR)
-        # return mask[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])], com[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-        return mask, com
-    
-    def segmenation(self, idx, procImgSet, kps, bb, img2bb, bgs):
-        rgb, depth = procImgSet
 
-        # _, depth_bg = bgs
-        # depth_bg = depth_bg[int(bb[1]):int(bb[1] + bb[3]), int(bb[0]):int(bb[0] + bb[2])]
+    def segmenation(self, idx, procImgSet, kps, img2bb):
+        rgb, depth = procImgSet
 
         procKps = self.translateKpts(self.marker_proj, img2bb)
         ps = []
         for i in range(procKps.shape[0]):
             ps.append(np.asarray(procKps[i, :], dtype=int))
 
+        hsv_image = np.uint8(rgb.copy())
+        hsv = cv2.cvtColor(hsv_image, cv2.COLOR_BGR2HSV)
+        hsv[:, :, 2] = 150
+        rgb_filtered = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        # cv2.imshow("orig", rgb / 255)
+        # cv2.imshow("result", result / 255)
+        # cv2.waitKey(0)
 
         ### extract hand mask
-        seg_image = np.uint8(rgb.copy())
-        debug_image = seg_image.copy()
+        seg_image = np.uint8(rgb_filtered.copy())
+        # debug_image = seg_image.copy()
         mask = np.ones(seg_image.shape[:2], np.uint8) * 2
         # hand kpt for foreground
-        for i in range(len(palmIndices)-1):
-            point1 = np.int32(kps[palmIndices[i], :2])
-            point2 = np.int32(kps[palmIndices[i+1], :2])
+        for i in range(len(segIndices)):
+            point1 = np.int32(kps[0, :2])
+            point2 = np.int32(kps[segIndices[i], :2])
 
             cv2.line(mask, point1, point2, cv2.GC_FGD, 1)
-            cv2.line(debug_image, point1, point2, (255, 0, 0), 2)
+            # cv2.line(debug_image, point1, point2, (255, 0, 0), 2)
 
         # object marker for background
         for p in ps:
             for p_ in ps:
                 cv2.line(mask, p, p_, cv2.GC_BGD, 2)
-                cv2.line(debug_image, p, p_, (0, 255, 0), 2)
+                # cv2.line(debug_image, p, p_, (0, 255, 0), 2)
 
         bgdModel = np.zeros((1,65),np.float64)
         fgdModel = np.zeros((1,65),np.float64)
         mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
         mask_hand = np.where((mask==2)|(mask==0),0,1).astype('uint8')
 
+        mask_hand = np.where(depth > 1000, 0, mask_hand)
 
-        cv2.imshow("rgb", rgb / 255.0)
-        cv2.imshow("mask_hand", mask_hand * 255.0)
-        # cv2.imshow("mask_fg", mask_fg * 255)
-        # cv2.imshow("mask_table", mask_table * 255)
-        cv2.imshow("debug_image", debug_image / 255.0)
-        # cv2.imshow("mask_obj", mask_obj * 255)
-        # cv2.imshow("mask_obj_2", mask_obj_2 * 255)
-        # cv2.imshow("rgb_obj", np.uint8(rgb.copy()) * mask_obj[:, :, np.newaxis] / 255.0)
-        cv2.waitKey(0)
+        # cv2.imshow("rgb", rgb / 255.0)
+        # cv2.imshow("mask_hand", mask_hand * 255.0)
+        # cv2.imshow("rgb_hand", np.uint8(rgb.copy()) * mask_hand[:, :, np.newaxis] / 255.0)
+        # cv2.imshow("debug_image", debug_image / 255.0)
+        # cv2.waitKey(0)
 
 
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
-        cv2.imwrite(os.path.join(self.segResDir, imgName), mask * 255)
-        cv2.imwrite(os.path.join(self.segVisDir, imgName), seg_image*mask[:,:,np.newaxis])
+        cv2.imwrite(os.path.join(self.segResDir, imgName), mask_hand * 255)
+        cv2.imwrite(os.path.join(self.segVisDir, imgName), rgb*mask_hand[:,:,np.newaxis])
 
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts):
 
@@ -691,21 +647,16 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
             images = db.getItem(idx, save_idx)
             images = db.undistort(images)
             output = db.procImg(images, mp_hand)
-            bgs = db.getBg()
 
             if not output[0] is None:
                 bb, img2bb, bb2img, procImgSet, kps = output
                 procKps = db.translateKpts(np.copy(kps), img2bb)
-                # matting, mattedRgb = db.backgroundMatting(images, bgs, bb)
-                # procImgSet.append(matting)
-                # procImgSet.append(mattedRgb)
                 db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
 
                 db.updateObjdata(idx, save_idx)
 
                 if flag_segmentation:
-                    db.segmenation(save_idx, procImgSet, procKps, bb, img2bb, bgs)
-
+                    db.segmenation(save_idx, procImgSet, procKps, img2bb)
 
             progress.update()
             global_tqdm.update()
@@ -735,7 +686,7 @@ def main(argv):
     '''
 
     tasks = []
-    process_count = 4
+    process_count = 1
     total_count = 0
 
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
