@@ -43,7 +43,7 @@ from config import *
 from tqdm_multiprocess import TqdmMultiProcessPool
 import shutil
 from utils.dataUtils import *
-import modules.common.transforms as tf
+# import modules.common.transforms as tf
 from pytorch3d.io import load_obj
 
 
@@ -345,8 +345,8 @@ class loadDataset():
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
             # TODO
-            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
-            self.obj_pose_sampled[str(save_idx)] = obj_pose_data
+            # obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
+            # self.obj_pose_sampled[str(save_idx)] = obj_pose_data
 
         else:
             self.marker_sampled[str(save_idx)] = None
@@ -377,7 +377,7 @@ class loadDataset():
         # for k in range(4):
         #     point = reprojected[k, :]
         #     image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
-
+        #
         # cv2.imshow(f"debug marker to cam {self.camID}", image)
         # cv2.waitKey(0)
 
@@ -604,97 +604,46 @@ class loadDataset():
     def segmenation(self, idx, procImgSet, kps, bb, img2bb, bgs):
         rgb, depth = procImgSet
 
-        _, depth_bg = bgs
-        depth_bg = depth_bg[int(bb[1]):int(bb[1] + bb[3]), int(bb[0]):int(bb[0] + bb[2])]
-
-        # rgb, _, matting, mattedRgb = procImgSet
-        seg_image = np.uint8(rgb.copy())
-        # seg_image = np.uint8(rgb.copy())
-        mask = np.ones(seg_image.shape[:2], np.uint8) * 2
-        for lineIndex in lineIndices:
-            for j in range(len(lineIndex)-1):
-                point1 = np.int32(kps[lineIndex[j], :2])
-                point2 = np.int32(kps[lineIndex[j+1], :2])
-                cv2.line(mask, point1, point2, 1, 1)
-        bgdModel = np.zeros((1,65),np.float64)
-        fgdModel = np.zeros((1,65),np.float64)
-        mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
-        mask_hand = np.where((mask==2)|(mask==0),0,1).astype('uint8')
-
-        # image_temp = np.uint8(rgb.copy())
-        # gray = rgb2gray(image_temp)
-        # th_otsu = threshold_otsu(gray)
-        # binary_otsu = gray < th_otsu
-        # if camID == 'mas':
-        #     mask_otsu = np.ones(seg_image.shape[:2], np.uint8)
-        #     mask_otsu = np.where(binary_otsu, 0, mask_otsu)
-        # elif camID == 'sub1':
-        #     mask_otsu = np.zeros(seg_image.shape[:2], np.uint8)
-        #     mask_otsu = np.where(binary_otsu, 1, mask_otsu)
-
-        # mask_fg = np.ones(seg_image.shape[:2], np.uint8)
-        # mask_fg = np.where(depth > 1000, 0, mask_fg)
-        # mask_fg = np.where(depth < 200, 0, mask_fg)
-        # mask_fg = np.where(depth == 0, 0, mask_fg)
-        # mask_fg = cv2.medianBlur(mask_fg, 3)
-
-        # image_temp = np.uint8(rgb.copy())
-        # lower_table = np.array([0, 00, 0])
-        # upper_table = np.array([65, 50, 40])
-        # mask_table = cv2.inRange(image_temp, lower_table, upper_table)
-        # mask_table = np.where(mask_table>0, 1, mask_table)
-        # mask_obj = mask_otsu.copy()
-        # mask_obj = np.where(depth > 1000, 0, mask_obj)
-        # mask_obj = np.where(depth < 400, 0, mask_obj)
-        # mask_obj = np.where(mask_hand > 0, 0, mask_obj)
-        # mask_obj = cv2.medianBlur(mask_obj, 3)
-
-
-        ### remove bg first and grabcut object.
-        rgb_fg = np.uint8(rgb.copy())
-        mask_fg = np.ones(rgb_fg.shape[:2], np.uint8)
-        gap = abs(depth - bgs[1])
-
-        mask_fg = np.where(gap < 10, 0, mask_fg)
-        # mask_fg = cv2.medianBlur(mask_fg, 3)
-        cv2.imshow("rgb_fg", np.uint8(rgb_fg.copy()) * mask_fg[:, :, np.newaxis] / 255.0)
-
-        seg_image = np.uint8(rgb.copy())
-        mask_obj = np.ones(seg_image.shape[:2], np.uint8) * 2
+        # _, depth_bg = bgs
+        # depth_bg = depth_bg[int(bb[1]):int(bb[1] + bb[3]), int(bb[0]):int(bb[0] + bb[2])]
 
         procKps = self.translateKpts(self.marker_proj, img2bb)
         ps = []
         for i in range(procKps.shape[0]):
             ps.append(np.asarray(procKps[i, :], dtype=int))
 
-        # check grabcut input(marker position)
-        debug_image = np.uint8(rgb.copy())
-        for p in ps:
-            for p_ in ps:
-                cv2.line(debug_image, p, p_, (255, 0, 0), 2)
 
+        ### extract hand mask
+        seg_image = np.uint8(rgb.copy())
+        debug_image = seg_image.copy()
+        mask = np.ones(seg_image.shape[:2], np.uint8) * 2
+        # hand kpt for foreground
+        for i in range(len(palmIndices)-1):
+            point1 = np.int32(kps[palmIndices[i], :2])
+            point2 = np.int32(kps[palmIndices[i+1], :2])
+
+            cv2.line(mask, point1, point2, cv2.GC_FGD, 1)
+            cv2.line(debug_image, point1, point2, (255, 0, 0), 2)
+
+        # object marker for background
         for p in ps:
             for p_ in ps:
-                cv2.line(mask_obj, p, p_, cv2.GC_FGD, 2)
-        for lineIndex in lineIndices:
-            for j in range(len(lineIndex) - 1):
-                point1 = np.int32(kps[lineIndex[j], :2])
-                point2 = np.int32(kps[lineIndex[j + 1], :2])
-                cv2.line(mask_obj, point1, point2, cv2.GC_BGD, 1)
-        bgdModel = np.zeros((1, 65), np.float64)
-        fgdModel = np.zeros((1, 65), np.float64)
-        mask_obj, bgdModel, fgdModel = cv2.grabCut(seg_image, mask_obj, None, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
-        mask_obj = np.where((mask_obj == 2) | (mask_obj == 0), 0, 1).astype('uint8')
-        mask_obj = cv2.medianBlur(mask_obj, 3)
-        mask_obj = np.where(mask_hand > 0, 0, mask_obj)
+                cv2.line(mask, p, p_, cv2.GC_BGD, 2)
+                cv2.line(debug_image, p, p_, (0, 255, 0), 2)
+
+        bgdModel = np.zeros((1,65),np.float64)
+        fgdModel = np.zeros((1,65),np.float64)
+        mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
+        mask_hand = np.where((mask==2)|(mask==0),0,1).astype('uint8')
 
 
         cv2.imshow("rgb", rgb / 255.0)
-        # cv2.imshow("mask_hand", mask_hand * 255.0)
+        cv2.imshow("mask_hand", mask_hand * 255.0)
         # cv2.imshow("mask_fg", mask_fg * 255)
         # cv2.imshow("mask_table", mask_table * 255)
         cv2.imshow("debug_image", debug_image / 255.0)
-        cv2.imshow("mask_obj", mask_obj * 255)
+        # cv2.imshow("mask_obj", mask_obj * 255)
+        # cv2.imshow("mask_obj_2", mask_obj_2 * 255)
         # cv2.imshow("rgb_obj", np.uint8(rgb.copy()) * mask_obj[:, :, np.newaxis] / 255.0)
         cv2.waitKey(0)
 
@@ -733,6 +682,8 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
 
         save_idx = 0
         for idx in range(len(db)):
+            if idx < 5:
+                continue
             if idx % 3 != 0:
                 progress.update()
                 global_tqdm.update()
@@ -784,7 +735,7 @@ def main(argv):
     '''
 
     tasks = []
-    process_count = 1
+    process_count = 4
     total_count = 0
 
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
