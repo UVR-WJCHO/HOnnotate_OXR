@@ -390,13 +390,13 @@ class loadDataset():
         verts_pose = obj_verts[vertIDpermarker, :]
         verts_pose = apply_transform(obj_init_pose, verts_pose)
 
-        verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
-        marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
+        #verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
+        #marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
 
-        R, t = tf.batch_solve_rigid_tf(verts_pose, marker_pose)
+        R, t = tf.solve_rigid_tf_np(verts_pose, marker_pose)
 
-        R = R[0]
-        t = t[0]
+        #R = R[0]
+        #t = t[0]
         pose_calc = np.eye(4)
         pose_calc[:3, :3] = R[:3, :3]
         pose_calc[0, 3] = t[0]
