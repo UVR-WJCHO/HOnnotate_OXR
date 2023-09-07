@@ -132,6 +132,8 @@ class loadDataset():
         self.rgbBgDir = os.path.join(self.bgDir, 'rgb')
         self.depthBgDir = os.path.join(self.bgDir, 'depth')
 
+        self.segfgDir = os.path.join(self.dbDir, 'segmentation_fg')
+
         for camID in camIDset:
             os.makedirs(os.path.join(self.dbDir, 'rgb_crop', camID), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'depth_crop', camID), exist_ok=True)
@@ -343,8 +345,8 @@ class loadDataset():
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
-            # obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
-            # self.obj_pose_sampled[str(save_idx)] = obj_pose_data
+            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
+            self.obj_pose_sampled[str(save_idx)] = obj_pose_data
 
         else:
             self.marker_sampled[str(save_idx)] = None
@@ -403,9 +405,9 @@ class loadDataset():
         pose_calc[1, 3] = t[1]
         pose_calc[2, 3] = t[2]
 
-        verts_debug = np.squeeze(verts_pose.numpy())
+        verts_debug = np.squeeze(verts_pose)
         verts_debug = apply_transform(pose_calc, verts_debug)
-        marker_debug = np.squeeze(marker_pose.numpy())
+        marker_debug = np.squeeze(marker_pose)
 
         err = np.sum(abs(verts_debug - marker_debug), axis=1)
         err = np.average(err)
@@ -425,6 +427,13 @@ class loadDataset():
 
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_obj_pose.pkl'), 'wb') as f:
             pickle.dump(self.obj_pose_sampled, f, pickle.HIGHEST_PROTOCOL)
+
+
+    def getFgmask(self, idx):
+        mask_fg_path = os.path.join(self.segfgDir, str(self.camID), str(self.camID) + "_%04d.png" % idx)
+        mask_fg = cv2.imread(mask_fg_path)
+
+        return mask_fg
 
     def getItem(self, idx, save_idx):
         # camID : mas, sub1, sub2, sub3
@@ -568,6 +577,7 @@ class loadDataset():
     def segmentation(self, idx, procImgSet, kps, img2bb):
         rgb, depth = procImgSet
 
+
         obj_kps = self.translateKpts(self.marker_proj, img2bb)
         ps = []
         for i in range(obj_kps.shape[0]):
@@ -583,6 +593,14 @@ class loadDataset():
 
         ### extract hand mask
         seg_image = np.uint8(rgb_filtered.copy())
+
+        # apply fg
+        # mask_fg_bin = np.ones(seg_image.shape[:2], np.uint8)
+        # mask_fg_bin = np.where(mask_fg == 0, 0, mask_fg_bin)
+        # seg_image = seg_image * mask_fg_bin[:, :, np.newaxis]
+        # cv2.imshow("seg_image", seg_image / 255)
+        # cv2.waitKey(0)
+
         # debug_image = seg_image.copy()
         mask = np.ones(seg_image.shape[:2], np.uint8) * 2
         # hand kpt for foreground
@@ -590,8 +608,10 @@ class loadDataset():
             point1 = np.int32(kps[0, :2])
             point2 = np.int32(kps[segIndices[i], :2])
             point3 = np.int32(kps[segIndices[i+1], :2])
+            point4 = np.int32(kps[segIndices[i]+1, :2])
             cv2.line(mask, point1, point2, cv2.GC_FGD, 1)
             cv2.line(mask, point3, point2, cv2.GC_FGD, 1)
+            cv2.line(mask, point4, point2, cv2.GC_FGD, 1)
 
             # cv2.line(debug_image, point1, point2, (255, 0, 0), 2)
             # cv2.line(debug_image, point3, point2, (255, 0, 0), 2)
@@ -622,14 +642,13 @@ class loadDataset():
         # mask_both = np.logical_and(mask_hand, mask_obj)
         # value_both = np.sum(mask_both)
         #
-        # if self.camID == 'sub2':
-        #     print("value both : ", value_both)
+        # if self.camID == 'sub1':
         #     cv2.imshow("rgb", rgb / 255.0)
-        #     cv2.imshow("debug_image", debug_image / 255.0)
+        #     cv2.imshow("mask_fg", mask_fg * 255.0)
         #     cv2.imshow("mask_hand", mask_hand * 255.0)
-        #     cv2.imshow("mask_obj", mask_obj * 255.0)
+        #     # cv2.imshow("mask_obj", mask_obj * 255.0)
         #     # cv2.imshow("rgb_hand", np.uint8(rgb.copy()) * mask_hand[:, :, np.newaxis] / 255.0)
-        #     cv2.waitKey(1)
+        #     cv2.waitKey(0)
 
 
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
@@ -749,4 +768,5 @@ def main(argv):
         print("total json num in seq %s : %s" % (seqName, total_num))
 
 if __name__ == '__main__':
+
     app.run(main)
