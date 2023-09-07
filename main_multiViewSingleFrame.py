@@ -117,7 +117,7 @@ def main(argv):
             ## Currently, set object pose as init pose on every frame
             if CFG_WITH_OBJ:
                 obj_pose = obj_dataloader[frame][:-1, :]
-                # obj_pose[:3, -1] *= 0.001
+                obj_pose[:3, -1] *= 0.1
                 model_obj.update_pose(pose=obj_pose)
 
             ## Initialize optimizer
