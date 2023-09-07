@@ -378,8 +378,8 @@ class loadDataset():
         # for k in range(self.marker_num):
         #     point = reprojected[k, :]
         #     image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
-        #     cv2.imshow(f"debug marker to cam {self.camID}", image)
-        #     cv2.waitKey(0)
+        # cv2.imshow(f"debug marker to cam {self.camID}", image)
+        # cv2.waitKey(0)
 
         return world_coord, reprojected
 

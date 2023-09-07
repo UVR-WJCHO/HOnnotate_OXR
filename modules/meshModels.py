@@ -107,7 +107,7 @@ class ObjModel(nn.Module):
         self.template_verts = template_verts.to(self.device)
 
         # only obj_pose is trainable [bs, 4, 4]
-        obj_pose = torch.tensor(obj_init_pose, dtype=torch.float32)[:-1, :]
+        obj_pose = torch.tensor(obj_init_pose, dtype=torch.float32)
         obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
         self.obj_pose.requires_grad = True
@@ -116,7 +116,7 @@ class ObjModel(nn.Module):
         self.scale = torch.FloatTensor([100.0]).to(self.device)
 
     def update_pose(self, pose):
-        obj_pose = torch.tensor(pose, dtype=torch.float32)[:-1, :]
+        obj_pose = torch.tensor(pose, dtype=torch.float32)
         obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
         self.obj_pose.requires_grad = True
@@ -135,10 +135,25 @@ class ObjModel(nn.Module):
         transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
         transformed_points_cartesian = transformed_points_cartesian.view(self.batch_size, -1, 3)
 
-        return transformed_points_cartesian * self.scale
+        return transformed_points_cartesian# * self.scale
 
     def forward(self):
+
+        # debug_obj_pose = self.obj_pose.view(4, 4).detach().cpu().numpy()
+        # debug_template_verts = np.squeeze(self.template_verts.detach().cpu().numpy())
+        #
+        # homogeneous_points = np.hstack((debug_template_verts, np.ones((debug_template_verts.shape[0], 1))))
+        #
+        # # Apply matrix multiplication
+        # transformed_points = np.dot(debug_obj_pose, homogeneous_points.T).T
+        #
+        # # Convert back to Cartesian coordinates
+        # transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
+
+
         obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
 
+        # debug = obj_verts.detach().cpu().numpy()
+        obj_verts[:, :, -1] *= 0.1
         return {'verts': obj_verts, 'faces': self.template_faces, 'pose': self.obj_pose}
 

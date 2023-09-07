@@ -314,16 +314,17 @@ class MultiViewLossFunc(nn.Module):
         except:
             print("headless server")
 
-        cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
-        # cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
-        cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
+        if save_path is not None:
+            cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
+            # cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
+            cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
 
-        # save meshes
-        import trimesh
-        hand_verts = mano3DToCam3D(pred['verts'], self.Ms, self.main_Ms)
-        hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
-        hand.export(os.path.join(save_path, f'mesh_hand_{camID}_{frame}.obj'))
+            # save meshes
+            import trimesh
+            hand_verts = mano3DToCam3D(pred['verts'], self.Ms, self.main_Ms)
+            hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
+            hand.export(os.path.join(save_path, f'mesh_hand_{camID}_{frame}.obj'))
 
-        obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms, self.main_Ms_obj)
-        obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
-        obj.export(os.path.join(save_path, f'mesh_obj_{camID}_{frame}.obj'))
+            obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms, self.main_Ms_obj)
+            obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
+            obj.export(os.path.join(save_path, f'mesh_obj_{camID}_{frame}.obj'))

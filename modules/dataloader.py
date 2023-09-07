@@ -246,10 +246,9 @@ class ObjectLoader:
         obj_pose_data_name = data_type + '_0' + data_trial[-1] + '_obj_pose.pkl'
         obj_pose_data_path = os.path.join(self.obj_pose_dir, obj_pose_data_name)
         with open(obj_pose_data_path, 'rb') as f:
-            self.obj_init_pose = pickle.load(f)
+            obj_init_pose = pickle.load(f)
 
-
-
+        self.obj_init_pose = obj_init_pose
 
     def read_obj(self, file_path):
         verts = []
@@ -275,7 +274,7 @@ class ObjectLoader:
 
     def __getitem__(self, index: int):
         try:
-            sample = self.obj_pose_data[str(index)]
+            sample = self.obj_init_pose[str(index)]
             sample = np.asarray(sample)
         except ExecError:
             raise "Error at load object index {}".format(index)
