@@ -153,7 +153,5 @@ class ObjModel(nn.Module):
 
         obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
 
-        # debug = obj_verts.detach().cpu().numpy()
-        # obj_verts[:, :, -1] *= 0.1
         return {'verts': obj_verts, 'faces': self.template_faces, 'pose': self.obj_pose}
 
