@@ -139,22 +139,28 @@ class BackgroundMatting():
                 com = pha_ * fgr_ + (1 - pha_) * torch.tensor([120/255, 255/255, 155/255], device='cuda').view(1, 3, 1, 1)
                 com = com.permute(0, 2, 3, 1).cpu().numpy()[0] * 255
                 com = cv2.cvtColor(com.astype(np.uint8), cv2.COLOR_RGB2BGR)
-                cv2.imwrite(os.path.join(self.resultDir, '%s.png' % file_name), mask)
+                cv2.imwrite(os.path.join(self.resultDir, '%s.jpg' % file_name), mask)
                 cv2.imwrite(os.path.join(self.resultDir, '%s_masked.png' % file_name), com)
-
 
                 seg = sample['seg'][idx]*255
                 seg = seg.permute(1, 2, 0).cpu().numpy()
-                mask = np.tile(mask, (1, 1, 3))
+                seg = np.squeeze(seg[:, :, 0])
+                mask = np.squeeze(mask)
                 mask[mask < 200] = 0
                 mask[seg > 10] = 0
+                mask = np.where(mask > 1, 255, 0)
                 mask = mask.astype(np.uint8)
-                cv2.imwrite(os.path.join(self.objMaskDir, '%s.png' % file_name), mask)
+                cv2.imwrite(os.path.join(self.objMaskDir, '%s.jpg' % file_name), mask)
+
 
 if __name__ == '__main__':
+    t1 = time.time()
     for seq in os.listdir(camResultDir):
         for trial in os.listdir(os.path.join(camResultDir, seq)):
             for camID in camIDset:
                 print("run : ", seq, trial, camID)
                 bgm = BackgroundMatting(FLAGS.db, seq, trial, camID)
                 bgm.run()
+
+    proc_time = round((time.time() - t1) / 60., 2)
+    print("total process time : %s min" % (str(proc_time)))

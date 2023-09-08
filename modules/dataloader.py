@@ -78,6 +78,7 @@ class DataLoader:
         self.rgb_path = os.path.join(self.base_path, 'rgb_crop')
         self.depth_path = os.path.join(self.base_path, 'depth_crop')
         self.seg_path = os.path.join(self.base_path, 'segmentation')
+        self.seg_obj_path = os.path.join(self.base_path, 'segmentation_obj')
         self.meta_base_path = os.path.join(self.base_path, 'meta')
 
 
@@ -167,8 +168,7 @@ class DataLoader:
 
         # currently use temporal segmentation folder
         seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.jpg'%idx)
-        seg_obj_path = os.path.join(self.seg_path + '_deep', self.cam, 'raw_seg_results', self.cam + '_%04d.jpg' % idx)
-
+        seg_obj_path = os.path.join(self.seg_obj_path, self.cam, self.cam + '_%04d.jpg' % idx)
 
         assert os.path.exists(rgb_path)
         assert os.path.exists(depth_path)
@@ -190,9 +190,9 @@ class DataLoader:
 
         if os.path.exists(seg_obj_path):
             seg_obj = np.asarray(cv2.imread(seg_obj_path, cv2.IMREAD_UNCHANGED))
-            seg_obj[seg_obj == 2] = 0  # bg:0, obj:1, hand:2
         else:
-            seg_obj = None
+            seg_obj = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
+        seg_obj = np.where(seg_obj > 1, 1, 0)
 
         return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
     
@@ -231,13 +231,15 @@ class ObjectLoader:
         self.obj_dir = os.path.join(base_path, data_date + '_obj')
         self.obj_pose_dir = os.path.join(self.obj_dir, data_type[:-9])
 
-        obj_type = data_type.split('_')[3]
-        obj_class = obj_type + '_' + str(OBJType(int(obj_type)).name)
+        obj_idx = data_type.split('_')[3]
+        self.obj_name = str(OBJType(int(obj_idx)).name)
+        obj_class = obj_idx + '_' + self.obj_name
         self.obj_template_dir = os.path.join(base_path, 'obj_scanned_models', obj_class)
 
         # load object mesh data (new scanned object need to be load through pytorch3d 'load_obj'
-        obj_mesh_path = os.path.join(self.obj_template_dir, obj_class) + '.obj'
-        # self.obj_mesh_data = self.read_obj(obj_mesh_path)
+        self.obj_mesh_name = obj_class + '.obj'
+        obj_mesh_path = os.path.join(self.obj_template_dir, self.obj_mesh_name)
+
         self.obj_mesh_data = {}
         self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
         self.obj_mesh_data['faces'] = faces.verts_idx
@@ -246,9 +248,12 @@ class ObjectLoader:
         obj_pose_data_name = data_type + '_0' + data_trial[-1] + '_obj_pose.pkl'
         obj_pose_data_path = os.path.join(self.obj_pose_dir, obj_pose_data_name)
         with open(obj_pose_data_path, 'rb') as f:
-            obj_init_pose = pickle.load(f)
+            self.obj_init_pose = pickle.load(f)
 
-        self.obj_init_pose = obj_init_pose
+        marker_cam_data_name = data_type + '_0' + data_trial[-1] + '_marker_cam.pkl'
+        marker_cam_data_path = os.path.join(self.obj_pose_dir, marker_cam_data_name)
+        with open(marker_cam_data_path, 'rb') as f:
+            self.marker_cam_pose = pickle.load(f)
 
     def read_obj(self, file_path):
         verts = []

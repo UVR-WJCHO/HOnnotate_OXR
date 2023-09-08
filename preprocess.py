@@ -417,25 +417,25 @@ class loadDataset():
         # verts_all = torch.FloatTensor(verts_all)
         # mesh = Meshes(verts=[verts_all], faces=[obj_faces]).to(self.device)
 
-        projection = self.extrinsics[self.camID].reshape(3, 4)
-        marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
-                                           projection[:, 3:], self.intrinsics[self.camID], self.distCoeffs[self.camID])
-        marker_reproj = np.squeeze(marker_reproj)
+        # projection = self.extrinsics[self.camID].reshape(3, 4)
+        # marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
+        #                                    projection[:, 3:], self.intrinsics[self.camID], self.distCoeffs[self.camID])
+        # marker_reproj = np.squeeze(marker_reproj)
+        #
+        # projection = self.extrinsics[self.camID].reshape(3, 4)
+        # vert_reproj, _ = cv2.projectPoints(verts_debug, projection[:, :3],
+        #                                      projection[:, 3:], self.intrinsics[self.camID],
+        #                                      self.distCoeffs[self.camID])
+        # vert_reproj = np.squeeze(vert_reproj)
 
-        projection = self.extrinsics[self.camID].reshape(3, 4)
-        vert_reproj, _ = cv2.projectPoints(verts_debug, projection[:, :3],
-                                             projection[:, 3:], self.intrinsics[self.camID],
-                                             self.distCoeffs[self.camID])
-        vert_reproj = np.squeeze(vert_reproj)
-
-        image = self.debug
-        for k in range(self.marker_num):
-            point = marker_reproj[k, :]
-            point_ = vert_reproj[k, :]
-            image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
-            image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
-            cv2.imshow(f"debug marker to cam {self.camID}", image)
-            cv2.waitKey(0)
+        # image = self.debug
+        # for k in range(self.marker_num):
+        #     point = marker_reproj[k, :]
+        #     point_ = vert_reproj[k, :]
+        #     image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
+        #     image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
+        #     cv2.imshow(f"debug marker to cam {self.camID}", image)
+        #     cv2.waitKey(0)
 
         return pose_calc
 

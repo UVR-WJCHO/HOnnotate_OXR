@@ -7,7 +7,7 @@ import json
 from config import *
 
 
-def save_annotation(targetDir, trialName, frame, seq, pred, side):
+def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
     #seq ='230822_S01_obj_01_grasp_13'
     db = seq.split('_')[0]
     subject_id = seq.split('_')[1][1:]
@@ -39,8 +39,8 @@ def save_annotation(targetDir, trialName, frame, seq, pred, side):
         anno['Mesh'][0]['class_id'] = grasp_id
         anno['Mesh'][0]['class_name'] = GRASPType(int(grasp_id)).name
         anno['Mesh'][0]['object_name'] = OBJType(int(obj_id)).name
-        # anno['Mesh'][0]['object_file'] = "['3_apple.obj']" #TODO object file 받기
-        anno['Mesh'][0]['object_mat'] = np.eye(4, 4).tolist()
+        anno['Mesh'][0]['object_file'] = pred_obj[1]
+        anno['Mesh'][0]['object_mat'] = pred_obj[0].tolist()
         anno['Mesh'][0]['mano_side'] = side
         anno['Mesh'][0]['mano_trans'] = pred['rot'].tolist()
         anno['Mesh'][0]['mano_pose'] = pred['pose'].tolist()

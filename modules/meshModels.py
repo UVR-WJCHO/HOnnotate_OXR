@@ -106,7 +106,7 @@ class ObjModel(nn.Module):
         self.template_faces = template_faces.to(self.device).unsqueeze(0)
         self.template_verts = template_verts.to(self.device)
 
-        # only obj_pose is trainable [bs, 4, 4]
+        # only obj_pose is trainable [bs, 3, 4]
         obj_pose = torch.tensor(obj_init_pose, dtype=torch.float32)
         obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
@@ -114,6 +114,10 @@ class ObjModel(nn.Module):
 
         self.h = torch.tensor([[0, 0, 0, 1]], dtype=torch.float32).to(self.device)
         self.scale = torch.FloatTensor([100.0]).to(self.device)
+
+    def get_object_mat(self):
+        obj_mat = torch.cat([self.obj_pose, self.h], dim=0)
+        return np.squeeze(obj_mat.detach().cpu().numpy())
 
     def update_pose(self, pose):
         obj_pose = torch.tensor(pose, dtype=torch.float32)

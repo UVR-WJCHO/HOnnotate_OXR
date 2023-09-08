@@ -20,7 +20,7 @@ from absl import logging
 
 from config import *
 import time
-
+from utils.dataUtils import *
 
 
 ## FLAGS
@@ -53,7 +53,6 @@ def main(argv):
         sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub2')
         sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub3')
 
-
         ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
         mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
         default_M = np.eye(4)[:3]
@@ -68,6 +67,8 @@ def main(argv):
         dataloader_set = [mas_dataloader, sub1_dataloader, sub2_dataloader, sub3_dataloader]
         renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
 
+        if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
+            raise ValueError("The number of data is not same between cameras")
 
         if CFG_WITH_OBJ:
             obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, mas_dataloader.cam_parameter)
@@ -76,66 +77,63 @@ def main(argv):
         loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT)
         loss_func.set_main_cam(main_cam_idx=0)
 
-
-        # if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
-        #     raise ValueError("The number of data is not same between cameras")
-
         ## Initialize hand model
         model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE, side=CFG_MANO_SIDE)
         model.change_grads(root=True, rot=True, pose=True, shape=True)
 
+        ## Initialize object model
         if CFG_WITH_OBJ:
             obj_template_mesh = obj_dataloader.obj_mesh_data
             model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh)
-            ## Set object's main camera extrinsic as mas
-            loss_func.set_object_main_extrinsic(0)
+            loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
 
+        ## Start optimization per frame
         cfg_lr_init = CFG_LR_INIT
-
         for frame in range(len(mas_dataloader)):
             t1 = time.time()
-            ### {YYMMDD} folder의 visualizeMP 결과를 확인해서, mediapipe input을 GT로 사용가능한 첫 프레임을 지정.
-            if trialIdx == 0 and frame < FLAGS.initNum:  # for 230823_S01_obj_09_grasp_05, trial_0
+
+            # check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
+            if trialIdx == 0 and frame < FLAGS.initNum:
                 continue
 
             detected_cams = []
             for camIdx, camID in enumerate(CFG_CAMID_SET):
                 if dataloader_set[camIdx][frame] is not None:
                     detected_cams.append(camIdx)
-            
             if len(detected_cams) < 3:
                 print('detected hand is less than 3, skip the frame ', frame)
                 continue
 
+            # set initial loss, early stopping threshold
             best_kps_loss = torch.inf
             prev_kps_loss = 0
             ealry_stopping_patience = 0
             ealry_stopping_patience_v2 = 0
 
-            ## initial frames are often errorneous, check
-
-            ## Currently, set object pose as init pose on every frame
+            # set object init pose and marker pose as GT for projected vertex.
             if CFG_WITH_OBJ:
                 obj_pose = obj_dataloader[frame][:-1, :]
                 obj_pose[:3, -1] *= 0.1
                 model_obj.update_pose(pose=obj_pose)
 
+                marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
+                loss_func.set_object_marker_pose(marker_cam_pose, CFG_vertspermarker[obj_dataloader.obj_name])
+
             ## Initialize optimizer
-            # TODO : skipped shape lr in model_params. check lr ratio with above definition
+            params_hand = set_lr_forHand(model, cfg_lr_init)
             if not CFG_WITH_OBJ:
-                params_hand = set_lr_forHand(model, cfg_lr_init)
                 optimizer = torch.optim.Adam(params_hand)
             else:
-                params_hand = set_lr_forHand(model, cfg_lr_init)
                 params_obj = set_lr_forObj(model_obj, CFG_LR_INIT_OBJ)
-
                 params = list(params_hand) + list(params_obj)
                 optimizer = torch.optim.Adam(params)
 
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
+
             kps_loss = {}
             for iter in range(CFG_NUM_ITER):
                 loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'depth_obj':0.0, 'contact': 0.0}
+
                 if CFG_WITH_OBJ:
                     obj_param = model_obj()
 
@@ -154,16 +152,14 @@ def main(argv):
                         losses = loss_func(pred=hand_param, pred_obj=None, render=flag_render,
                                            camIdx=camIdx, frame=frame)
                     else:
-                        ## TODO
                         losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
                                            camIdx=camIdx, frame=frame, contact=iter>(CFG_NUM_ITER-CFG_NUM_ITER_CONTACT))
 
-                        loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                                            camID=camID, flag_obj=True, flag_crop=True)
+                        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
+                        #                     camID=camID, flag_obj=True, flag_crop=True)
 
                     for k in CFG_LOSS_DICT:
                         loss_all[k] += losses[k]
-                    # loss_func.visualize(CFG_SAVE_PATH, camID)
 
                 num_done = len(CFG_CAMID_SET) - num_skip
                 total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT) / num_done
@@ -196,17 +192,10 @@ def main(argv):
 
                 prev_kps_loss = cur_kpt_loss
 
-            ### temp draw loss graph
-            # plt.plot(list(kps_loss.keys()), list(kps_loss.values()))
-            # plt.savefig(CFG_SAVE_PATH + "/loss" + "/%d_loss_graph.png"%frame)
-            # plt.close()
-            # cfg_lr_init = 1e-2
-
-
+            hand_param = model()
             ### visualization results of frame
             for camIdx in detected_cams:
                 camID = CFG_CAMID_SET[camIdx]
-                hand_param = model()
 
                 save_path = os.path.join(targetDir_result, trialName, 'visualization', camID)
                 os.makedirs(save_path, exist_ok=True)
@@ -219,7 +208,8 @@ def main(argv):
                                         save_path=save_path, camID=camID, flag_obj=True, flag_crop=True)
 
             ### save annotation per frame as json format
-            save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, CFG_MANO_SIDE)
+            obj_param = [model_obj.get_object_mat(), obj_dataloader.obj_mesh_name]
+            save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, obj_param, CFG_MANO_SIDE)
             t2 = time.time()
             print("end %s - frame %s, processed %s" % (trialName, frame, t2 - t1))
 

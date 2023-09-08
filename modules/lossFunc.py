@@ -33,6 +33,10 @@ class MultiViewLossFunc(nn.Module):
         cam_params = self.dataloaders[obj_main_cam_idx].cam_parameter
         self.main_Ms_obj = torch.FloatTensor(cam_params[1]).to(self.device)
 
+    def set_object_marker_pose(self, obj_marker_cam_pose, vertsIdx_per_marker):
+        self.obj_marker_cam_pose = torch.FloatTensor(obj_marker_cam_pose).to(self.device)
+
+
     def get_pose_constraint_tensor(self):
         pose_mean_tensor = torch.tensor(params.pose_mean_list).cuda()
         pose_reg_tensor = torch.tensor(params.pose_reg_list).cuda()
@@ -95,8 +99,8 @@ class MultiViewLossFunc(nn.Module):
                 loss_kpts2d = torch.sum(((pred_kpts2d - self.gt_kpts2d) ** 2).reshape(self.bs, -1), -1)
                 loss['kpts2d'] = loss_kpts2d
 
-                debug_pred = np.squeeze(pred_kpts2d.cpu().detach().numpy())
-                debug_gt = np.squeeze(self.gt_kpts2d.cpu().detach().numpy())
+                # debug_pred = np.squeeze(pred_kpts2d.cpu().detach().numpy())
+                # debug_gt = np.squeeze(self.gt_kpts2d.cpu().detach().numpy())
 
         if 'reg' in self.loss_dict:
             pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
