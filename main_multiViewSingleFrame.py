@@ -132,9 +132,9 @@ def main(argv):
 
             kps_loss = {}
             for iter in range(CFG_NUM_ITER):
+                t1 = time.time()
+
                 loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'contact': 0.0}
-
-
                 hand_param = model()
                 if CFG_WITH_OBJ:
                     obj_param = model_obj()
@@ -175,7 +175,9 @@ def main(argv):
 
                 cur_kpt_loss = loss_all['kpts2d'].item() / num_done
                 kps_loss[iter] = cur_kpt_loss
-                logs = ["[{} - frame {}] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
+
+                iter_t = time.time() - t1
+                logs = ["[{} - frame {}] [time : {:.2f}] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter_t, iter, total_loss.item())]
                 logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
                 logging.info(''.join(logs))
 
@@ -198,6 +200,7 @@ def main(argv):
                     break
 
                 prev_kps_loss = cur_kpt_loss
+
 
             hand_param = model()
             ### visualization results of frame
