@@ -14,7 +14,7 @@ CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 CFG_MANO_SIDE = 'right'
 
-CFG_LOSS_DICT = ['kpts2d','reg','seg', 'depth']#, ] #, 'contact',
+CFG_LOSS_DICT = ['kpts2d', 'reg', 'seg', 'depth', 'contact']
 CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 
@@ -30,9 +30,9 @@ CFG_PATIENCE = 30
 
 CFG_PATIENCE_v2 = 50
 
-CFG_NUM_ITER_CONTACT = 100 # use contact loss for the last 100 iters 
-CFG_CONTACT_THRESH = 8
-
+CFG_CONTACT_START_THRESHOLD = 15000 # use contact loss when kpts_loss < 15000
+CFG_CONTACT_DIST = 8
+CFG_CONTACT_LOSS_WEIGHT = 4
 
 CFG_vertspermarker = {
     "mug" : [1282, 1329, 965, 756],

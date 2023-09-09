@@ -113,7 +113,7 @@ class ObjModel(nn.Module):
         self.scale = torch.FloatTensor([100.0]).to(self.device)
 
     def get_object_mat(self):
-        obj_mat = torch.cat([self.obj_pose, self.h], dim=0)
+        obj_mat = torch.cat([self.obj_pose, self.h], dim=-1)
         return np.squeeze(obj_mat.detach().cpu().numpy())
 
     def update_pose(self, pose):

@@ -194,9 +194,9 @@ class MultiViewLossFunc(nn.Module):
                 obj_mesh = Meshes(verts=verts_obj_cam.detach(), faces=pred_obj['faces']) # optimize only hand meshes
 
                 inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
-                contact_mask = inter_dist < CFG_CONTACT_THRESH
+                contact_mask = inter_dist < CFG_CONTACT_DIST
 
-                loss['contact'] = inter_dist[contact_mask].sum()
+                loss['contact'] = inter_dist[contact_mask].sum() * CFG_CONTACT_LOSS_WEIGHT
             else:
                 loss['contact'] = torch.tensor([0.0], requires_grad=True).cuda()
 
@@ -285,6 +285,7 @@ class MultiViewLossFunc(nn.Module):
         blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
         blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
 
+        '''
         try:
             cv2.imshow(blend_gt_name, img_blend_gt)
             cv2.imshow(blend_pred_name, img_blend_pred)
@@ -294,7 +295,7 @@ class MultiViewLossFunc(nn.Module):
             cv2.waitKey(0)
         except:
             print("headless server")
-
+        '''
         if save_path is not None:
             cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
             # cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)

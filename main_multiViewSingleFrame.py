@@ -49,7 +49,7 @@ def single_loss(proc_num, flag_obj, loss_func, args, return_dict):
 
 def main(argv):
     logging.get_absl_handler().setFormatter(None)
-    torch.multiprocessing.set_start_method('spawn')
+    torch.multiprocessing.set_start_method('spawn', force=True)
 
     save_num = 0
 
@@ -147,6 +147,8 @@ def main(argv):
 
             manager = multiprocessing.Manager()
             kps_loss = {}
+            use_contact_loss = False
+
             for iter in range(CFG_NUM_ITER):
                 t1 = time.time()
 
@@ -179,7 +181,7 @@ def main(argv):
                                            camIdx=camIdx, frame=frame)
                     else:
                         losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
-                                           camIdx=camIdx, frame=frame, contact=iter>(CFG_NUM_ITER-CFG_NUM_ITER_CONTACT))
+                                           camIdx=camIdx, frame=frame, contact=use_contact_loss)
 
                         # if camID == 'mas':
                         #     loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
@@ -229,6 +231,9 @@ def main(argv):
                 if ealry_stopping_patience_v2 > CFG_PATIENCE_v2:
                     logging.info('Early stopping(converged) at iter %d' % iter)
                     break
+
+                if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
+                    use_contact_loss = True
 
                 prev_kps_loss = cur_kpt_loss
 
