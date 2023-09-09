@@ -21,6 +21,7 @@ from absl import logging
 from config import *
 import time
 from utils.dataUtils import *
+import multiprocessing
 
 
 ## FLAGS
@@ -33,8 +34,22 @@ FLAGS(sys.argv)
 
 
 
+def single_loss(proc_num, flag_obj, loss_func, args, return_dict):
+    hand_param, obj_param, flag_render, camIdx, frame = args
+    if not flag_obj:
+        losses = loss_func(pred=hand_param, pred_obj=None, render=flag_render,
+                           camIdx=camIdx, frame=frame)
+    else:
+        losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
+             camIdx=camIdx, frame=frame)
+        # losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
+        #                    camIdx=camIdx, frame=frame, contact=iter > (CFG_NUM_ITER - CFG_NUM_ITER_CONTACT))
+    return_dict[proc_num] = losses
+
+
 def main(argv):
     logging.get_absl_handler().setFormatter(None)
+    torch.multiprocessing.set_start_method('spawn')
 
     save_num = 0
 
@@ -130,6 +145,7 @@ def main(argv):
 
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
 
+            manager = multiprocessing.Manager()
             kps_loss = {}
             for iter in range(CFG_NUM_ITER):
                 t1 = time.time()
@@ -138,17 +154,25 @@ def main(argv):
                 hand_param = model()
                 if CFG_WITH_OBJ:
                     obj_param = model_obj()
+                else:
+                    obj_param = None
 
-
+                return_dict = manager.dict()
+                procs = []
                 num_skip = 0
                 for camIdx in detected_cams:
-
                     camID = CFG_CAMID_SET[camIdx]
                     # skip non-detected camera
                     if np.isnan(dataloader_set[camIdx].sample_kpt[frame]['kpts3d']).any():
                         num_skip += 1
                         print("skip cam ", camID)
                         continue
+
+                    ## debugging multiprocessing multicam
+                    # args = [hand_param, obj_param, flag_render, camIdx, frame]
+                    # p = multiprocessing.Process(target=single_loss, args=(camIdx, CFG_WITH_OBJ, loss_func, args, return_dict))
+                    # procs.append(p)
+                    # p.start()
 
                     if not CFG_WITH_OBJ:
                         losses = loss_func(pred=hand_param, pred_obj=None, render=flag_render,
@@ -164,6 +188,13 @@ def main(argv):
                     for k in CFG_LOSS_DICT:
                         loss_all[k] += losses[k]
 
+                ## debugging multiprocessing multicam
+                # for proc in procs:
+                #     proc.join()
+                # for key in return_dict:
+                #     losses = return_dict[key]
+                #     for k in CFG_LOSS_DICT:
+                #         loss_all[k] += losses[k]
 
                 num_done = len(CFG_CAMID_SET) - num_skip
                 total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT) / num_done
@@ -177,7 +208,7 @@ def main(argv):
                 kps_loss[iter] = cur_kpt_loss
 
                 iter_t = time.time() - t1
-                logs = ["[{} - frame {}] [time : {:.2f}] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter_t, iter, total_loss.item())]
+                logs = ["[{} - frame {}] [t : {:.2f} sec] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter_t, iter, total_loss.item())]
                 logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
                 logging.info(''.join(logs))
 

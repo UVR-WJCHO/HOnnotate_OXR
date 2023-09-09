@@ -302,10 +302,10 @@ class MultiViewLossFunc(nn.Module):
 
             # save meshes
             import trimesh
-            hand_verts = mano3DToCam3D(pred['verts'], self.Ms, self.main_Ms)
+            hand_verts = mano3DToCam3D(pred['verts'], self.Ms)
             hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
             hand.export(os.path.join(save_path, f'mesh_hand_{camID}_{frame}.obj'))
             if flag_obj:
-                obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms, self.main_Ms_obj)
+                obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms)
                 obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
                 obj.export(os.path.join(save_path, f'mesh_obj_{camID}_{frame}.obj'))
