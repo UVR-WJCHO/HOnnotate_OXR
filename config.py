@@ -14,7 +14,7 @@ CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 CFG_MANO_SIDE = 'right'
 
-CFG_LOSS_DICT = ['kpts2d', 'reg', 'contact']#, 'depth','depth_obj'] #  'seg',
+CFG_LOSS_DICT = ['kpts2d', 'reg', 'contact', 'depth', 'seg']
 CFG_SAVE_PATH = os.path.join(os.getcwd(), 'output')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 

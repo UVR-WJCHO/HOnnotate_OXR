@@ -132,7 +132,7 @@ def main(argv):
 
             kps_loss = {}
             for iter in range(CFG_NUM_ITER):
-                loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'depth_obj':0.0, 'contact': 0.0}
+                loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'seg_obj':0.0, 'depth_obj':0.0, 'contact': 0.0}
 
                 if CFG_WITH_OBJ:
                     obj_param = model_obj()

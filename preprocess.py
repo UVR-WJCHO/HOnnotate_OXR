@@ -557,15 +557,15 @@ class loadDataset():
         idx_to_coord = idx_to_coordinates
 
         if idx_to_coord is None:
-            return [None]
+            return None
 
         bbox = self.extractBbox(idx_to_coord, image_rows, image_cols)
         rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
         depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-        depthMask = np.where(depth < 3, 1, 0).astype(np.uint8)[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+        # depthMask = np.where(depth < 3, 1, 0).astype(np.uint8)[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
 
         procImgSet = [rgbCrop, depthCrop]
-        self.prev_bbox = copy.deepcopy(bbox)
+        self.prev_bbox = np.copy(bbox)
 
         return [bbox, img2bb_trans, bb2img_trans, procImgSet, kps]
 
@@ -735,6 +735,58 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
 
     return True
 
+def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
+
+    with tqdm_func(total=len(dbs[0])) as progress:
+        progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
+        mp_hand_list = []
+        for i in range(len(dbs)):
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.3)
+            mp_hand_list.append(mp_hand)
+
+        for db in dbs:
+            db.init_info()
+
+        save_idx = 0
+        for idx in range(len(dbs[0])):
+            if idx % 3 != 0:
+                progress.update()
+                global_tqdm.update()
+                continue
+
+            images_list = []
+            output_list = []
+            for db, mp_hand in zip(dbs, mp_hand_list):
+                images = db.getItem(idx, save_idx)
+                images = db.undistort(images)
+                output = db.procImg(images, mp_hand)
+                images_list.append(images)
+                output_list.append(output)
+
+            if not any(x is None for x in output_list):
+                for db, images, output in zip(dbs, images_list, output_list):
+                    bb, img2bb, bb2img, procImgSet, kps = output
+                    procKps = db.translateKpts(np.copy(kps), img2bb)
+                    db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
+                    db.updateObjdata(idx, save_idx)
+
+                    if flag_segmentation:
+                        db.segmentation(save_idx, procImgSet, procKps, img2bb)
+
+                progress.update()
+                global_tqdm.update()
+                save_idx += 1
+            else:
+                progress.update()
+                global_tqdm.update()
+
+        for db in dbs:
+            db.saveObjdata()
+
+    return True
+
+
+
 def error_callback(result):
     print("Error!")
 
@@ -755,18 +807,23 @@ def main(argv):
     '''
 
     tasks = []
-    process_count = 8
+    process_count = 4
     total_count = 0
     t1 = time.time()
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
         seqDir = os.path.join(rootDir, seqName)
         print("---------------start preprocess seq : %s ---------------" % (seqName))
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+            dbs = []
             for camID in camIDset:
                 db = loadDataset(FLAGS.db, seqName, trialName)
                 db.init_cam(camID)
-                total_count += len(db)
-                tasks.append((preprocess_single_cam, (db,)))
+                dbs.append(db)
+                # total_count += len(db)
+                # tasks.append((preprocess_single_cam, (db,)))
+
+            total_count += len(dbs[0])
+            tasks.append((preprocess_multi_cam, (dbs,)))
 
         pool = TqdmMultiProcessPool(process_count)
         with tqdm.tqdm(total=total_count) as global_tqdm:
