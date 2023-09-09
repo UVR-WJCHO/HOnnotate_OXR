@@ -7,7 +7,7 @@ import numpy as np
 from manopth.manolayer import ManoLayer
 
 from utils.modelUtils import *
-
+import time
 
 class HandModel(nn.Module):
     def __init__(self, mano_path, device, batch_size, initial_rot=torch.zeros(3), initial_pose=torch.zeros(45), initial_shape=torch.zeros(1, 10), side="right"):
@@ -127,7 +127,7 @@ class ObjModel(nn.Module):
         obj_mat = torch.cat([obj_pose, self.h], dim=0)
 
         # Append 1 to each coordinate to convert them to homogeneous coordinates
-        h = torch.ones((obj_verts.shape[0], 1)).to(self.device)
+        h = torch.ones((obj_verts.shape[0], 1), device=self.device)
         homogeneous_points = torch.cat((obj_verts, h), 1)
 
         # Apply matrix multiplication
@@ -150,7 +150,6 @@ class ObjModel(nn.Module):
         #
         # # Convert back to Cartesian coordinates
         # transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
-
 
         obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
 

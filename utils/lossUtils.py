@@ -15,12 +15,11 @@ from pytorch3d.structures import Meshes, Pointclouds
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 
-def mano3DToCam3D(xyz3D, ext, main_ext):
+def mano3DToCam3D(xyz3D, ext):
     device = xyz3D.device
-    h = torch.tensor([[0, 0, 0, 1]]).to(device)
 
     xyz3D = torch.squeeze(xyz3D)
-    ones = torch.ones((xyz3D.shape[0], 1)).to(device)
+    ones = torch.ones((xyz3D.shape[0], 1), device=device)
 
     # mano to world
     xyz4Dcam = torch.cat([xyz3D, ones], axis=1)

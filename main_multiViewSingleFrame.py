@@ -48,10 +48,10 @@ def main(argv):
     for trialIdx, trialName in enumerate(sorted(os.listdir(targetDir))):
         ## Load data of each camera, save pkl file for second run.
         print("loading data... %s %s " % (FLAGS.seq, trialName))
-        mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'mas')
-        sub1_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub1')
-        sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub2')
-        sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub3')
+        mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'mas', CFG_DEVICE)
+        sub1_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub1', CFG_DEVICE)
+        sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub2', CFG_DEVICE)
+        sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub3', CFG_DEVICE)
 
         ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
         mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
@@ -132,21 +132,23 @@ def main(argv):
 
             kps_loss = {}
             for iter in range(CFG_NUM_ITER):
-                loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'seg_obj':0.0, 'depth_obj':0.0, 'contact': 0.0}
+                loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'contact': 0.0}
 
+
+                hand_param = model()
                 if CFG_WITH_OBJ:
                     obj_param = model_obj()
 
+
                 num_skip = 0
                 for camIdx in detected_cams:
+
                     camID = CFG_CAMID_SET[camIdx]
                     # skip non-detected camera
-                    if np.isnan(dataloader_set[camIdx][frame]['kpts3d']).any():
+                    if np.isnan(dataloader_set[camIdx].sample_kpt[frame]['kpts3d']).any():
                         num_skip += 1
                         print("skip cam ", camID)
                         continue
-
-                    hand_param = model()
 
                     if not CFG_WITH_OBJ:
                         losses = loss_func(pred=hand_param, pred_obj=None, render=flag_render,
@@ -155,12 +157,13 @@ def main(argv):
                         losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
                                            camIdx=camIdx, frame=frame, contact=iter>(CFG_NUM_ITER-CFG_NUM_ITER_CONTACT))
 
-                        if camID == 'mas':
-                            loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                                            camID=camID, flag_obj=True, flag_crop=True)
+                        # if camID == 'mas':
+                        #     loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
+                        #                     camID=camID, flag_obj=True, flag_crop=True)
 
                     for k in CFG_LOSS_DICT:
                         loss_all[k] += losses[k]
+
 
                 num_done = len(CFG_CAMID_SET) - num_skip
                 total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT) / num_done
@@ -170,13 +173,13 @@ def main(argv):
                 optimizer.step()
                 lr_scheduler.step()
 
-                # cur_kpt_loss = loss_all['kpts2d'].item() / num_done
-                # kps_loss[iter] = cur_kpt_loss
-                cur_kpt_loss = 0
+                cur_kpt_loss = loss_all['kpts2d'].item() / num_done
                 kps_loss[iter] = cur_kpt_loss
                 logs = ["[{} - frame {}] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
                 logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
                 logging.info(''.join(logs))
+
+
 
                 ### sparse criterion on converge for v1 db release, need to be tight ###
                 if abs(prev_kps_loss - cur_kpt_loss) < 0.5:

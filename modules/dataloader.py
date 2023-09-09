@@ -59,13 +59,14 @@ def split_ext(fpath:str):
     return os.path.splitext(os.path.basename(fpath))
 
 class DataLoader:
-    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, cam:str):
+    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, cam:str, device='cuda'):
 
         # base_path : os.path.join(os.getcwd(), 'dataset')
         # data_date : 230822
         # data_type : 230822_S01_obj_01_grasp_13
         # data_trial : trial_0
         # cam : 'mas'
+        self.device = device
         self.cam = cam
         self.data_date = data_date
         self.data_type = data_type
@@ -91,19 +92,46 @@ class DataLoader:
         self.db_len = len(glob(os.path.join(self.rgb_path, self.cam, '*.jpg')))
 
         # set preprocessed sample as pickle
-        self.sample_dict = {}
+        sample_dict = {}
         sample_pkl_path = self.base_path + '/sample_'+ cam + '.pickle'
         if os.path.exists(sample_pkl_path):
             print("found pre-loaded pickle of %s" % cam)
             with open(sample_pkl_path, 'rb') as handle:
-                self.sample_dict = pickle.load(handle)
+                sample_dict = pickle.load(handle)
         else:
             for frame in tqdm(range(self.db_len)):
                 sample = self.load_sample(frame)
-                self.sample_dict[frame] = sample
+                sample_dict[frame] = sample
             print("saving pickle of %s" % cam)
             with open(sample_pkl_path, 'wb') as handle:
-                pickle.dump(self.sample_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(sample_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        self.sample_dict, self.sample_kpt = self.sample_to_torch(sample_dict)
+
+    def sample_to_torch(self, sample_dict):
+        sample_dict_torch = {}
+        sample_kpt = {}
+        for idx in range(len(sample_dict)):
+            sample = sample_dict[idx]
+
+            sample_kpt_ = {}
+            sample_kpt_['kpts3d'] = np.copy(sample['kpts3d'])
+
+            sample_torch = {}
+            sample_torch['bb'] = np.asarray(sample['bb']).astype(int)
+            sample_torch['img2bb'] = sample['img2bb']
+            sample_torch['kpts2d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts2d']), 0).to(self.device)
+            sample_torch['kpts3d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d']), 0).to(self.device)
+            sample_torch['rgb'] = torch.FloatTensor(sample['rgb']).to(self.device)
+            sample_torch['depth'] = torch.unsqueeze(torch.FloatTensor(sample['depth']), 0).to(self.device)
+            sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
+            sample_torch['seg_obj'] =torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
+
+            sample_dict_torch[idx] = sample_torch
+            sample_kpt[idx] = sample_kpt_
+
+        return sample_dict_torch, sample_kpt
+
 
     def get_sample(self, index):
         if len(self.sample_dict) <= index:
@@ -156,6 +184,9 @@ class DataLoader:
         cam_extrinsic = extrinsics[self.cam].reshape(3, 4)
         # scale z axis value as mm to cm
         cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
+
+        cam_intrinsic = torch.FloatTensor(cam_intrinsic).to(self.device)
+        cam_extrinsic = torch.FloatTensor(cam_extrinsic).to(self.device)
 
         return [cam_intrinsic, cam_extrinsic, dist_coeff]
 
@@ -253,7 +284,12 @@ class ObjectLoader:
         marker_cam_data_name = data_type + '_0' + data_trial[-1] + '_marker_cam.pkl'
         marker_cam_data_path = os.path.join(self.obj_pose_dir, marker_cam_data_name)
         with open(marker_cam_data_path, 'rb') as f:
-            self.marker_cam_pose = pickle.load(f)
+            marker_cam_pose = pickle.load(f)
+
+        self.marker_cam_pose = {}
+        for key in marker_cam_pose:
+            self.marker_cam_pose[key] = torch.FloatTensor(marker_cam_pose[key]).to(self.device)
+
 
     def read_obj(self, file_path):
         verts = []

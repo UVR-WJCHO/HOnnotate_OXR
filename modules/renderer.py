@@ -9,6 +9,7 @@ from torch.nn import functional as F
 from manopth.manolayer import ManoLayer
 from pytorch3d.structures import Meshes, join_meshes_as_scene
 from pytorch3d.renderer import (
+    BlendParams,
     look_at_view_transform,
     FoVPerspectiveCameras, 
     PointLights, 
@@ -116,6 +117,16 @@ class Renderer():
         raster_settings=raster_settings
         )
 
+        ## require 0.7 sec to render
+        # blend_params = BlendParams(sigma=1e-7, gamma=1e-7)
+        # self.silhouette_renderer = MeshRenderer(
+        #     rasterizer=MeshRasterizer(
+        #         cameras=cameras,
+        #         raster_settings=raster_settings
+        #     ),
+        #     shader=SoftSilhouetteShader(blend_params=blend_params)
+        # )
+
 
     def render(self, verts, faces, flag_rgb=False):
         '''
@@ -125,8 +136,8 @@ class Renderer():
         -> [bs, H, W, 3], [bs, H, W], [bs, H, W]
         '''
 
-        verts_rgb = torch.ones_like(verts)
-        textures = TexturesVertex(verts_features=verts_rgb.to(self.device))
+        verts_rgb = torch.ones_like(verts, device=self.device)
+        textures = TexturesVertex(verts_features=verts_rgb)
 
         meshes = Meshes(verts=verts, faces=faces, textures=textures)
 
@@ -135,11 +146,11 @@ class Renderer():
         else:
             rgb = None
 
-        depth = self.rasterizer_depth(meshes).zbuf
+        depth = self.rasterizer_depth(meshes).zbuf[..., 0]
 
         # depth map process
         depth[depth == -1] = 0.
-        depth = depth * 10.0
+        depth = depth * 10.0    # change to mm scale (same as gt)
 
         seg = torch.empty_like(depth).copy_(depth)
 
@@ -147,7 +158,8 @@ class Renderer():
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
 
 
-        return {"rgb":rgb, "depth":depth[..., 0], "seg":seg[..., 0]}
+
+        return {"rgb":rgb, "depth":depth, "seg":seg}
 
     def render_meshes(self, verts_list, faces_list, flag_rgb=False):
         '''
@@ -158,8 +170,8 @@ class Renderer():
         '''
         mesh_list = list()
         for verts, faces in zip(verts_list, faces_list):
-            verts_rgb = torch.ones_like(verts)
-            textures = TexturesVertex(verts_features=verts_rgb.to(self.device))
+            verts_rgb = torch.ones_like(verts, device=self.device)
+            textures = TexturesVertex(verts_features=verts_rgb)
             meshes = Meshes(verts=verts, faces=faces, textures=textures)
             mesh_list.append(meshes)
 
