@@ -39,7 +39,7 @@ def set_lr_forObj(model, init_lr):
     for key, value in params_dict.items():
         lr_pose.append(value)
 
-    model_params = [{'params': lr_pose, 'lr': init_lr}]
+    model_params = [{'params': lr_pose, 'lr': init_lr / 10.}]
     return model_params
 
 

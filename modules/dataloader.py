@@ -185,13 +185,13 @@ class DataLoader:
         if os.path.exists(seg_path):
             seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED))
         else:
-            seg = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
+            seg = np.ones((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
         seg = np.where(seg>1, 1, 0)
 
         if os.path.exists(seg_obj_path):
             seg_obj = np.asarray(cv2.imread(seg_obj_path, cv2.IMREAD_UNCHANGED))
         else:
-            seg_obj = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
+            seg_obj = np.ones((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
         seg_obj = np.where(seg_obj > 1, 1, 0)
 
         return rgb, depth, seg, seg_obj, rgb_raw, depth_raw

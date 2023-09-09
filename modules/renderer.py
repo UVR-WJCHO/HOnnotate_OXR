@@ -26,6 +26,7 @@ from pytorch3d.renderer import (
 )
 import transforms3d as t3d
 from scipy.spatial.transform import Rotation as R
+import time
 
 
 def changeCoordtopytorch3D(extrinsic):
@@ -116,18 +117,24 @@ class Renderer():
         )
 
 
-    def render(self, verts, faces):
+    def render(self, verts, faces, flag_rgb=False):
         '''
         verts : [bs, V, 3]
         faces : [bs, F, 3]
         
         -> [bs, H, W, 3], [bs, H, W], [bs, H, W]
         '''
+
         verts_rgb = torch.ones_like(verts)
         textures = TexturesVertex(verts_features=verts_rgb.to(self.device))
+
         meshes = Meshes(verts=verts, faces=faces, textures=textures)
 
-        rgb = self.renderer_rgb(meshes)
+        if flag_rgb:
+            rgb = self.renderer_rgb(meshes)[..., :3]
+        else:
+            rgb = None
+
         depth = self.rasterizer_depth(meshes).zbuf
 
         # depth map process
@@ -139,9 +146,10 @@ class Renderer():
         # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
 
-        return {"rgb":rgb[..., :3], "depth":depth[..., 0], "seg":seg[..., 0]}
 
-    def render_meshes(self, verts_list, faces_list):
+        return {"rgb":rgb, "depth":depth[..., 0], "seg":seg[..., 0]}
+
+    def render_meshes(self, verts_list, faces_list, flag_rgb=False):
         '''
         verts : [bs, V, 3]
         faces : [bs, F, 3]
@@ -157,7 +165,11 @@ class Renderer():
 
         mesh_joined = join_meshes_as_scene(mesh_list)
 
-        rgb = self.renderer_rgb(mesh_joined)
+        if flag_rgb:
+            rgb = self.renderer_rgb(mesh_joined)[..., :3]
+        else:
+            rgb = None
+
         depth = self.rasterizer_depth(mesh_joined).zbuf
 
         # depth map process
@@ -169,5 +181,5 @@ class Renderer():
         # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
 
-        return {"rgb": rgb[..., :3], "depth": depth[..., 0], "seg":seg[..., 0]}
+        return {"rgb": rgb, "depth": depth[..., 0], "seg":seg[..., 0]}
 

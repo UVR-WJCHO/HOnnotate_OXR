@@ -155,8 +155,9 @@ def main(argv):
                         losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
                                            camIdx=camIdx, frame=frame, contact=iter>(CFG_NUM_ITER-CFG_NUM_ITER_CONTACT))
 
-                        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                        #                     camID=camID, flag_obj=True, flag_crop=True)
+                        if camID == 'mas':
+                            loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
+                                            camID=camID, flag_obj=True, flag_crop=True)
 
                     for k in CFG_LOSS_DICT:
                         loss_all[k] += losses[k]
@@ -168,7 +169,10 @@ def main(argv):
                 total_loss.backward(retain_graph=True)
                 optimizer.step()
                 lr_scheduler.step()
-                cur_kpt_loss = loss_all['kpts2d'].item() / num_done
+
+                # cur_kpt_loss = loss_all['kpts2d'].item() / num_done
+                # kps_loss[iter] = cur_kpt_loss
+                cur_kpt_loss = 0
                 kps_loss[iter] = cur_kpt_loss
                 logs = ["[{} - frame {}] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
                 logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
@@ -206,9 +210,13 @@ def main(argv):
                     obj_param = model_obj()
                     loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
                                         save_path=save_path, camID=camID, flag_obj=True, flag_crop=True)
+            cv2.waitKey(0)
 
             ### save annotation per frame as json format
-            obj_param = [model_obj.get_object_mat(), obj_dataloader.obj_mesh_name]
+            if CFG_WITH_OBJ:
+                obj_param = [model_obj.get_object_mat(), obj_dataloader.obj_mesh_name]
+            else:
+                obj_param = [None, [None]]
             save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, obj_param, CFG_MANO_SIDE)
             t2 = time.time()
             print("end %s - frame %s, processed %s" % (trialName, frame, t2 - t1))
