@@ -57,8 +57,6 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_string('obj_db', '230905_obj', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_string('obj_coord', '3', 'target cam coord idx in world_calib.py')   ## name ,default, help
-flags.DEFINE_string('obj_cam', 'mas', 'target cam in world_calib.py')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -191,8 +189,7 @@ class loadDataset():
         obj_dir_name = self.seq[:-9] # 230612_S01_obj_01
         self.obj_data_Dir = os.path.join(self.obj_db_Dir, obj_dir_name)
 
-        self.obj_cam_ext = np.load(os.path.join(camResultDir, str(FLAGS.obj_coord) + '-world.npy'))
-        self.obj_cam = str(FLAGS.obj_cam)
+        self.obj_cam_ext = np.load(os.path.join(camResultDir, 'global_world.npy'))
 
         self.h = np.array([[0, 0, 0, 1]])
         self.obj_cam_ext = np.concatenate((self.obj_cam_ext, self.h), axis=0)
@@ -356,16 +353,11 @@ class loadDataset():
     def transform_marker_pose(self, marker_poses_mocap):
         obj_cam_ext = self.obj_cam_ext
         # transform marker pose origin to master cam
-        extr = self.extrinsics[self.obj_cam]
         intr = self.intrinsics[self.camID]
         distC = self.distCoeffs[self.camID]
 
         coord_homo = np.concatenate((marker_poses_mocap.T, np.ones((1, self.marker_num))), axis=0)
-        world_coord = obj_cam_ext @ coord_homo # master's coordinate
-        projection = extr.reshape(3, 4)
-        projection = np.concatenate((projection, self.h), axis=0)
-        projection = np.linalg.inv(projection)
-        world_coord = projection @ world_coord # camera's coordinate
+        world_coord = obj_cam_ext @ coord_homo # world's coordinate
         world_coord = world_coord[:3].T
 
         ### debug ###

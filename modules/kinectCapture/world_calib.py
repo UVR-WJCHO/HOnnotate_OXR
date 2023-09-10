@@ -47,7 +47,7 @@ class WorldCalib():
         self.nSize = (6, 5) # the number of checkers
         self.result_dir = os.path.join(base_dir, opt.dir)
         self.intrinsic, self.distCoeffs, self.extrinsics = LoadCameraParams(os.path.join(self.result_dir, "cameraParams.json"))
-        self.camera = "mas"
+        self.camera = opt.camera
         image_dir = os.path.join(self.result_dir, "world", "rgb")
         depth_dir = os.path.join(self.result_dir, "world", "depth")
 
@@ -69,6 +69,10 @@ class WorldCalib():
                 criteria = (cv2.TERM_CRITERIA_EPS +
                             cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
                 corners = cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
+
+            else:
+                print("checkerboard is not detected!")
+                return
 
             # visualize world coordinates
             checker_formats = [
@@ -105,7 +109,12 @@ class WorldCalib():
                     cv2.putText(image, f"{i}-th coord", (int(Z[0]), int(Z[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0), 2)
 
                     P = np.concatenate((R, T), axis=1)
-                    np.save(os.path.join(self.result_dir, f"{i}-world.npy"), P)
+                    P = np.concatenate((P, h), axis=0)
+                    projection = self.extrinsics[self.camera].reshape(3,4)
+                    projection = np.concatenate((projection, h), axis=0)
+                    projection = np.linalg.inv(projection)
+                    P = projection @ P
+                    np.save(os.path.join(self.result_dir, f"{i}-world.npy"), P[:3])
 
             cv2.imwrite(os.path.join(self.result_dir, "world_coordinate.png"), image)
 
@@ -144,6 +153,12 @@ class WorldCalib():
                     image = cv2.line(image, (int(O[0]), int(O[1])), (int(basis[0]), int(basis[1])), color, 2)
 
                 cv2.imwrite(os.path.join(self.result_dir, f"{cam}_world.png"), image)
+
+            projection = self.extrinsics[self.camera].reshape(3,4)
+            projection = np.concatenate((projection, h), axis=0)
+            projection = np.linalg.inv(projection)
+            P = projection @ P
+            np.save(os.path.join(self.result_dir, "global_world.npy"), P[:3])
 
 
     def SolvePnP(self, pts_2d, reorder_idx, transposed, cam):
