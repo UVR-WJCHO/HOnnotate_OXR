@@ -138,48 +138,52 @@ def main(argv):
                 t_iter = time.time()
 
                 loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'contact': 0.0, 'depth_rel':0.0}
+                loss_weight = {'kpts2d':1.0, 'depth':1.0, 'seg':1.0, 'reg':1.0, 'contact': 1.0, 'depth_rel':1.0}
+
                 hand_param = model()
                 if CFG_WITH_OBJ:
                     obj_param = model_obj()
                 else:
                     obj_param = None
 
-                num_skip = 0
-
                 losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
                                    camIdxSet=detected_cams, frame=frame, contact=use_contact_loss)
 
-                # if camID == 'mas':
                 # loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                #                 camID=camID, flag_obj=CFG_WITH_OBJ, flag_crop=True)
+                #                 camIDSet=['mas'], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
                 for camIdx in detected_cams:
                     for k in CFG_LOSS_DICT:
                         loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
 
-
-                num_done = len(CFG_CAMID_SET) - num_skip
-                total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT) / num_done
+                total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
 
                 optimizer.zero_grad()
                 total_loss.backward(retain_graph=True)
                 optimizer.step()
                 lr_scheduler.step()
 
-                cur_kpt_loss = loss_all['kpts2d'].item() / num_done
+                cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
                 kps_loss[iter] = cur_kpt_loss
 
                 iter_t = time.time() - t_iter
                 logs = ["[{} - frame {}] [t : {:.2f} sec] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter_t, iter, total_loss.item())]
-                logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
+                logs += ['[%s:%.4f]' % (key, loss_all[key]/len(detected_cams)) for key in loss_all.keys() if key in CFG_LOSS_DICT]
                 logging.info(''.join(logs))
 
-
+                ## criteria for contact loss
                 if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
                     use_contact_loss = True
 
+                ## criteria for losses
+                if 'kpts2d' in CFG_LOSS_DICT and 'depth' in CFG_LOSS_DICT:
+                    if loss_all['kpts2d'] < 5000.:
+                        loss_weight['kpts2d'] = 0.2
+                        loss_weight['depth_rel'] = 0.2
+
+
+                ## sparse criterion on converge for v1 db release, need to be tight
                 if CFG_EARLYSTOPPING:
-                    ### sparse criterion on converge for v1 db release, need to be tight ###
                     if abs(prev_kps_loss - cur_kpt_loss) < 0.5:
                         ealry_stopping_patience_v2 += 1
 

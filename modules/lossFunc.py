@@ -132,7 +132,7 @@ class MultiViewLossFunc(nn.Module):
                 gt_depth_rel = torch.mul(gt_depth_rel, ratio)
 
                 loss_depth_rel = torch.sum(((joint_depth_rel - gt_depth_rel) ** 2).reshape(self.bs, -1), -1)
-                loss['depth_rel'] = loss_depth_rel
+                loss['depth_rel'] = loss_depth_rel * 10.0
 
             if 'reg' in self.loss_dict:
                 pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
@@ -158,14 +158,11 @@ class MultiViewLossFunc(nn.Module):
 
                 if 'seg' in self.loss_dict:
                     pred_seg = pred_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-
-                    # adhoc segment map
                     pred_seg = torch.div(pred_seg, torch.max(pred_seg))
-                    # debug = np.squeeze((pred_seg[0].cpu().detach().numpy()))
 
-                    seg_gap = torch.abs(pred_seg - self.gt_seg) * pred_seg
+                    seg_gap = torch.abs(pred_seg - self.gt_seg)
                     loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
-                    loss['seg'] = loss_seg
+                    loss['seg'] = loss_seg / 10.0
 
                     # pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
                     # gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
@@ -196,7 +193,6 @@ class MultiViewLossFunc(nn.Module):
                 if 'depth' in self.loss_dict:
                     pred_depth = pred_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                     depth_gap = torch.abs(pred_depth - self.gt_depth)
-                    depth_gap[pred_depth == 0] = 0
 
                     # pred_depth_vis = np.squeeze((pred_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                     # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
@@ -206,8 +202,8 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.imshow("depth_gap_vis", depth_gap_vis)
                     # cv2.waitKey(0)
 
-                    loss_depth = torch.sum(depth_gap.view(self.bs, -1), -1) / 100.0
-                    loss['depth'] = loss_depth
+                    loss_depth = torch.sum(depth_gap.view(self.bs, -1), -1)
+                    loss['depth'] = loss_depth / 1000.0
 
                     if pred_obj is not None:
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
@@ -330,7 +326,7 @@ class MultiViewLossFunc(nn.Module):
                 cv2.imshow(blend_gt_name, img_blend_gt)
                 cv2.imshow(blend_pred_name, img_blend_pred)
                 # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-                # cv2.imshow(blend_depth_name, depth_gap)
+                cv2.imshow(blend_depth_name, depth_gap)
                 # cv2.imshow(blend_seg_name, seg_gap)
                 cv2.waitKey(0)
             except:

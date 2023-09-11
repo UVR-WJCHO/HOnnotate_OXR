@@ -230,6 +230,17 @@ class DataLoader:
         seg[seg != 1] = 0
         seg_obj[seg_obj != 2] = 0
 
+        depth_near_th, depth_far_th = CFG_DEPTH_RANGE[self.cam]
+        depth[depth < depth_near_th] = 0
+        depth[depth > depth_far_th] = 0
+
+        depth[seg == 0] = 0
+
+        # depth /= np.max(depth)
+        # name = "depth_" + self.cam
+        # cv2.imshow(name, np.asarray(depth*255, dtype=np.uint8))
+        # cv2.waitKey(0)
+
         return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
     
     def get_meta(self, idx):
