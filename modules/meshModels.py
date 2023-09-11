@@ -51,19 +51,20 @@ class HandModel(nn.Module):
         self.pose_all = torch.cat((self.input_rot, self.input_pose), 1)
         # normalize scale
         hand_verts, hand_joints = self.mano_layer(self.pose_all, self.input_shape)
-        self.scale = torch.tensor([[self.compute_normalized_scale(hand_joints)]]).to(device)
+        scale = torch.tensor([[self.compute_normalized_scale(hand_joints)]])
+        self.input_scale = nn.Parameter(scale.repeat(self.batch_size, 1).to(device))
 
 
     def compute_normalized_scale(self, hand_joints):
         return (torch.sum((hand_joints[0, self.mcp_idx] - hand_joints[0, self.wrist_idx])**2)**0.5)/self.key_bone_len
 
-    def change_grads(self, root=False, rot=False, pose=False, shape=False):
+    def change_grads(self, root=False, rot=False, pose=False, shape=False, scale=False):
         self.xy_root.requires_grad = root
         self.z_root.requires_grad = root
         self.input_rot.requires_grad = rot
         self.input_pose.requires_grad = pose
         self.input_shape.requires_grad = shape
-        # self.input_scale.requires_grad = scale
+        self.input_scale.requires_grad = scale
 
     def forward(self):
         self.pose_ = self.input_pose
@@ -77,14 +78,14 @@ class HandModel(nn.Module):
         hand_verts, hand_joints = self.mano_layer(mano_param, self.shape_)
 
         xyz_root = torch.cat([self.xy_root, self.z_root], dim=-1)
-        hand_verts = hand_verts / self.scale
+        hand_verts = hand_verts / self.input_scale
         hand_verts = hand_verts + xyz_root[:, None, :]
-        hand_joints = hand_joints / self.scale
+        hand_joints = hand_joints / self.input_scale
         hand_joints = hand_joints + xyz_root[:, None, :]
 
         hand_faces = self.mano_layer.th_faces.repeat(self.batch_size, 1, 1)
 
-        return {'verts':hand_verts, 'faces':hand_faces, 'joints':hand_joints, 'xyz_root':xyz_root, 'scale':self.scale, 'rot':self.input_rot, 'pose':self.pose_, 'shape':self.shape_}
+        return {'verts':hand_verts, 'faces':hand_faces, 'joints':hand_joints, 'xyz_root':xyz_root, 'scale':self.input_scale, 'rot':self.input_rot, 'pose':self.pose_, 'shape':self.shape_}
 
 
 class ObjModel(nn.Module):
@@ -110,7 +111,6 @@ class ObjModel(nn.Module):
         self.obj_pose.requires_grad = True
 
         self.h = torch.tensor([[0, 0, 0, 1]], dtype=torch.float32).to(self.device)
-        self.scale = torch.FloatTensor([100.0]).to(self.device)
 
     def get_object_mat(self):
         obj_mat = torch.cat([self.obj_pose, self.h], dim=-1)
@@ -136,7 +136,7 @@ class ObjModel(nn.Module):
         transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
         transformed_points_cartesian = transformed_points_cartesian.view(self.batch_size, -1, 3)
 
-        return transformed_points_cartesian# * self.scale
+        return transformed_points_cartesian
 
     def forward(self):
 

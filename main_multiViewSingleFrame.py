@@ -80,7 +80,7 @@ def main(argv):
 
         ## Initialize hand model
         model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE, side=CFG_MANO_SIDE).to(CFG_DEVICE)
-        model.change_grads(root=True, rot=True, pose=True, shape=True)
+        model.change_grads(root=True, rot=True, pose=True, shape=True, scale=True)
 
         ## Initialize object model
         if CFG_WITH_OBJ:
