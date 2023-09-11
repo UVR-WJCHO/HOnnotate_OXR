@@ -35,20 +35,6 @@ flags.DEFINE_integer('initNum', 1, 'initial frame num of trial_0, check mediapip
 FLAGS(sys.argv)
 
 
-
-def single_loss(proc_num, flag_obj, loss_func, args, return_dict):
-    hand_param, obj_param, flag_render, camIdx, frame = args
-    if not flag_obj:
-        losses = loss_func(pred=hand_param, pred_obj=None, render=flag_render,
-                           camIdx=camIdx, frame=frame)
-    else:
-        losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
-             camIdx=camIdx, frame=frame)
-        # losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
-        #                    camIdx=camIdx, frame=frame, contact=iter > (CFG_NUM_ITER - CFG_NUM_ITER_CONTACT))
-    return_dict[proc_num] = losses
-
-
 def main(argv):
     logging.get_absl_handler().setFormatter(None)
     save_num = 0
@@ -145,7 +131,6 @@ def main(argv):
 
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
 
-            # manager = multiprocessing.Manager()
             kps_loss = {}
             use_contact_loss = False
 
@@ -159,8 +144,6 @@ def main(argv):
                 else:
                     obj_param = None
 
-                # return_dict = manager.dict()
-                # procs = []
                 num_skip = 0
 
                 losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
@@ -169,27 +152,11 @@ def main(argv):
                 # if camID == 'mas':
                 # loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
                 #                 camID=camID, flag_obj=CFG_WITH_OBJ, flag_crop=True)
-                # time.sleep(0.6)
+
                 for camIdx in detected_cams:
                     for k in CFG_LOSS_DICT:
                         loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
 
-                # for camIdx in detected_cams:
-                #     camID = CFG_CAMID_SET[camIdx]
-                    ## debugging multiprocessing multicam
-                    # args = [hand_param, obj_param, flag_render, camIdx, frame]
-                    # p = multiprocessing.Process(target=single_loss, args=(camIdx, CFG_WITH_OBJ, loss_func, args, return_dict))
-                    # procs.append(p)
-                    # p.start()
-
-
-                ## debugging multiprocessing multicam
-                # for proc in procs:
-                #     proc.join()
-                # for key in return_dict:
-                #     losses = return_dict[key]
-                #     for k in CFG_LOSS_DICT:
-                #         loss_all[k] += losses[k]
 
                 num_done = len(CFG_CAMID_SET) - num_skip
                 total_loss = sum(loss_all[k] for k in CFG_LOSS_DICT) / num_done
@@ -232,18 +199,14 @@ def main(argv):
 
             hand_param = model()
             ### visualization results of frame
-            for camIdx in detected_cams:
-                camID = CFG_CAMID_SET[camIdx]
-
-                save_path = os.path.join(targetDir_result, trialName, 'visualization', camID)
-                os.makedirs(save_path, exist_ok=True)
-                if not CFG_WITH_OBJ:
-                    loss_func.visualize(pred=hand_param, pred_obj=None, camIdx=camIdx, frame=frame,
-                                        save_path=save_path, camID=camID, flag_obj=False, flag_crop=True)
-                else:
-                    obj_param = model_obj()
-                    loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                                        save_path=save_path, camID=camID, flag_obj=True, flag_crop=True)
+            save_path = os.path.join(targetDir_result, trialName, "visualization")
+            if not CFG_WITH_OBJ:
+                loss_func.visualize(pred=hand_param, pred_obj=None, camIdxSet=detected_cams, frame=frame,
+                                    save_path=save_path, flag_obj=False, flag_crop=True)
+            else:
+                obj_param = model_obj()
+                loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
+                                    save_path=save_path, flag_obj=True, flag_crop=True)
 
             ### save annotation per frame as json format
             if CFG_WITH_OBJ:

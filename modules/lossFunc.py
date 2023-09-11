@@ -228,110 +228,114 @@ class MultiViewLossFunc(nn.Module):
 
         return losses
 
-    def visualize(self, pred, pred_obj, camIdx, frame, camID, save_path=None, flag_obj=False, flag_crop=False):
-        # set gt to load original input
-        self.set_gt(camIdx, frame)
-        # set camera status for projection
-        self.set_cam(camIdx)
+    def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False):
 
-        ## HAND ##
-        # project hand joint
-        joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms), 0)
-        pred_kpts2d = projectPoints(joints_cam, self.Ks)
+        for camIdx in camIdxSet:
+            camID = CFG_CAMID_SET[camIdx]
+            # set gt to load original input
+            self.set_gt(camIdx, frame)
+            # set camera status for projection
 
-        verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms), 0)
+            ## HAND ##
+            # project hand joint
+            joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
+            pred_kpts2d = projectPoints(joints_cam, self.Ks[camIdx])
 
-        if not flag_obj:
-            pred_rendered = self.cam_renderer.render(verts_cam, pred['faces'], flag_rgb=True)
-        else:
-            # if flag_obj, render both objects
-            verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms), 0)
-            pred_rendered = self.cam_renderer.render_meshes([verts_cam, verts_cam_obj],
-                                                            [pred['faces'], pred_obj['faces']], flag_rgb=True)
+            verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms[camIdx]), 0)
 
-        ## VISUALIZE ##
-        rgb_mesh = np.squeeze((pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-        depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
-        seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
+            if not flag_obj:
+                pred_rendered = self.cam_renderer[camIdx].render(verts_cam, pred['faces'], flag_rgb=True)
+            else:
+                # if flag_obj, render both objects
+                verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
+                pred_rendered = self.cam_renderer[camIdx].render_meshes([verts_cam, verts_cam_obj],
+                                                                [pred['faces'], pred_obj['faces']], flag_rgb=True)
 
-        gt_kpts2d = np.squeeze(self.gt_kpts2d.cpu().numpy())
-        pred_kpts2d = np.squeeze(pred_kpts2d.cpu().detach().numpy())
+            ## VISUALIZE ##
+            rgb_mesh = np.squeeze((pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+            depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
+            seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
 
-        # check if gt kpts is nan (not detected)
-        if np.isnan(gt_kpts2d).any():
-            gt_kpts2d = np.zeros((21, 2))
+            gt_kpts2d = np.squeeze(self.gt_kpts2d.cpu().numpy())
+            pred_kpts2d = np.squeeze(pred_kpts2d.cpu().detach().numpy())
 
-        if flag_crop:
-            # show cropped size of input (480, 640)
-            rgb_input = np.squeeze(self.gt_rgb.cpu().numpy()).astype(np.uint8)
-            depth_input = np.squeeze(self.gt_depth.cpu().numpy())
-            seg_input = np.squeeze(self.gt_seg.cpu().numpy())
+            # check if gt kpts is nan (not detected)
+            if np.isnan(gt_kpts2d).any():
+                gt_kpts2d = np.zeros((21, 2))
 
-            # rendered image is original size (1080, 1920)
-            rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
-            depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-            seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+            if flag_crop:
+                # show cropped size of input (480, 640)
+                rgb_input = np.squeeze(self.gt_rgb.cpu().numpy()).astype(np.uint8)
+                depth_input = np.squeeze(self.gt_depth.cpu().numpy())
+                seg_input = np.squeeze(self.gt_seg.cpu().numpy())
 
-            uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
-            gt_kpts2d = (self.img2bb @ uv1.T).T
-            uv1 = np.concatenate((pred_kpts2d, np.ones_like(pred_kpts2d[:, :1])), 1)
-            pred_kpts2d = (self.img2bb @ uv1.T).T
-        else:
-            # show original size of input (1080, 1920)
-            rgb_input, depth_input, seg_input, seg_obj = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
+                # rendered image is original size (1080, 1920)
+                rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
+                depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
-        rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
-        rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
-        rgb_seg = (rgb_input * seg_input[..., None]).astype(np.uint8)
+                uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
+                gt_kpts2d = (self.img2bb @ uv1.T).T
+                uv1 = np.concatenate((pred_kpts2d, np.ones_like(pred_kpts2d[:, :1])), 1)
+                pred_kpts2d = (self.img2bb @ uv1.T).T
+            else:
+                # show original size of input (1080, 1920)
+                rgb_input, depth_input, seg_input, seg_obj = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
 
-        seg_mask = np.copy(seg_mesh)
-        seg_mask[seg_mesh>0] = 1
-        rgb_2d_pred *= seg_mask[..., None]
+            rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
+            rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
+            rgb_seg = (rgb_input * seg_input[..., None]).astype(np.uint8)
 
-        img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
-        img_blend_pred = cv2.addWeighted(rgb_input, 1.0, rgb_2d_pred, 0.4, 0)
-        img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
+            seg_mask = np.copy(seg_mesh)
+            seg_mask[seg_mesh>0] = 1
+            rgb_2d_pred *= seg_mask[..., None]
 
-        depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
-        seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
-        depth_gap *= seg_mask
-        seg_gap *= seg_mask * 255
+            img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
+            img_blend_pred = cv2.addWeighted(rgb_input, 1.0, rgb_2d_pred, 0.4, 0)
+            img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
 
-        if not flag_crop:
-            # resize images to (360, 640)
-            img_blend_gt = cv2.resize(img_blend_gt, dsize=(640,360), interpolation=cv2.INTER_LINEAR)
-            img_blend_pred = cv2.resize(img_blend_pred, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
-            img_blend_pred_seg = cv2.resize(img_blend_pred_seg, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
-            depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
-            seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+            depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
+            seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
+            depth_gap *= seg_mask
+            seg_gap *= seg_mask * 255
 
-        blend_gt_name = "blend_gt_" + camID + "_" + str(frame)
-        blend_pred_name = "blend_pred_" + camID + "_" + str(frame)
-        blend_pred_seg_name = "blend_pred_seg_" + camID + "_" + str(frame)
-        blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
-        blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
+            if not flag_crop:
+                # resize images to (360, 640)
+                img_blend_gt = cv2.resize(img_blend_gt, dsize=(640,360), interpolation=cv2.INTER_LINEAR)
+                img_blend_pred = cv2.resize(img_blend_pred, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+                img_blend_pred_seg = cv2.resize(img_blend_pred_seg, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+                depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+                seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
 
-        # try:
-        #     cv2.imshow(blend_gt_name, img_blend_gt)
-        #     cv2.imshow(blend_pred_name, img_blend_pred)
-        #     # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-        #     # cv2.imshow(blend_depth_name, depth_gap)
-        #     # cv2.imshow(blend_seg_name, seg_gap)
-        #     cv2.waitKey(0)
-        # except:
-        #     print("headless server")
+            blend_gt_name = "blend_gt_" + camID + "_" + str(frame)
+            blend_pred_name = "blend_pred_" + camID + "_" + str(frame)
+            blend_pred_seg_name = "blend_pred_seg_" + camID + "_" + str(frame)
+            blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
+            blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
 
-        if save_path is not None:
-            cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
-            # cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
-            cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
+            # try:
+            #     cv2.imshow(blend_gt_name, img_blend_gt)
+            #     cv2.imshow(blend_pred_name, img_blend_pred)
+            #     # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+            #     # cv2.imshow(blend_depth_name, depth_gap)
+            #     # cv2.imshow(blend_seg_name, seg_gap)
+            #     cv2.waitKey(0)
+            # except:
+            #     print("headless server")
 
-            # save meshes
-            import trimesh
-            hand_verts = mano3DToCam3D(pred['verts'], self.Ms)
-            hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
-            hand.export(os.path.join(save_path, f'mesh_hand_{camID}_{frame}.obj'))
-            if flag_obj:
-                obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms)
-                obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
-                obj.export(os.path.join(save_path, f'mesh_obj_{camID}_{frame}.obj'))
+            if save_path is not None:
+                save_path = os.path.join(save_path, camID)
+                os.makedirs(save_path, exist_ok=True)
+                cv2.imwrite(os.path.join(save_path, blend_pred_name + '.png'), img_blend_pred)
+                # cv2.imwrite(os.path.join(save_path, blend_pred_seg_name + '.png'), img_blend_pred_seg)
+                cv2.imwrite(os.path.join(save_path, blend_depth_name + '.png'), depth_gap)
+
+                # save meshes
+                import trimesh
+                hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
+                hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
+                hand.export(os.path.join(save_path, f'mesh_hand_{camID}_{frame}.obj'))
+                if flag_obj:
+                    obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
+                    obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
+                    obj.export(os.path.join(save_path, f'mesh_obj_{camID}_{frame}.obj'))
