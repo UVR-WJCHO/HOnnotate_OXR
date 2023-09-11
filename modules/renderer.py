@@ -42,7 +42,7 @@ def changeCoordtopytorch3D(extrinsic):
 
 
 class Renderer():
-    def __init__(self, device='cpu', bs=1, extrinsic=None, intrinsic=None, image_size=None, light_loaction=((2.0, 2.0, -2.0),)):
+    def __init__(self, device='cuda', bs=1, extrinsic=None, intrinsic=None, image_size=None, light_loaction=((2.0, 2.0, -2.0),)):
         '''
             R : numpy array [3, 3]
             T : numpy array [3]
@@ -98,7 +98,7 @@ class Renderer():
             image_size=image_size,
             blur_radius=0.0,
             faces_per_pixel=1,
-            bin_size = 0,
+            bin_size = None,
             max_faces_per_bin = None
         )
 
@@ -128,6 +128,35 @@ class Renderer():
         # )
 
 
+    def render_simple(self, meshes, flag_rgb=False):
+        '''
+        verts : [bs, V, 3]
+        faces : [bs, F, 3]
+
+        -> [bs, H, W, 3], [bs, H, W], [bs, H, W]
+        '''
+
+        if flag_rgb:
+            rgb = self.renderer_rgb(meshes)[..., :3]
+        else:
+            rgb = None
+        t1 = time.time()
+        depth = self.rasterizer_depth(meshes).zbuf[..., 0]
+
+        print("raster d : ", time.time() - t1)
+
+        # depth map process
+        depth[depth == -1] = 0.
+        depth = depth * 10.0    # change to mm scale (same as gt)
+
+        seg = torch.empty_like(depth).copy_(depth)
+
+        # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
+        #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
+
+        return {"rgb":rgb, "depth":depth, "seg":seg}
+
+
     def render(self, verts, faces, flag_rgb=False):
         '''
         verts : [bs, V, 3]
@@ -135,10 +164,8 @@ class Renderer():
         
         -> [bs, H, W, 3], [bs, H, W], [bs, H, W]
         '''
-
         verts_rgb = torch.ones_like(verts, device=self.device)
         textures = TexturesVertex(verts_features=verts_rgb)
-
         meshes = Meshes(verts=verts, faces=faces, textures=textures)
 
         if flag_rgb:
@@ -156,7 +183,6 @@ class Renderer():
 
         # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
-
 
 
         return {"rgb":rgb, "depth":depth, "seg":seg}

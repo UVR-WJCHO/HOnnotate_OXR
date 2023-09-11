@@ -22,6 +22,8 @@ from config import *
 import time
 from utils.dataUtils import *
 import multiprocessing
+from cProfile import Profile
+from pstats import Stats
 
 
 ## FLAGS
@@ -49,8 +51,6 @@ def single_loss(proc_num, flag_obj, loss_func, args, return_dict):
 
 def main(argv):
     logging.get_absl_handler().setFormatter(None)
-    torch.multiprocessing.set_start_method('spawn', force=True)
-
     save_num = 0
 
     flag_render = False
@@ -89,23 +89,23 @@ def main(argv):
             obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, mas_dataloader.cam_parameter)
 
         ## Initialize loss function
-        loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT)
+        loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT).to(CFG_DEVICE)
         loss_func.set_main_cam(main_cam_idx=0)
 
         ## Initialize hand model
-        model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE, side=CFG_MANO_SIDE)
+        model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE, side=CFG_MANO_SIDE).to(CFG_DEVICE)
         model.change_grads(root=True, rot=True, pose=True, shape=True)
 
         ## Initialize object model
         if CFG_WITH_OBJ:
             obj_template_mesh = obj_dataloader.obj_mesh_data
-            model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh)
+            model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh).to(CFG_DEVICE)
             loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
 
         ## Start optimization per frame
         cfg_lr_init = CFG_LR_INIT
         for frame in range(len(mas_dataloader)):
-            t1 = time.time()
+            t_start = time.time()
 
             # check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
             if trialIdx == 0 and frame < FLAGS.initNum:
@@ -145,12 +145,12 @@ def main(argv):
 
             lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
 
-            manager = multiprocessing.Manager()
+            # manager = multiprocessing.Manager()
             kps_loss = {}
             use_contact_loss = False
 
             for iter in range(CFG_NUM_ITER):
-                t1 = time.time()
+                t_iter = time.time()
 
                 loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'contact': 0.0}
                 hand_param = model()
@@ -159,27 +159,29 @@ def main(argv):
                 else:
                     obj_param = None
 
-                return_dict = manager.dict()
-                procs = []
+                # return_dict = manager.dict()
+                # procs = []
                 num_skip = 0
-                for camIdx in detected_cams:
-                    camID = CFG_CAMID_SET[camIdx]
 
+                losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
+                                   camIdxSet=detected_cams, frame=frame, contact=use_contact_loss)
+
+                # if camID == 'mas':
+                # loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
+                #                 camID=camID, flag_obj=CFG_WITH_OBJ, flag_crop=True)
+                # time.sleep(0.6)
+                for camIdx in detected_cams:
+                    for k in CFG_LOSS_DICT:
+                        loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
+
+                # for camIdx in detected_cams:
+                #     camID = CFG_CAMID_SET[camIdx]
                     ## debugging multiprocessing multicam
                     # args = [hand_param, obj_param, flag_render, camIdx, frame]
                     # p = multiprocessing.Process(target=single_loss, args=(camIdx, CFG_WITH_OBJ, loss_func, args, return_dict))
                     # procs.append(p)
                     # p.start()
 
-                    losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
-                                       camIdx=camIdx, frame=frame, contact=use_contact_loss)
-
-                    if camID == 'mas':
-                        loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                                        camID=camID, flag_obj=CFG_WITH_OBJ, flag_crop=True)
-
-                    for k in CFG_LOSS_DICT:
-                        loss_all[k] += losses[k] * float(CFG_CAM_WEIGHT[camIdx])
 
                 ## debugging multiprocessing multicam
                 # for proc in procs:
@@ -200,7 +202,7 @@ def main(argv):
                 cur_kpt_loss = loss_all['kpts2d'].item() / num_done
                 kps_loss[iter] = cur_kpt_loss
 
-                iter_t = time.time() - t1
+                iter_t = time.time() - t_iter
                 logs = ["[{} - frame {}] [t : {:.2f} sec] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter_t, iter, total_loss.item())]
                 logs += ['[%s:%.4f]' % (key, loss_all[key]/num_done) for key in loss_all.keys() if key in CFG_LOSS_DICT]
                 logging.info(''.join(logs))
@@ -242,7 +244,6 @@ def main(argv):
                     obj_param = model_obj()
                     loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
                                         save_path=save_path, camID=camID, flag_obj=True, flag_crop=True)
-            cv2.waitKey(0)
 
             ### save annotation per frame as json format
             if CFG_WITH_OBJ:
@@ -250,12 +251,15 @@ def main(argv):
             else:
                 obj_param = [None, None]
             save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, obj_param, CFG_MANO_SIDE)
-            t2 = time.time()
-            print("end %s - frame %s, processed %s" % (trialName, frame, t2 - t1))
+            t_end = time.time()
+            print("end %s - frame %s, processed %s" % (trialName, frame, t_end - t_start))
 
             save_num += 1
     print("end time : ", time.ctime())
     print("total processed frames : ", save_num)
 
+
 if __name__ == "__main__":
     app.run(main)
+
+
