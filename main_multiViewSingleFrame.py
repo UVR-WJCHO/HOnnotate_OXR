@@ -137,7 +137,7 @@ def main(argv):
             for iter in range(CFG_NUM_ITER):
                 t_iter = time.time()
 
-                loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'contact': 0.0}
+                loss_all = {'kpts2d':0.0, 'depth':0.0, 'seg':0.0, 'reg':0.0, 'contact': 0.0, 'depth_rel':0.0}
                 hand_param = model()
                 if CFG_WITH_OBJ:
                     obj_param = model_obj()

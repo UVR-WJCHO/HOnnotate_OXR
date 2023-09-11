@@ -121,6 +121,19 @@ class MultiViewLossFunc(nn.Module):
                 # debug_pred = np.squeeze(pred_kpts2d.cpu().detach().numpy())
                 # debug_gt = np.squeeze(self.gt_kpts2d.cpu().detach().numpy())
 
+            if 'depth_rel' in self.loss_dict:
+                joint_depth_rel = joints_set[camIdx][:, :, -1] - joints_set[camIdx][:, 0, -1]
+                gt_depth_rel = self.gt_kpts3d[:, :, -1] - self.gt_kpts3d[:, 0, -1]
+
+                joint_scale = joint_depth_rel[:, 1] - joint_depth_rel[:, 0]
+                gt_scale = gt_depth_rel[:, 1] - gt_depth_rel[:, 0]
+                ratio = joint_scale / gt_scale
+
+                gt_depth_rel = torch.mul(gt_depth_rel, ratio)
+
+                loss_depth_rel = torch.sum(((joint_depth_rel - gt_depth_rel) ** 2).reshape(self.bs, -1), -1)
+                loss['depth_rel'] = loss_depth_rel
+
             if 'reg' in self.loss_dict:
                 pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
                 shape_reg = torch.sum(
