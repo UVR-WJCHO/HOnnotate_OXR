@@ -150,11 +150,14 @@ class loadDataset():
         self.bbox_width = 640
         self.bbox_height = 480
         # 매뉴얼 하게 초기 bbox를 찾아서 설정해줌
-        self.temp_bbox = {}
-        self.temp_bbox["mas"] = [650, 280, self.bbox_width, self.bbox_height]
-        self.temp_bbox["sub1"] = [750, 300, self.bbox_width, self.bbox_height]
-        self.temp_bbox["sub2"] = [500, 150, self.bbox_width, self.bbox_height]
-        self.temp_bbox["sub3"] = [650, 200, self.bbox_width, self.bbox_height]
+
+        self.init_bbox = {}
+        self.init_bbox["mas"] = [400, 60, 1120, 960]
+        self.init_bbox["sub1"] = [360, 0, 1120, 960]
+        self.init_bbox["sub2"] = [640, 180, 640, 720]
+        self.init_bbox["sub3"] = [680, 180, 960, 720]
+
+
         self.prev_bbox = None
         self.wrist_px = None
 
@@ -278,7 +281,7 @@ class loadDataset():
         self.dist = self.distCoeffs[camID]
         self.new_camera = self.intrinsic_undistort[camID]
 
-        self.prev_bbox = self.temp_bbox[camID]
+        self.prev_bbox = self.init_bbox[camID]
 
     def init_info(self):
         self.annotCamDir = os.path.join(self.annotDir, self.camID)
@@ -500,61 +503,57 @@ class loadDataset():
         kps[:] = np.nan
         idx_to_coordinates = None
 
-        # 반복해서 검출 시도
-        for _ in range(2):
-            results = mp_hand.process(cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
-            if results.multi_hand_landmarks and len(results.multi_hand_landmarks[0].landmark) == 21:
-                hand_landmark = results.multi_hand_landmarks[0]
+        # crop initial image with each camera view's pre-defined bbox
+        bbox = self.init_bbox[self.camID]
+        rgb_init = np.copy(rgb)
+        rgb_init = rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+
+        # run mediapipe
+        results = mp_hand.process(cv2.cvtColor(rgb_init, cv2.COLOR_BGR2RGB))
+
+        if results.multi_hand_landmarks and len(results.multi_hand_landmarks[0].landmark) == 21:
+            hand_landmark = results.multi_hand_landmarks[0]
+            idx_to_coordinates = {}
+            # wristDepth = depth[
+            #     int(hand_landmark.landmark[0].y * image_rows), int(hand_landmark.landmark[0].x * image_cols)]
+            for idx_land, landmark in enumerate(hand_landmark.landmark):
+                landmark_px = [landmark.x * bbox[2] + bbox[0], landmark.y * bbox[3] + bbox[1]]
+                if landmark_px:
+                    # landmark_px has fliped x axis
+                    idx_to_coordinates[idx_land] = [landmark_px[0], landmark_px[1]]
+
+                    kps[idx_land, 0] = landmark_px[0]
+                    kps[idx_land, 1] = landmark_px[1]
+                    # save relative depth on z axis
+                    kps[idx_land, 2] = landmark.z
+
+        # 전체 이미지에서 손 검출이 안되는 경우 이전 bbox로 크롭한 후에 다시 검출
+        if not results.multi_hand_landmarks or len(results.multi_hand_landmarks[0].landmark) != 21 or np.any(
+                np.isnan(kps)):
+            bbox = self.prev_bbox
+            rgb_crop = rgb[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+            results = mp_hand.process(cv2.cvtColor(rgb_crop, cv2.COLOR_BGR2RGB))
+            if results.multi_hand_landmarks:
+                hand_landmarks = results.multi_hand_landmarks[0]
                 idx_to_coordinates = {}
-                # wristDepth = depth[
-                #     int(hand_landmark.landmark[0].y * image_rows), int(hand_landmark.landmark[0].x * image_cols)]
-                for idx_land, landmark in enumerate(hand_landmark.landmark):
-                    landmark_px = [landmark.x * image_cols, landmark.y * image_rows]
-                    if landmark_px:
-                        # landmark_px has fliped x axis
-                        orig_x = landmark_px[0]
-                        idx_to_coordinates[idx_land] = [orig_x, landmark_px[1]]
+                # wristDepth = depth[int(hand_landmarks.landmark[0].y * bbox[3] + bbox[1]), int(
+                #     hand_landmarks.landmark[0].x * bbox[2] + bbox[0])]
+                for idx_land, landmarks in enumerate(hand_landmarks.landmark):
+                    landmarks_px = [int(landmarks.x * bbox[2] + bbox[0]), int(landmarks.y * bbox[3] + bbox[1])]
+                    if landmarks_px:
+                        idx_to_coordinates[idx_land] = landmarks_px
 
-                        kps[idx_land, 0] = landmark_px[0]
-                        kps[idx_land, 1] = landmark_px[1]
+                        kps[idx_land, 0] = landmarks_px[0]
+                        kps[idx_land, 1] = landmarks_px[1]
                         # save relative depth on z axis
-                        kps[idx_land, 2] = landmark.z
+                        kps[idx_land, 2] = landmarks.z
 
-
-            # 전체 이미지에서 손 검출이 안되는 경우 이전 bbox로 크롭한 후에 다시 검출
-            if not results.multi_hand_landmarks or len(results.multi_hand_landmarks[0].landmark) != 21 or np.any(
-                    np.isnan(kps)):
-                bbox = self.prev_bbox
-                rgb_crop = rgb[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-                results = mp_hand.process(cv2.cvtColor(rgb_crop, cv2.COLOR_BGR2RGB))
-                if results.multi_hand_landmarks:
-                    hand_landmarks = results.multi_hand_landmarks[0]
-                    idx_to_coordinates = {}
-                    # wristDepth = depth[int(hand_landmarks.landmark[0].y * bbox[3] + bbox[1]), int(
-                    #     hand_landmarks.landmark[0].x * bbox[2] + bbox[0])]
-                    for idx_land, landmarks in enumerate(hand_landmarks.landmark):
-                        landmarks_px = [int(landmarks.x * bbox[2] + bbox[0]), int(landmarks.y * bbox[3] + bbox[1])]
-                        if landmarks_px:
-                            idx_to_coordinates[idx_land] = landmarks_px
-
-                            kps[idx_land, 0] = landmarks_px[0]
-                            kps[idx_land, 1] = landmarks_px[1]
-                            # save relative depth on z axis
-                            kps[idx_land, 2] = landmarks.z
-
-            # 손이 나왔을 경우 반복 멈춤
-            if not np.any(np.isnan(kps)):
-                break
-
-        idx_to_coord = idx_to_coordinates
-
-        if idx_to_coord is None:
+        if idx_to_coordinates is None:
             return None
 
-        bbox = self.extractBbox(idx_to_coord, image_rows, image_cols)
+        bbox = self.extractBbox(idx_to_coordinates, image_rows, image_cols)
         rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
         depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-        # depthMask = np.where(depth < 3, 1, 0).astype(np.uint8)[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
 
         procImgSet = [rgbCrop, depthCrop]
         self.prev_bbox = np.copy(bbox)
@@ -670,6 +669,17 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.segVisDir, imgName), rgb*mask_hand[:,:,np.newaxis])
 
 
+
+    def postProcessNone(self, idx):
+        meta_info = {'bb': None, 'img2bb': None,
+                     'bb2img': None, 'kpts': None, 'kpts_crop': None}
+
+        metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
+        jsonPath = os.path.join(self.metaDir, metaName)
+        with open(jsonPath, 'wb') as f:
+            pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
+
+
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts):
 
         rgbName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
@@ -733,7 +743,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.3)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.9, min_tracking_confidence=0.95)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
@@ -755,16 +765,18 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 images_list.append(images)
                 output_list.append(output)
 
-            if not any(x is None for x in output_list):
+            if not all(x is None for x in output_list):
                 for db, images, output in zip(dbs, images_list, output_list):
-                    bb, img2bb, bb2img, procImgSet, kps = output
-                    procKps = db.translateKpts(np.copy(kps), img2bb)
-                    db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
-                    db.updateObjdata(idx, save_idx)
+                    if output is not None:
+                        bb, img2bb, bb2img, procImgSet, kps = output
+                        procKps = db.translateKpts(np.copy(kps), img2bb)
+                        db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
+                        db.updateObjdata(idx, save_idx)
 
-                    if flag_segmentation:
-                        db.segmentation(save_idx, procImgSet, procKps, img2bb)
-
+                        if flag_segmentation:
+                            db.segmentation(save_idx, procImgSet, procKps, img2bb)
+                    else:
+                        db.postProcessNone(save_idx)
                 progress.update()
                 global_tqdm.update()
                 save_idx += 1
@@ -799,7 +811,9 @@ def main(argv):
     '''
 
     tasks = []
-    process_count = 4
+    process_count = 1
+
+
     total_count = 0
     t1 = time.time()
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):

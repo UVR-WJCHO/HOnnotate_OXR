@@ -40,7 +40,7 @@ def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
         anno['Mesh'][0]['class_name'] = GRASPType(int(grasp_id)).name
         anno['Mesh'][0]['object_name'] = OBJType(int(obj_id)).name
         anno['Mesh'][0]['object_file'] = pred_obj[1]
-        anno['Mesh'][0]['object_mat'] = pred_obj[0].tolist()
+        anno['Mesh'][0]['object_mat'] = pred_obj[0]
         anno['Mesh'][0]['mano_side'] = side
         anno['Mesh'][0]['mano_trans'] = pred['rot'].tolist()
         anno['Mesh'][0]['mano_pose'] = pred['pose'].tolist()

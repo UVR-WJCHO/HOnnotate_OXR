@@ -164,11 +164,6 @@ def main(argv):
                 num_skip = 0
                 for camIdx in detected_cams:
                     camID = CFG_CAMID_SET[camIdx]
-                    # skip non-detected camera
-                    if np.isnan(dataloader_set[camIdx].sample_kpt[frame]['kpts3d']).any():
-                        num_skip += 1
-                        print("skip cam ", camID)
-                        continue
 
                     ## debugging multiprocessing multicam
                     # args = [hand_param, obj_param, flag_render, camIdx, frame]
@@ -176,19 +171,15 @@ def main(argv):
                     # procs.append(p)
                     # p.start()
 
-                    if not CFG_WITH_OBJ:
-                        losses = loss_func(pred=hand_param, pred_obj=None, render=flag_render,
-                                           camIdx=camIdx, frame=frame)
-                    else:
-                        losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
-                                           camIdx=camIdx, frame=frame, contact=use_contact_loss)
+                    losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
+                                       camIdx=camIdx, frame=frame, contact=use_contact_loss)
 
-                        # if camID == 'mas':
-                        #     loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                        #                     camID=camID, flag_obj=True, flag_crop=True)
+                    if camID == 'mas':
+                        loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
+                                        camID=camID, flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
                     for k in CFG_LOSS_DICT:
-                        loss_all[k] += losses[k]
+                        loss_all[k] += losses[k] * float(CFG_CAM_WEIGHT[camIdx])
 
                 ## debugging multiprocessing multicam
                 # for proc in procs:
@@ -215,27 +206,26 @@ def main(argv):
                 logging.info(''.join(logs))
 
 
-
-                ### sparse criterion on converge for v1 db release, need to be tight ###
-                if abs(prev_kps_loss - cur_kpt_loss) < 0.5:
-                    ealry_stopping_patience_v2 += 1
-
-                if cur_kpt_loss < best_kps_loss:
-                    best_kps_loss = cur_kpt_loss
-                if cur_kpt_loss < CFG_LOSS_THRESHOLD:
-                    ealry_stopping_patience += 1
-
-                if cur_kpt_loss < CFG_LOSS_THRESHOLD and ealry_stopping_patience > CFG_PATIENCE:
-                    logging.info('Early stopping(less than THRESHOLD) at iter %d' % iter)
-                    break
-                if ealry_stopping_patience_v2 > CFG_PATIENCE_v2:
-                    logging.info('Early stopping(converged) at iter %d' % iter)
-                    break
-
                 if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
                     use_contact_loss = True
 
-                prev_kps_loss = cur_kpt_loss
+                if CFG_EARLYSTOPPING:
+                    ### sparse criterion on converge for v1 db release, need to be tight ###
+                    if abs(prev_kps_loss - cur_kpt_loss) < 0.5:
+                        ealry_stopping_patience_v2 += 1
+
+                    if cur_kpt_loss < best_kps_loss:
+                        best_kps_loss = cur_kpt_loss
+                    if cur_kpt_loss < CFG_LOSS_THRESHOLD:
+                        ealry_stopping_patience += 1
+
+                    if cur_kpt_loss < CFG_LOSS_THRESHOLD and ealry_stopping_patience > CFG_PATIENCE:
+                        logging.info('Early stopping(less than THRESHOLD) at iter %d' % iter)
+                        break
+                    if ealry_stopping_patience_v2 > CFG_PATIENCE_v2:
+                        logging.info('Early stopping(converged) at iter %d' % iter)
+                        break
+                    prev_kps_loss = cur_kpt_loss
 
 
             hand_param = model()
@@ -256,9 +246,9 @@ def main(argv):
 
             ### save annotation per frame as json format
             if CFG_WITH_OBJ:
-                obj_param = [model_obj.get_object_mat(), obj_dataloader.obj_mesh_name]
+                obj_param = [model_obj.get_object_mat().tolist(), obj_dataloader.obj_mesh_name]
             else:
-                obj_param = [None, [None]]
+                obj_param = [None, None]
             save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, obj_param, CFG_MANO_SIDE)
             t2 = time.time()
             print("end %s - frame %s, processed %s" % (trialName, frame, t2 - t1))

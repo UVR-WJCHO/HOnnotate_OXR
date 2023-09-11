@@ -116,21 +116,25 @@ class DataLoader:
         for idx in range(len(sample_dict)):
             sample = sample_dict[idx]
 
-            sample_kpt_ = {}
-            sample_kpt_['kpts3d'] = np.copy(sample['kpts3d'])
+            if sample == None:
+                sample_dict_torch[idx] = None
+                sample_kpt[idx] = None
+            else:
+                sample_kpt_ = {}
+                sample_kpt_['kpts3d'] = np.copy(sample['kpts3d'])
 
-            sample_torch = {}
-            sample_torch['bb'] = np.asarray(sample['bb']).astype(int)
-            sample_torch['img2bb'] = sample['img2bb']
-            sample_torch['kpts2d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts2d']), 0).to(self.device)
-            sample_torch['kpts3d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d']), 0).to(self.device)
-            sample_torch['rgb'] = torch.FloatTensor(sample['rgb']).to(self.device)
-            sample_torch['depth'] = torch.unsqueeze(torch.FloatTensor(sample['depth']), 0).to(self.device)
-            sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
-            sample_torch['seg_obj'] =torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
+                sample_torch = {}
+                sample_torch['bb'] = np.asarray(sample['bb']).astype(int)
+                sample_torch['img2bb'] = sample['img2bb']
+                sample_torch['kpts2d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts2d']), 0).to(self.device)
+                sample_torch['kpts3d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d']), 0).to(self.device)
+                sample_torch['rgb'] = torch.FloatTensor(sample['rgb']).to(self.device)
+                sample_torch['depth'] = torch.unsqueeze(torch.FloatTensor(sample['depth']), 0).to(self.device)
+                sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
+                sample_torch['seg_obj'] =torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
 
-            sample_dict_torch[idx] = sample_torch
-            sample_kpt[idx] = sample_kpt_
+                sample_dict_torch[idx] = sample_torch
+                sample_kpt[idx] = sample_kpt_
 
         return sample_dict_torch, sample_kpt
 
@@ -147,28 +151,28 @@ class DataLoader:
         # get meta data
         meta = self.get_meta(index)
 
-        if meta is None:
+        if meta['kpts'] is None:
             return None
+        else:
+            bb = np.asarray(meta['bb']).astype(int)
+            sample['bb'] = np.copy(bb)
+            sample['img2bb'] = meta['img2bb']
+            sample['kpts3d'] = meta['kpts']
+            sample['kpts2d'] = meta['kpts'][:, :2]
 
-        bb = np.asarray(meta['bb']).astype(int)
-        sample['bb'] = np.copy(bb)
-        sample['img2bb'] = meta['img2bb']
-        sample['kpts3d'] = meta['kpts']
-        sample['kpts2d'] = meta['kpts'][:, :2]
+            #get imgs
+            # sample['rgb'], depth, seg, rgb_raw, depth_raw = self.get_img(index)
+            # # masking depth, need to modify
+            # depth_bg = depth_raw > 800
+            # depth_raw[depth_bg] = 0
+            # # currently segmap is often errorneous
+            # # depth_raw[seg == 0] = 0
+            # sample['depth'] = depth_raw[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
+            # sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
+            # return sample
 
-        #get imgs
-        # sample['rgb'], depth, seg, rgb_raw, depth_raw = self.get_img(index)
-        # # masking depth, need to modify
-        # depth_bg = depth_raw > 800
-        # depth_raw[depth_bg] = 0
-        # # currently segmap is often errorneous
-        # # depth_raw[seg == 0] = 0
-        # sample['depth'] = depth_raw[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
-        # sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
-        # return sample
-
-        sample['rgb'], sample['depth'], sample['seg'], sample['seg_obj'], _, _ = self.get_img(index)
-        return sample
+            sample['rgb'], sample['depth'], sample['seg'], sample['seg_obj'], _, _ = self.get_img(index)
+            return sample
 
 
 
