@@ -82,6 +82,8 @@ class DataLoader:
         self.seg_obj_path = os.path.join(self.base_path, 'segmentation_obj')
         self.meta_base_path = os.path.join(self.base_path, 'meta')
 
+        self.seg_deep_path = os.path.join(self.base_path, 'segmentation_deep')
+
 
 
         self.cam_path = os.path.join(base_path, data_date+"_cam")
@@ -198,8 +200,10 @@ class DataLoader:
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
 
         # currently use temporal segmentation folder
-        seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.jpg'%idx)
-        seg_obj_path = os.path.join(self.seg_obj_path, self.cam, self.cam + '_%04d.jpg' % idx)
+        # seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.jpg'%idx)
+        # seg_obj_path = os.path.join(self.seg_obj_path, self.cam, self.cam + '_%04d.jpg' % idx)
+
+        seg_path = os.path.join(self.seg_deep_path, self.cam, 'mask_seg',  self.cam + '_%04d.png' % idx)
 
         assert os.path.exists(rgb_path)
         assert os.path.exists(depth_path)
@@ -214,16 +218,13 @@ class DataLoader:
 
         # there are skipped frame for segmentation
         if os.path.exists(seg_path):
-            seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED))
+            seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)).astype(float)
         else:
             seg = np.ones((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
-        seg = np.where(seg>1, 1, 0)
+        seg_obj = seg.copy()
 
-        if os.path.exists(seg_obj_path):
-            seg_obj = np.asarray(cv2.imread(seg_obj_path, cv2.IMREAD_UNCHANGED))
-        else:
-            seg_obj = np.ones((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
-        seg_obj = np.where(seg_obj > 1, 1, 0)
+        seg[seg != 1] = 0
+        seg_obj[seg_obj != 2] = 0
 
         return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
     

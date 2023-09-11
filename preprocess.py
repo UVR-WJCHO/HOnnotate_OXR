@@ -91,7 +91,7 @@ lineIndices = [palmIndices, thumbIndices, indexIndices, middleIndices, ringIndic
 
 ### Manual Flags (remove after debug) ###
 flag_preprocess = True
-flag_segmentation = True
+flag_segmentation = False
 
 
 num_global = 0
