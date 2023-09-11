@@ -162,7 +162,7 @@ class MultiViewLossFunc(nn.Module):
 
                     seg_gap = torch.abs(pred_seg - self.gt_seg)
                     loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
-                    loss['seg'] = loss_seg / 10.0
+                    loss['seg'] = loss_seg
 
                     # pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
                     # gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
@@ -203,7 +203,7 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.waitKey(0)
 
                     loss_depth = torch.sum(depth_gap.view(self.bs, -1), -1)
-                    loss['depth'] = loss_depth / 1000.0
+                    loss['depth'] = loss_depth / 2000.0
 
                     if pred_obj is not None:
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
@@ -304,9 +304,9 @@ class MultiViewLossFunc(nn.Module):
             img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
 
             depth_gap = np.clip(np.abs(depth_input - depth_mesh), a_min=0.0, a_max=255.0).astype(np.uint8)
+
             seg_gap = ((seg_input - seg_mesh) * 255.0).astype(np.uint8)
-            depth_gap *= seg_mask
-            seg_gap *= seg_mask * 255
+            seg_gap *= 255
 
             if not flag_crop:
                 # resize images to (360, 640)

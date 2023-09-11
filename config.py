@@ -19,7 +19,7 @@ CFG_CAM_WEIGHT = [1.0, 0.7, 0.7, 1.0]
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 
-CFG_NUM_ITER = 500
+CFG_NUM_ITER = 100
 CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
