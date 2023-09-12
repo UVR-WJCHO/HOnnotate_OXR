@@ -17,6 +17,7 @@ import mediapipe as mp
 from modules.utils.processing import augmentation_real
 import numpy as np
 from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraParams
+from modules.deepLabV3plus.oxr_predict import predict as deepSegPredict
 
 #temp
 import matplotlib.pyplot as plt
@@ -131,6 +132,7 @@ class loadDataset():
         self.depthBgDir = os.path.join(self.bgDir, 'depth')
 
         self.segfgDir = os.path.join(self.dbDir, 'segmentation_fg')
+        self.deepSegDir = os.path.join(self.dbDir, 'segmentation_deep')
 
         for camID in camIDset:
             os.makedirs(os.path.join(self.dbDir, 'rgb_crop', camID), exist_ok=True)
@@ -138,6 +140,8 @@ class loadDataset():
             os.makedirs(os.path.join(self.dbDir, 'meta', camID), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'mask_seg'), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'vis_seg'), exist_ok=True)
             # os.makedirs(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'), exist_ok=True)
 
         os.makedirs(os.path.join(self.dbDir, 'visualizeMP'), exist_ok=True)
@@ -271,6 +275,9 @@ class loadDataset():
         segDir = os.path.join(self.dbDir, 'segmentation', camID)
         self.segVisDir = os.path.join(segDir, 'visualization')
         self.segResDir = os.path.join(segDir, 'raw_seg_results')
+        deepSegDir = os.path.join(self.dbDir, 'segmentation_deep', camID)
+        self.deepSegMaskDir = os.path.join(deepSegDir, 'mask_seg')
+        self.deepSegVisDir = os.path.join(deepSegDir, 'vis_seg')
 
         #for background matting
         # self.maskedRgbDir = os.path.join(self.dbDir, 'masked_rgb', camID)
@@ -667,6 +674,18 @@ class loadDataset():
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.segResDir, imgName), mask_hand * 255)
         cv2.imwrite(os.path.join(self.segVisDir, imgName), rgb*mask_hand[:,:,np.newaxis])
+
+    def deepSegmentation(self, idx, procImgSet):
+        rgb, depth = procImgSet
+
+        print(type(rgb))
+        assert isinstance(rgb, np.ndarray), "rgb type is not np.ndarray"
+
+        mask, vis_mask = deepSegPredict(rgb)
+        maskName = str(self.camID) + '_' + format(idx, '04') + '.png'
+        visName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
+        mask.save(os.path.join(self.deepSegMaskDir, maskName))
+        vis_mask.save(os.path.join(self.deepSegVisDir, visName))
 
 
 
