@@ -91,6 +91,8 @@ def main(argv):
         ## Start optimization per frame
         cfg_lr_init = CFG_LR_INIT
         for frame in range(len(mas_dataloader)):
+            if frame < 30:
+                continue
             t_start = time.time()
 
             # check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
@@ -149,8 +151,8 @@ def main(argv):
                 losses = loss_func(pred=hand_param, pred_obj=obj_param, render=flag_render,
                                    camIdxSet=detected_cams, frame=frame, contact=use_contact_loss)
 
-                # loss_func.visualize(pred=hand_param, pred_obj=obj_param, camIdx=camIdx, frame=frame,
-                #                 camIDSet=['mas'], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+                loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
+                                camIdxSet=[3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
                 for camIdx in detected_cams:
                     for k in CFG_LOSS_DICT:
@@ -161,7 +163,7 @@ def main(argv):
                 optimizer.zero_grad()
                 total_loss.backward(retain_graph=True)
                 optimizer.step()
-                # lr_scheduler.step()
+                lr_scheduler.step()
 
                 cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
                 kps_loss[iter] = cur_kpt_loss
@@ -176,13 +178,13 @@ def main(argv):
                     use_contact_loss = True
 
                 ## criteria for losses
-                if 'kpts2d' in CFG_LOSS_DICT and 'depth' in CFG_LOSS_DICT:
-                    if loss_all['kpts2d']/len(detected_cams) < 5000.:
-                        loss_weight['kpts2d'] = 0.2
-                        loss_weight['depth_rel'] = 0.2
-                    if loss_all['kpts2d']/len(detected_cams) < 3000.:
-                        loss_weight['kpts2d'] = 0.0
-                        loss_weight['depth_rel'] = 0.0
+                # if 'kpts2d' in CFG_LOSS_DICT and 'depth' in CFG_LOSS_DICT:
+                #     if loss_all['kpts2d']/len(detected_cams) < 5000.:
+                #         loss_weight['kpts2d'] = 0.2
+                #         loss_weight['depth_rel'] = 0.2
+                #     if loss_all['kpts2d']/len(detected_cams) < 3000.:
+                #         loss_weight['kpts2d'] = 0.0
+                #         loss_weight['depth_rel'] = 0.0
 
                 ## sparse criterion on converge for v1 db release, need to be tight
                 if CFG_EARLYSTOPPING:
@@ -222,8 +224,12 @@ def main(argv):
             save_annotation(targetDir_result, trialName, frame,  FLAGS.seq, hand_param, obj_param, CFG_MANO_SIDE)
             t_end = time.time()
             print("end %s - frame %s, processed %s" % (trialName, frame, t_end - t_start))
-
             save_num += 1
+
+
+            cv2.waitKey(0)
+            break
+
     print("end time : ", time.ctime())
     print("total processed frames : ", save_num)
 

@@ -41,6 +41,27 @@ class MultiViewLossFunc(nn.Module):
             self.Ms.append(Ms)
 
         self.default_zero = torch.tensor([0.0], requires_grad=True).cuda()
+        self.const = Constraints()
+
+        self.vis = self.set_visibility_weight(CFG_CAM_PER_FINGER_VIS)
+
+
+    def set_visibility_weight(self, CFG_W):
+        vis = {}
+        for camIdx in range(len(CFG_CAMID_SET)):
+            vis_cam = np.ones(21)
+            weights = CFG_W[CFG_CAMID_SET[camIdx]]
+            # for weight in weights:
+            vis_cam[1:5] = weights[0]
+            vis_cam[5:9] = weights[1]
+            vis_cam[9:13] = weights[2]
+            vis_cam[13:17] = weights[3]
+            vis_cam[17:21] = weights[4]
+
+            vis_cam = torch.unsqueeze(torch.FloatTensor(vis_cam).to(self.device), 1)
+            vis[camIdx] = vis_cam
+        return vis
+
 
     def set_object_main_extrinsic(self, obj_main_cam_idx):
         self.main_Ms_obj = self.Ms[obj_main_cam_idx]
@@ -114,12 +135,13 @@ class MultiViewLossFunc(nn.Module):
             if 'kpts2d' in self.loss_dict:
                 pred_kpts2d = projectPoints(joints_set[camIdx], self.Ks[camIdx])
 
-                # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d.repeat(self.bs, 1, 1).to(self.device))
-                loss_kpts2d = torch.sum(((pred_kpts2d - self.gt_kpts2d) ** 2).reshape(self.bs, -1), -1)
-                loss['kpts2d'] = loss_kpts2d
 
-                # debug_pred = np.squeeze(pred_kpts2d.cpu().detach().numpy())
-                # debug_gt = np.squeeze(self.gt_kpts2d.cpu().detach().numpy())
+                # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d) #* self.vis[camIdx]
+                loss_kpts2d = torch.sqrt((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
+
+                loss_kpts2d = torch.sum(loss_kpts2d.reshape(self.bs, -1), -1)
+                loss['kpts2d'] = loss_kpts2d * 10.0
+
 
             if 'depth_rel' in self.loss_dict:
                 joint_depth_rel = joints_set[camIdx][:, :, -1] - joints_set[camIdx][:, 0, -1]
@@ -131,13 +153,17 @@ class MultiViewLossFunc(nn.Module):
 
                 gt_depth_rel = torch.mul(gt_depth_rel, ratio)
 
-                loss_depth_rel = torch.sum(((joint_depth_rel - gt_depth_rel) ** 2).reshape(self.bs, -1), -1)
-                loss['depth_rel'] = loss_depth_rel * 10.0
+                loss_depth_rel = self.mse_loss(joint_depth_rel, gt_depth_rel)
+                loss['depth_rel'] = loss_depth_rel * 5e1
 
             if 'reg' in self.loss_dict:
                 pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
-                shape_reg = torch.sum(
-                    ((pred['shape'] - torch.zeros_like(pred['shape'])) ** 2).view(self.bs, -1), -1)
+                shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1) * 0.5e1
+
+                ## wrong adoption, check
+                # thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
+                # loss_constMin = 5e1 * thetaConstMin
+                # loss_constMax = 5e1 * thetaConstMax
 
                 loss['reg'] = pose_reg + shape_reg
 
@@ -162,23 +188,24 @@ class MultiViewLossFunc(nn.Module):
 
                     seg_gap = torch.abs(pred_seg - self.gt_seg)
                     loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
-                    loss['seg'] = loss_seg
+                    loss['seg'] = loss_seg / 100.0
 
-                    # pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
-                    # gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
-                    # seg_gap = np.squeeze((seg_gap[0].cpu().detach().numpy()))
+                    # if camIdx == 0:
+                    #     pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
+                    #     gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
+                    #     seg_gap = np.squeeze((seg_gap[0].cpu().detach().numpy()))
                     #
-                    # cv2.imshow("pred_seg", pred_seg)
-                    # cv2.imshow("gt_seg", gt_seg)
-                    # cv2.imshow("seg_gap", seg_gap)
-                    # cv2.waitKey(0)
+                    #     cv2.imshow("pred_seg", pred_seg)
+                    #     cv2.imshow("gt_seg", gt_seg)
+                    #     cv2.imshow("seg_gap", seg_gap)
+                    #     cv2.waitKey(0)
 
                     if pred_obj is not None:
                         pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
                         pred_seg_obj = torch.div(pred_seg_obj, torch.max(pred_seg_obj))
                         seg_obj_gap = torch.abs(pred_seg_obj - self.gt_seg_obj) * pred_seg_obj
 
-                        loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1) / 10.0
+                        loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
                         loss['seg'] += loss_seg_obj
 
                         # pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
@@ -202,16 +229,16 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.imshow("depth_gap_vis", depth_gap_vis)
                     # cv2.waitKey(0)
 
-                    loss_depth = torch.sum(depth_gap.view(self.bs, -1), -1)
-                    loss['depth'] = loss_depth / 2000.0
+                    loss_depth = torch.mean(depth_gap.view(self.bs, -1), -1)
+                    loss['depth'] = loss_depth * 1e2
 
                     if pred_obj is not None:
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                         depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth)
                         depth_obj_gap[pred_depth_obj== 0] = 0
 
-                        loss_depth_obj = torch.sum(depth_obj_gap.view(self.bs, -1), -1) / 1000.0
-                        loss['depth'] += loss_depth_obj
+                        loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
+                        loss['depth'] += loss_depth_obj * 1e2
 
                         # pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                         # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
@@ -290,6 +317,7 @@ class MultiViewLossFunc(nn.Module):
             else:
                 # show original size of input (1080, 1920)
                 rgb_input, depth_input, seg_input, seg_obj = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
+
 
             rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
             rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)

@@ -15,6 +15,59 @@ from pytorch3d.structures import Meshes, Pointclouds
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
 
+class Constraints():
+    def __init__(self):
+        self.device = 'cuda'
+        self.thetaLimits()
+
+    def thetaLimits(self):
+        MINBOUND = -5.
+        MAXBOUND = 5.
+        self.validThetaIDs = np.array([0, 1, 2, 3, 4, 5, 6, 8, 11, 13, 14, 15, 17, 20, 21, 22, 23, 25, 26, 29,
+                                       30, 31, 32, 33, 35, 38, 39, 40, 41, 42, 44, 46, 47], dtype=np.int32)
+
+        invalidThetaIDsList = []
+        for i in range(48):
+            if i not in self.validThetaIDs:
+                invalidThetaIDsList.append(i)
+        self.invalidThetaIDs = np.array(invalidThetaIDsList)
+
+        self.minThetaVals = torch.FloatTensor([MINBOUND, MINBOUND, MINBOUND,  # global rot
+                                      0, -0.15, 0.1, -0.3, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # index
+                                      MINBOUND, -0.15, 0.1, -0.5, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # middle
+                                      -1.5, -0.15, -0.1, MINBOUND, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # pinky
+                                      -0.5, -0.25, 0.1, -0.4, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # ring
+                                      MINBOUND, -0.83, -0.0, -0.15, MINBOUND, 0, MINBOUND, -0.5, -1.57, ]).to(self.device)  # thumb
+
+        self.maxThetaVals = torch.FloatTensor([MAXBOUND, MAXBOUND, MAXBOUND,  # global
+                                      0.45, 0.2, 1.8, 0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # index
+                                      MAXBOUND, 0.15, 2.0, -0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # middle
+                                      -0.2, 0.15, 1.6, MAXBOUND, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # pinky
+                                      -0.4, 0.10, 1.6, -0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # ring
+                                      MAXBOUND, 0.66, 0.5, 1.6, MAXBOUND, 0.5, MAXBOUND, 0, 1.08]).to(self.device)  # thumb
+
+
+    def getHandJointConstraints(self, theta, isValidTheta=False):
+        '''
+        get constraints on the joint angles when input is theta vector itself (first 3 elems are NOT global rot)
+        :param theta: Nx45 tensor if isValidTheta is False and Nx25 if isValidTheta is True
+        :param isValidTheta:
+        :return:
+        '''
+
+        if not isValidTheta:
+            assert (theta.shape)[-1] == 45
+            validTheta = torch.squeeze(theta[:, self.validThetaIDs[3:] - 3])
+        else:
+            assert (theta.shape)[-1] == len(self.validThetaIDs[3:])
+            validTheta = theta
+
+        phyConstMax = (torch.max(self.minThetaVals[self.validThetaIDs[3:]] - validTheta))
+        phyConstMin = (torch.max(validTheta - self.maxThetaVals[self.validThetaIDs[3:]]))
+
+        return phyConstMin, phyConstMax
+
+
 def mano3DToCam3D(xyz3D, ext):
     device = xyz3D.device
 
@@ -61,6 +114,7 @@ def paint_kpts(img_path, img, kpts, circle_size = 1):
         else:
             r = 1
         cv2.circle(im, (col, row), radius=r, thickness=-1, color=(0, 0, 255))
+
 
     # draw lines
     for i in range(len(limbSeq)):

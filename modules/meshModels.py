@@ -18,7 +18,7 @@ class HandModel(nn.Module):
         self.wrist_idx = 0
         self.mcp_idx = 9
         self.key_bone_len = 10.0
-        self.mano_layer = ManoLayer(side=side, mano_root=mano_path, use_pca=False, flat_hand_mean=False,
+        self.mano_layer = ManoLayer(side=side, mano_root=mano_path, use_pca=False, flat_hand_mean=True,
                                     center_idx=0, ncomps=45, root_rot_mode="axisang", joint_rot_mode="axisang").to(device)
 
         # initial pose parameters
@@ -35,13 +35,14 @@ class HandModel(nn.Module):
         self.xy_root = nn.Parameter(
             torch.tensor([-0.9094, 12.0501], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
         self.z_root = nn.Parameter(torch.tensor([65.0], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
-        initial_pose = torch.tensor([[-0.1072, 0.1475, -0.7427, -0.1397, 0.1483, -0.0789, -0.0184, 0.0225,
-                 7.2649, -0.1668, 0.8281, 0.7914, -0.0104, 0.1238, 2.4139, 0.0329,
-                 0.0267, 2.3347, -0.0112, 0.4245, 0.5857, 0.1500, 0.0563, 1.5343,
-                 -0.0234, -0.0344, 3.6133, -0.0661, 0.6330, 0.5967, -0.0478, 0.0238,
-                 2.9334, 0.0396, -0.0266, 2.5399, -0.2902, 0.2651, 0.1446, 0.1516,
-                 3.0003, -0.0806, 0.0826, 3.0492, -0.4458]])
+        # initial_pose = torch.tensor([[-0.1072, 0.1475, -0.7427, -0.1397, 0.1483, -0.0789, -0.0184, 0.0225,
+        #          7.2649, -0.1668, 0.8281, 0.7914, -0.0104, 0.1238, 2.4139, 0.0329,
+        #          0.0267, 2.3347, -0.0112, 0.4245, 0.5857, 0.1500, 0.0563, 1.5343,
+        #          -0.0234, -0.0344, 3.6133, -0.0661, 0.6330, 0.5967, -0.0478, 0.0238,
+        #          2.9334, 0.0396, -0.0266, 2.5399, -0.2902, 0.2651, 0.1446, 0.1516,
+        #          3.0003, -0.0806, 0.0826, 3.0492, -0.4458]])
         initial_rot = torch.tensor([[-1.7276, -1.6758, 2.1557]])
+        initial_pose = torch.zeros((1, 45), dtype=torch.float32)
 
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
         self.input_pose = nn.Parameter(initial_pose.to(device))

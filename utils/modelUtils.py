@@ -26,10 +26,10 @@ def set_lr_forHand(model, init_lr):
             elif 'input_shape' in key:
                 lr_shape.append(value)
 
-    model_params = [{'params': lr_xyz_root, 'lr': init_lr * 10},
+    model_params = [{'params': lr_xyz_root, 'lr': init_lr * 5},
                     {'params': lr_rot, 'lr': init_lr},
                     {'params': lr_pose, 'lr': init_lr},
-                    {'params': lr_shape, 'lr': init_lr * 2.0}]
+                    {'params': lr_shape, 'lr': init_lr }]
     return model_params
 
 def set_lr_forObj(model, init_lr):
