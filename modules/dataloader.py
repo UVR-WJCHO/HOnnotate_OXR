@@ -221,13 +221,10 @@ class DataLoader:
         rgb = np.asarray(cv2.imread(rgb_path))
         depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
 
-        depth_vis_ori = np.asarray(cv2.imread(depth_vis_path, cv2.IMREAD_UNCHANGED))
-
-
-        depth_vis = depth / np.max(depth)
-        cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
-        cv2.imshow("depth", np.asarray(depth_vis * 255, dtype=np.uint8))
-        cv2.waitKey(1)
+        # depth_vis = depth / np.max(depth)
+        # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
+        # cv2.imshow("depth", np.asarray(depth_vis * 255, dtype=np.uint8))
+        # cv2.waitKey(1)
 
         # there are skipped frame for segmentation
         if os.path.exists(seg_path):
