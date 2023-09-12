@@ -1,6 +1,6 @@
 import os
 import sys
-
+sys.path.insert(0,os.path.join(os.getcwd()))
 sys.path.insert(0,os.path.join(os.getcwd(), 'modules'))
 sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine'))
 sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine/models'))

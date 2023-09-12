@@ -1,7 +1,10 @@
+import sys
+import os
+sys.path.insert(0,os.path.join(os.getcwd(), 'modules'))
 from torch.utils.data import dataset
 from tqdm import tqdm
-import network
-import utils
+import deepLabV3plus.network
+import deepLabV3plus.utils as utils
 import os
 import random
 import argparse
@@ -10,7 +13,7 @@ import pickle as pkl
 import time
 import cv2
 from torch.utils import data
-from datasets import VOCSegmentation, Cityscapes, cityscapes, OXRSegmentation
+from deepLabV3plus.datasets import VOCSegmentation, Cityscapes, cityscapes, OXRSegmentation
 from torchvision import transforms as T
 
 import torch
