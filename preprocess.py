@@ -48,7 +48,7 @@ from utils.dataUtils import *
 # import modules.common.transforms as tf
 from pytorch3d.io import load_obj
 import modules.common.transforms as tf
-
+from natsort import natsorted
 
 
 
@@ -93,10 +93,21 @@ lineIndices = [palmIndices, thumbIndices, indexIndices, middleIndices, ringIndic
 ### Manual Flags (remove after debug) ###
 flag_preprocess = True
 flag_segmentation = False
-flag_deep_segmentation = False
+flag_deep_segmentation = True
 
 
 num_global = 0
+
+
+def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir):
+    # print(type(rgb))
+    assert isinstance(rgb, np.ndarray), "rgb type is not np.ndarray"
+    mask, vis_mask = deepSegPredict(rgb)
+    maskName = image_name + '.png'
+    visName = image_name + '.jpg'
+    mask.save(os.path.join(deepSegMaskDir, maskName))
+    vis_mask.save(os.path.join(deepSegVisDir, visName))
+
 
 class loadDataset():
     def __init__(self, db, seq, trial):
@@ -141,8 +152,8 @@ class loadDataset():
             os.makedirs(os.path.join(self.dbDir, 'meta', camID), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'), exist_ok=True)
-            os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'mask_seg'), exist_ok=True)
-            os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'vis_seg'), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'raw_seg_results'), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'visualization'), exist_ok=True)
             # os.makedirs(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'), exist_ok=True)
 
         os.makedirs(os.path.join(self.dbDir, 'visualizeMP'), exist_ok=True)
@@ -273,12 +284,11 @@ class loadDataset():
         # self.depthCropDir_result = os.path.join(self.dbDir_result, 'depth_crop', camID)
 
         self.metaDir = os.path.join(self.dbDir, 'meta', camID)
+
+        # old
         segDir = os.path.join(self.dbDir, 'segmentation', camID)
         self.segVisDir = os.path.join(segDir, 'visualization')
         self.segResDir = os.path.join(segDir, 'raw_seg_results')
-        deepSegDir = os.path.join(self.dbDir, 'segmentation_deep', camID)
-        self.deepSegMaskDir = os.path.join(deepSegDir, 'mask_seg')
-        self.deepSegVisDir = os.path.join(deepSegDir, 'vis_seg')
 
         #for background matting
         # self.maskedRgbDir = os.path.join(self.dbDir, 'masked_rgb', camID)
@@ -353,8 +363,8 @@ class loadDataset():
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
-            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
-            self.obj_pose_sampled[str(save_idx)] = obj_pose_data
+            # obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
+            # self.obj_pose_sampled[str(save_idx)] = obj_pose_data
 
         else:
             self.marker_sampled[str(save_idx)] = None
@@ -676,17 +686,6 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.segResDir, imgName), mask_hand * 255)
         cv2.imwrite(os.path.join(self.segVisDir, imgName), rgb*mask_hand[:,:,np.newaxis])
 
-    def deepSegmentation(self, idx, procImgSet):
-        rgb, depth = procImgSet
-
-        print(type(rgb))
-        assert isinstance(rgb, np.ndarray), "rgb type is not np.ndarray"
-
-        mask, vis_mask = deepSegPredict(rgb)
-        maskName = str(self.camID) + '_' + format(idx, '04') + '.png'
-        visName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
-        mask.save(os.path.join(self.deepSegMaskDir, maskName))
-        vis_mask.save(os.path.join(self.deepSegVisDir, visName))
 
 
 
@@ -773,6 +772,10 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
         save_idx = 0
         for idx in range(len(dbs[0])):
+
+            if idx > 10:
+                break
+
             if idx % 3 != 0:
                 progress.update()
                 global_tqdm.update()
@@ -797,8 +800,6 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
                         if flag_segmentation:
                             db.segmentation(save_idx, procImgSet, procKps, img2bb)
-                        if flag_deep_segmentation:
-                            db.deepSegmentation(save_idx, procImgSet)
                     else:
                         db.postProcessNone(save_idx)
                 progress.update()
@@ -826,7 +827,6 @@ def done_callback(result):
 def main(argv):
     ### Setup ###
     rootDir = os.path.join(baseDir, FLAGS.db)
-    lenDBTotal = len(os.listdir(rootDir))
 
     ### Hand pose initialization(mediapipe) ###
     '''
@@ -835,8 +835,7 @@ def main(argv):
     '''
 
     tasks = []
-    process_count = 1
-
+    process_count = 4
 
     total_count = 0
     t1 = time.time()
@@ -864,6 +863,32 @@ def main(argv):
 
     proc_time = round((time.time() - t1) / 60., 2)
     print("total process time : %s min" % (str(proc_time)))
+
+
+    print("start segmentation - deeplab_v3")
+    if flag_deep_segmentation:
+        for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+            seqDir = os.path.join(rootDir, seqName)
+            print("---------------start preprocess seq : %s ---------------" % (seqName))
+            for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+                dbDir = os.path.join(baseDir, FLAGS.db, seqName, trialName)
+                for camID in camIDset:
+                    rgbCropDir = os.path.join(dbDir, 'rgb_crop', camID)
+
+                    deepSegDir = os.path.join(dbDir, 'segmentation_deep', camID)
+                    deepSegMaskDir = os.path.join(deepSegDir, 'raw_seg_results')
+                    deepSegVisDir = os.path.join(deepSegDir, 'visualization')
+
+                    target = os.listdir(rgbCropDir)
+                    target = natsorted(target)
+                    for image in tqdm.tqdm(target):
+                        rgbPath = os.path.join(rgbCropDir, image)
+                        assert os.path.exists(rgbPath), f'{rgbPath} rgb image does not exist'
+                        rgb = cv2.imread(rgbPath)
+                        image_name = image[:-4]
+                        deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir)
+
+    print("end segmentation - deeplab_v3")
 
     total_num = 0
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):

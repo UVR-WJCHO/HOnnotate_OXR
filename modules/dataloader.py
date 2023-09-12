@@ -204,13 +204,11 @@ class DataLoader:
         rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.jpg'%idx)
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
 
-        depth_vis_path = os.path.join(self.depth_vis_path, self.cam, self.cam + '_%04d.png' % idx)
-
         # currently use temporal segmentation folder
         # seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.jpg'%idx)
         # seg_obj_path = os.path.join(self.seg_obj_path, self.cam, self.cam + '_%04d.jpg' % idx)
 
-        seg_path = os.path.join(self.seg_deep_path, self.cam, 'mask_seg',  self.cam + '_%04d.png' % idx)
+        seg_path = os.path.join(self.seg_deep_path, self.cam, 'raw_seg_results',  self.cam + '_%04d.png' % idx)
 
         assert os.path.exists(rgb_path)
         assert os.path.exists(depth_path)

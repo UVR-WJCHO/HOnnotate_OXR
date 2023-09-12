@@ -3,7 +3,7 @@ import os
 sys.path.insert(0,os.path.join(os.getcwd(), 'modules'))
 from torch.utils.data import dataset
 from tqdm import tqdm
-import deepLabV3plus.network
+import deepLabV3plus.network as network
 import deepLabV3plus.utils as utils
 import os
 import random
@@ -29,7 +29,7 @@ def predict(rgb):
         model = 'deeplabv3plus_mobilenet'
         output_stride = 16
         gpu_id = '0'
-        ckpt = "/home/workplace/HOnnotate_OXR/modules/deepLabV3plus/checkpoint/best_deeplabv3plus_mobilenet_oxr_os16.pth"
+        ckpt = "./modules/deepLabV3plus/checkpoint/best_deeplabv3plus_mobilenet_oxr_os16.pth"
 
 
     os.environ["CUDA_VISIBLE_DEVICES"] = opts.gpu_id
