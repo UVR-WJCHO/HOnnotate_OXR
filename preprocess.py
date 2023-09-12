@@ -93,6 +93,7 @@ lineIndices = [palmIndices, thumbIndices, indexIndices, middleIndices, ringIndic
 ### Manual Flags (remove after debug) ###
 flag_preprocess = True
 flag_segmentation = False
+flag_deep_segmentation = False
 
 
 num_global = 0
@@ -747,6 +748,8 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
 
                 if flag_segmentation:
                     db.segmentation(save_idx, procImgSet, procKps, img2bb)
+                if flag_deep_segmentation:
+                    db.deepSegmentation(save_idx, procImgSet)
 
             progress.update()
             global_tqdm.update()
@@ -794,6 +797,8 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
                         if flag_segmentation:
                             db.segmentation(save_idx, procImgSet, procKps, img2bb)
+                        if flag_deep_segmentation:
+                            db.deepSegmentation(save_idx, procImgSet)
                     else:
                         db.postProcessNone(save_idx)
                 progress.update()
