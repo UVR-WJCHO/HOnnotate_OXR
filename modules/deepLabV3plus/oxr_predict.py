@@ -51,6 +51,10 @@ def predict(rgb):
     with torch.no_grad():
         model = model.eval()
         #TODO check image format
+        b = rgb[:,:,0]
+        g = rgb[:,:,1]
+        r = rgb[:,:,2]
+        rgb = np.stack([r,g,b], axis=2)
         img = transform(rgb).unsqueeze(0)
         img = img.to(device)
         pred = model(img)

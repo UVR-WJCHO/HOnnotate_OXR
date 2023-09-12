@@ -228,6 +228,7 @@ class loadDataset():
         # load marker set pose
         self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
         obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
+        print(obj_pose_data)
         assert os.path.isfile(obj_pose_data),"no obj pose data"
 
         obj_data = {}
@@ -265,8 +266,11 @@ class loadDataset():
         obj_mesh_path = os.path.join(self.obj_template_dir, obj_class) + '.obj'
         # self.obj_mesh_data = self.read_obj(obj_mesh_path)
         self.obj_mesh_data = {}
-        self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
-        self.obj_mesh_data['faces'] = faces.verts_idx
+        try:
+            self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
+            self.obj_mesh_data['faces'] = faces.verts_idx
+        except:
+            print("no obj mesh data")
 
 
     def __len__(self):
@@ -772,10 +776,6 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
         save_idx = 0
         for idx in range(len(dbs[0])):
-
-            if idx > 10:
-                break
-
             if idx % 3 != 0:
                 progress.update()
                 global_tqdm.update()
