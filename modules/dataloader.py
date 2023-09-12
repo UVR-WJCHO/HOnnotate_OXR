@@ -242,8 +242,8 @@ class DataLoader:
 
         depth[seg == 0] = 0
 
-        cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
-        cv2.waitKey(0)
+        # cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
+        # cv2.waitKey(0)
 
         return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
     
