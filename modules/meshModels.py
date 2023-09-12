@@ -42,38 +42,56 @@ class HandModel(nn.Module):
         #          2.9334, 0.0396, -0.0266, 2.5399, -0.2902, 0.2651, 0.1446, 0.1516,
         #          3.0003, -0.0806, 0.0826, 3.0492, -0.4458]])
         initial_rot = torch.tensor([[-1.7276, -1.6758, 2.1557]])
-        initial_pose = torch.zeros((1, 45), dtype=torch.float32)
+        initial_pose = torch.zeros((1, 30), dtype=torch.float32)
+        initial_tip_pose = torch.zeros((1, 15), dtype=torch.float32)
 
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
         self.input_pose = nn.Parameter(initial_pose.to(device))
+        self.input_tip_pose = nn.Parameter(initial_tip_pose.to(device))
+
         self.input_shape = nn.Parameter(initial_shape.repeat(self.batch_size, 1).to(device))
 
         # Inital set up
-        self.pose_all = torch.cat((self.input_rot, self.input_pose), 1)
+        pose_all = self.compute_pose_all(self.input_pose, self.input_tip_pose)  # (1, 45)
+        self.pose_all = torch.cat((self.input_rot, pose_all), 1)
         # normalize scale
         hand_verts, hand_joints = self.mano_layer(self.pose_all, self.input_shape)
         scale = torch.tensor([[self.compute_normalized_scale(hand_joints)]])
         self.input_scale = nn.Parameter(scale.repeat(self.batch_size, 1).to(device))
 
 
+    def compute_pose_all(self, pose, tip_pose):
+        # pose : (1, 30)
+        # tip_pose : (1, 15)
+        pose_all = torch.cat((pose[:, :6], tip_pose[:, :3],
+                              pose[:, 6:12], tip_pose[:, 3:6],
+                              pose[:, 12:18], tip_pose[:, 6:9],
+                              pose[:, 18:24], tip_pose[:, 9:12],
+                              pose[:, 24:30], tip_pose[:, 12:15]), 1)
+        return pose_all
+
     def compute_normalized_scale(self, hand_joints):
         return (torch.sum((hand_joints[0, self.mcp_idx] - hand_joints[0, self.wrist_idx])**2)**0.5)/self.key_bone_len
 
-    def change_grads(self, root=False, rot=False, pose=False, shape=False, scale=False):
+    def change_grads(self, root=False, rot=False, pose=False, shape=False, scale=False, tip=False):
         self.xy_root.requires_grad = root
         self.z_root.requires_grad = root
         self.input_rot.requires_grad = rot
         self.input_pose.requires_grad = pose
         self.input_shape.requires_grad = shape
         self.input_scale.requires_grad = scale
+        self.input_tip_pose.requires_grad = tip
 
     def forward(self):
-        self.pose_ = self.input_pose
         self.shape_ = self.input_shape
+
+        # self.pose_ = self.input_pose
 
         # need clipping?
         # self.pose_.data = clip_mano_hand_pose(self.input_pose)
-        self.pose_.data = self.input_pose
+        # self.pose_.data = self.input_pose
+        self.pose_ = self.compute_pose_all(self.input_pose, self.input_tip_pose)
+
         mano_param = torch.cat([self.input_rot, self.pose_], dim=1)
 
         hand_verts, hand_joints = self.mano_layer(mano_param, self.shape_)

@@ -76,6 +76,7 @@ class DataLoader:
 
         self.rgb_raw_path = os.path.join(self.base_path_result, 'rgb')
         self.depth_raw_path = os.path.join(self.base_path_result, 'depth')
+
         self.rgb_path = os.path.join(self.base_path, 'rgb_crop')
         self.depth_path = os.path.join(self.base_path, 'depth_crop')
         self.seg_path = os.path.join(self.base_path, 'segmentation')
@@ -84,7 +85,7 @@ class DataLoader:
 
         self.seg_deep_path = os.path.join(self.base_path, 'segmentation_deep')
 
-
+        self.depth_vis_path = os.path.join(self.base_path, 'depth_vis')
 
         self.cam_path = os.path.join(base_path, data_date+"_cam")
 
@@ -203,6 +204,8 @@ class DataLoader:
         rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.jpg'%idx)
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
 
+        depth_vis_path = os.path.join(self.depth_vis_path, self.cam, self.cam + '_%04d.png' % idx)
+
         # currently use temporal segmentation folder
         # seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.jpg'%idx)
         # seg_obj_path = os.path.join(self.seg_obj_path, self.cam, self.cam + '_%04d.jpg' % idx)
@@ -220,6 +223,14 @@ class DataLoader:
         rgb = np.asarray(cv2.imread(rgb_path))
         depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
 
+        depth_vis_ori = np.asarray(cv2.imread(depth_vis_path, cv2.IMREAD_UNCHANGED))
+
+
+        depth_vis = depth / np.max(depth)
+        cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
+        cv2.imshow("depth", np.asarray(depth_vis * 255, dtype=np.uint8))
+        cv2.waitKey(1)
+
         # there are skipped frame for segmentation
         if os.path.exists(seg_path):
             seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)).astype(float)
@@ -236,10 +247,8 @@ class DataLoader:
 
         depth[seg == 0] = 0
 
-        # depth /= np.max(depth)
-        # name = "depth_" + self.cam
-        # cv2.imshow(name, np.asarray(depth*255, dtype=np.uint8))
-        # cv2.waitKey(0)
+        cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
+        cv2.waitKey(0)
 
         return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
     

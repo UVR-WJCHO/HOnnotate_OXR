@@ -100,7 +100,10 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ks = self.Ks[main_cam_idx]
         self.main_Ms = self.Ms[main_cam_idx]
 
-    def forward(self, pred, pred_obj, render, camIdxSet, frame, contact=False):
+    def forward(self, pred, pred_obj, camIdxSet, frame, contact=False):
+        render = False
+        if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
+            render = True
 
         verts_set = {}
         verts_obj_set = {}
@@ -160,7 +163,7 @@ class MultiViewLossFunc(nn.Module):
                 pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
                 shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1) * 0.5e1
 
-                ## wrong adoption, check
+                ## wrong adoption, check HOnnotate_refine
                 # thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
                 # loss_constMin = 5e1 * thetaConstMin
                 # loss_constMax = 5e1 * thetaConstMax
@@ -265,7 +268,6 @@ class MultiViewLossFunc(nn.Module):
         return losses
 
     def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False):
-
         for camIdx in camIdxSet:
             camID = CFG_CAMID_SET[camIdx]
             # set gt to load original input
@@ -304,6 +306,10 @@ class MultiViewLossFunc(nn.Module):
                 rgb_input = np.squeeze(self.gt_rgb.cpu().numpy()).astype(np.uint8)
                 depth_input = np.squeeze(self.gt_depth.cpu().numpy())
                 seg_input = np.squeeze(self.gt_seg.cpu().numpy())
+
+                cv2.imshow("rgb input", rgb_input)
+                cv2.imshow("depth_input", np.asarray(depth_input/1000 * 255, dtype=np.uint8))
+                cv2.waitKey(0)
 
                 # rendered image is original size (1080, 1920)
                 rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]

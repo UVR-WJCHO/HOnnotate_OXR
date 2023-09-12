@@ -1,12 +1,14 @@
 import os
 import sys
 
-sys.path.insert(0,os.path.join(os.getcwd(), 'modules'))
-sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine'))
-sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine/models'))
-sys.path.insert(0,os.path.join(os.getcwd(), 'HOnnotate_refine/models/slim'))
+sys.path.insert(0, os.path.join(os.getcwd()))
+sys.path.insert(0, os.path.join(os.getcwd(), 'modules'))
+sys.path.insert(0, os.path.join(os.getcwd(), 'HOnnotate_refine'))
+sys.path.insert(0, os.path.join(os.getcwd(), 'HOnnotate_refine/models'))
+sys.path.insert(0, os.path.join(os.getcwd(), 'HOnnotate_refine/models/slim'))
 
 import warnings
+
 warnings.simplefilter("ignore", category=PendingDeprecationWarning)
 warnings.simplefilter("ignore", category=FutureWarning)
 from absl import flags
@@ -17,13 +19,13 @@ import mediapipe as mp
 from modules.utils.processing import augmentation_real
 import numpy as np
 from modules.utils.loadParameters import LoadCameraMatrix, LoadDistortionParam, LoadCameraParams
+from modules.deepLabV3plus.oxr_predict import predict as deepSegPredict
 
-#temp
+# temp
 import matplotlib.pyplot as plt
 from skimage.io import imread, imshow
 from skimage.color import rgb2gray, rgb2hsv
 from skimage.filters import threshold_otsu
-
 
 # others
 import cv2
@@ -48,15 +50,11 @@ from utils.dataUtils import *
 from pytorch3d.io import load_obj
 import modules.common.transforms as tf
 
-
-
-
-
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_string('obj_db', '230905_obj', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230905', 'target db Name')  ## name ,default, help
+flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')  ## name ,default, help
+flags.DEFINE_string('obj_db', '230905_obj', 'target cam db Name')  ## name ,default, help
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -80,26 +78,27 @@ numConsThreads = 1
 w = 640
 h = 480
 
-segIndices = [1,5,9,13,17,1]
-palmIndices = [0,1,5,9,13,17,0]
-thumbIndices = [0,1,2,3,4]
-indexIndices = [5,6,7,8]
-middleIndices = [9,10,11,12]
-ringIndices = [13,14,15,16]
-pinkyIndices = [17,18,19,20]
+segIndices = [1, 5, 9, 13, 17, 1]
+palmIndices = [0, 1, 5, 9, 13, 17, 0]
+thumbIndices = [0, 1, 2, 3, 4]
+indexIndices = [5, 6, 7, 8]
+middleIndices = [9, 10, 11, 12]
+ringIndices = [13, 14, 15, 16]
+pinkyIndices = [17, 18, 19, 20]
 lineIndices = [palmIndices, thumbIndices, indexIndices, middleIndices, ringIndices, pinkyIndices]
 
 ### Manual Flags (remove after debug) ###
 flag_preprocess = True
 flag_segmentation = False
-
+flag_deep_segmentation = True
 
 num_global = 0
 
+
 class loadDataset():
     def __init__(self, db, seq, trial):
-        self.seq = seq # 230612_S01_obj_01_grasp_01
-        self.db = db    # 230905
+        self.seq = seq  # 230612_S01_obj_01_grasp_01
+        self.db = db  # 230905
         assert len(seq.split('_')) == 6, 'invalid sequence name, ex. 230612_S01_obj_01_grasp_01'
 
         self.subject_id = seq.split('_')[1][1:]
@@ -109,7 +108,7 @@ class loadDataset():
         self.trial_num = trial.split('_')[1]
 
         ### create separate result dirs ###
-        self.dbDir_result = os.path.join(baseDir, db+'_result', seq, trial)
+        self.dbDir_result = os.path.join(baseDir, db + '_result', seq, trial)
         for camID in camIDset:
             os.makedirs(os.path.join(self.dbDir_result, 'rgb', camID), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir_result, 'depth', camID), exist_ok=True)
@@ -131,6 +130,7 @@ class loadDataset():
         self.depthBgDir = os.path.join(self.bgDir, 'depth')
 
         self.segfgDir = os.path.join(self.dbDir, 'segmentation_fg')
+        self.deepSegDir = os.path.join(self.dbDir, 'segmentation_deep')
 
         for camID in camIDset:
             os.makedirs(os.path.join(self.dbDir, 'rgb_crop', camID), exist_ok=True)
@@ -138,11 +138,13 @@ class loadDataset():
             os.makedirs(os.path.join(self.dbDir, 'meta', camID), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'segmentation', camID, 'raw_seg_results'), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'segmentation', camID, 'visualization'), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'mask_seg'), exist_ok=True)
+            os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'vis_seg'), exist_ok=True)
             # os.makedirs(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'), exist_ok=True)
 
         os.makedirs(os.path.join(self.dbDir, 'visualizeMP'), exist_ok=True)
         self.debug_vis = os.path.join(self.dbDir, 'visualizeMP')
-            
+
         self.rgbCropDir = None
         self.depthCropDir = None
         self.metaDir = None
@@ -157,7 +159,6 @@ class loadDataset():
         self.init_bbox["sub2"] = [640, 180, 640, 720]
         self.init_bbox["sub3"] = [680, 180, 960, 720]
 
-
         self.prev_bbox = None
         self.wrist_px = None
 
@@ -171,7 +172,8 @@ class loadDataset():
         self.intrinsic_undistort_path = os.path.join(camResultDir, "cameraInfo_undistort.txt")
         self.intrinsic_undistort = {}
         for cam in CFG_CAMID_SET:
-            new_camera, _ = cv2.getOptimalNewCameraMatrix(self.intrinsics[cam], self.distCoeffs[cam], (image_rows, image_cols), 1, (image_rows, image_cols))
+            new_camera, _ = cv2.getOptimalNewCameraMatrix(self.intrinsics[cam], self.distCoeffs[cam],
+                                                          (image_rows, image_cols), 1, (image_rows, image_cols))
             self.intrinsic_undistort[cam] = new_camera
 
         if not os.path.isfile(self.intrinsic_undistort_path):
@@ -189,7 +191,7 @@ class loadDataset():
 
         self.obj_db_Dir = os.path.join(baseDir, FLAGS.obj_db)
 
-        obj_dir_name = self.seq[:-9] # 230612_S01_obj_01
+        obj_dir_name = self.seq[:-9]  # 230612_S01_obj_01
         self.obj_data_Dir = os.path.join(self.obj_db_Dir, obj_dir_name)
 
         self.obj_cam_ext = np.load(os.path.join(camResultDir, 'global_world.npy'))
@@ -205,14 +207,14 @@ class loadDataset():
                 _ = f.readline()
             line = f.readline().strip()
             line = line.split('\t')
-            origin_x = float(line[1]) * 1000.       # 3mm.txt is m scale, other poses are mm scale
+            origin_x = float(line[1]) * 1000.  # 3mm.txt is m scale, other poses are mm scale
             origin_y = float(line[2]) * 1000.
             origin_z = float(line[3]) * 1000.
 
         # load marker set pose
         self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
-        obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
-        assert os.path.isfile(obj_pose_data),"no obj pose data"
+        obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name + '.txt')
+        assert os.path.isfile(obj_pose_data), "no obj pose data"
 
         obj_data = {}
         with open(obj_pose_data, "r") as f:
@@ -230,9 +232,9 @@ class loadDataset():
                 line = [value for value in line if value != '']
                 marker_pose = np.zeros((self.marker_num, 3))
                 for i in range(self.marker_num):
-                    marker_pose[i, 0] = float(line[i*3 + 1]) - origin_x
-                    marker_pose[i, 1] = float(line[i*3 + 2]) - origin_y
-                    marker_pose[i, 2] = float(line[i*3 + 3]) - origin_z
+                    marker_pose[i, 0] = float(line[i * 3 + 1]) - origin_x
+                    marker_pose[i, 1] = float(line[i * 3 + 2]) - origin_y
+                    marker_pose[i, 2] = float(line[i * 3 + 3]) - origin_z
                 obj_data[str(frame)] = marker_pose
                 frame += 1
 
@@ -252,13 +254,12 @@ class loadDataset():
         self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
         self.obj_mesh_data['faces'] = faces.verts_idx
 
-
     def __len__(self):
         return len(os.listdir(os.path.join(self.rgbDir, 'mas')))
 
     def init_cam(self, camID):
         #### calib err - 230825 ###
-        #print("calib err:", self.calib_err)
+        # print("calib err:", self.calib_err)
 
         self.camID = camID
         self.rgbCropDir = os.path.join(self.dbDir, 'rgb_crop', camID)
@@ -271,11 +272,14 @@ class loadDataset():
         segDir = os.path.join(self.dbDir, 'segmentation', camID)
         self.segVisDir = os.path.join(segDir, 'visualization')
         self.segResDir = os.path.join(segDir, 'raw_seg_results')
+        deepSegDir = os.path.join(self.dbDir, 'segmentation_deep', camID)
+        self.deepSegMaskDir = os.path.join(deepSegDir, 'mask_seg')
+        self.deepSegVisDir = os.path.join(deepSegDir, 'vis_seg')
 
-        #for background matting
+        # for background matting
         # self.maskedRgbDir = os.path.join(self.dbDir, 'masked_rgb', camID)
         # self.croppedBgDir = os.path.join(self.dbDir, 'masked_rgb', camID, 'bg')
-        
+
         self.debugDir = os.path.join(self.dbDir, 'debug')
         self.K = self.intrinsics[camID]
         self.dist = self.distCoeffs[camID]
@@ -285,7 +289,7 @@ class loadDataset():
 
     def init_info(self):
         self.annotCamDir = os.path.join(self.annotDir, self.camID)
-        #====================================================
+        # ====================================================
         # Dummy data 임시
         input = "./dummy_annotation_meta.csv"
 
@@ -294,11 +298,11 @@ class loadDataset():
             csv_dict = {}
             for row in f:
                 csv_dict[row[0]] = row[1]
-        #====================================================
-        #Sequence 내 공동정보 저장
+        # ====================================================
+        # Sequence 내 공동정보 저장
         with open(os.path.join(os.getcwd(), 'annotation_template.json')) as r:
             info = json.load(r)
-        #info keys 'info', 'actor', 'kinect_camera', 'infrared_camera', 'images', 'object', 'calibration', 'annotations', 'Mesh'
+        # info keys 'info', 'actor', 'kinect_camera', 'infrared_camera', 'images', 'object', 'calibration', 'annotations', 'Mesh'
         # 기록해 놓은 actor 정보 받아오기
         info['info']['date_created'] = time.strftime('%Y-%m-%d %H:%M', time.localtime(time.time()))
         info['actor']['id'] = csv_dict['actor.id']
@@ -306,9 +310,9 @@ class loadDataset():
         info['actor']['age'] = csv_dict['actor.age']
         info['actor']['height'] = csv_dict['actor.height']
         info['actor']['handsize'] = csv_dict['actor.handsize']
-        #카메라 정보 받아오기
+        # 카메라 정보 받아오기
         info['kinect_camera']['name'] = csv_dict['kinect_camera.name']
-        info['kinect_camera']['time'] = len(os.listdir(os.path.join(self.rgbDir, 'mas'))) / 30.0 #TODO 프레임레이트 확인 필요
+        info['kinect_camera']['time'] = len(os.listdir(os.path.join(self.rgbDir, 'mas'))) / 30.0  # TODO 프레임레이트 확인 필요
         info['kinect_camera']['id'] = csv_dict['kinect_camera.id']
         # 고정값
         info['kinect_camera']['height'] = "1080"
@@ -328,7 +332,8 @@ class loadDataset():
         Exts = self.extrinsics[self.camID]
         info['calibration']['extrinsic'] = Exts.tolist()
         Ks = self.intrinsics[self.camID]
-        info['calibration']['intrinsic'] = str(Ks[0,0]) + "," + str(Ks[1,1]) + "," + str(Ks[0,2]) + "," + str(Ks[1,2]) #fx, fy, cx, cy
+        info['calibration']['intrinsic'] = str(Ks[0, 0]) + "," + str(Ks[1, 1]) + "," + str(Ks[0, 2]) + "," + str(
+            Ks[1, 2])  # fx, fy, cx, cy
 
         info['object']['id'] = self.obj_id
         info['object']['name'] = OBJType(int(self.obj_id)).name
@@ -360,7 +365,7 @@ class loadDataset():
         distC = self.distCoeffs[self.camID]
 
         coord_homo = np.concatenate((marker_poses_mocap.T, np.ones((1, self.marker_num))), axis=0)
-        world_coord = obj_cam_ext @ coord_homo # world's coordinate
+        world_coord = obj_cam_ext @ coord_homo  # world's coordinate
         world_coord = world_coord[:3].T
 
         ### debug ###
@@ -380,7 +385,7 @@ class loadDataset():
 
     def fit_markerToObj(self, marker_pose, obj_type, obj_mesh):
         # generate initial obj pose (4, 4)
-        obj_init_pose = generate_pose([0,180,0],[0,0,0])
+        obj_init_pose = generate_pose([0, 180, 0], [0, 0, 0])
 
         vertIDpermarker = CFG_vertspermarker[str(OBJType(int(obj_type)).name)]
         obj_verts = obj_mesh['verts']
@@ -389,13 +394,13 @@ class loadDataset():
         # scale factor 10, is .obj file has cm scale?
         verts_pose = apply_transform(obj_init_pose, verts_pose) * 10.0
 
-        #verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
-        #marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
+        # verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
+        # marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
 
         R, t = tf.solve_rigid_tf_np(verts_pose, marker_pose)
 
-        #R = R[0]
-        #t = t[0]
+        # R = R[0]
+        # t = t[0]
         pose_calc = np.eye(4)
         pose_calc[:3, :3] = R[:3, :3]
         pose_calc[0, 3] = t[0]
@@ -434,17 +439,15 @@ class loadDataset():
 
         return pose_calc
 
-
     def saveObjdata(self):
-        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker.pkl'), 'wb') as f:
+        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_marker.pkl'), 'wb') as f:
             pickle.dump(self.marker_sampled, f, pickle.HIGHEST_PROTOCOL)
 
-        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker_cam.pkl'), 'wb') as f:
+        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_marker_cam.pkl'), 'wb') as f:
             pickle.dump(self.marker_cam_sampled, f, pickle.HIGHEST_PROTOCOL)
 
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_obj_pose.pkl'), 'wb') as f:
             pickle.dump(self.obj_pose_sampled, f, pickle.HIGHEST_PROTOCOL)
-
 
     def getFgmask(self, idx):
         mask_fg_path = os.path.join(self.segfgDir, str(self.camID), str(self.camID) + "_%04d.png" % idx)
@@ -474,16 +477,18 @@ class loadDataset():
         cv2.imwrite(rgbPath_sampled, rgb)
         cv2.imwrite(depthPath_sampled, depth)
 
-
-        self.info['images']['file_name'] = [os.path.join("rgb", str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.jpg'), os.path.join("depth", str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.png')]
-        self.info['images']['id'] = str(self.db+'_result') + str(self.subject_id) + str(self.obj_id) + str(self.grasp_id) + str(self.trial_num) + str(camIDset.index(self.camID)) + str(idx)
+        self.info['images']['file_name'] = [
+            os.path.join("rgb", str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.jpg'),
+            os.path.join("depth", str(self.camID) + '/' + str(self.camID) + '_' + str(save_idx) + '.png')]
+        self.info['images']['id'] = str(self.db + '_result') + str(self.subject_id) + str(self.obj_id) + str(
+            self.grasp_id) + str(self.trial_num) + str(camIDset.index(self.camID)) + str(idx)
         self.info['images']['width'] = rgb.shape[1]
         self.info['images']['height'] = rgb.shape[0]
-        self.info['images']['date_created'] = dt.datetime.fromtimestamp(os.path.getctime(rgbPath)).strftime('%Y-%m-%d %H:%M')
+        self.info['images']['date_created'] = dt.datetime.fromtimestamp(os.path.getctime(rgbPath)).strftime(
+            '%Y-%m-%d %H:%M')
         self.info['images']['frame_num'] = save_idx
-        with open(os.path.join(self.annotCamDir, "anno_%04d.json"%save_idx), "w") as w:
+        with open(os.path.join(self.annotCamDir, "anno_%04d.json" % save_idx), "w") as w:
             json.dump(self.info, w, ensure_ascii=False)
-
 
         self.debug = rgb.copy()
 
@@ -495,7 +500,7 @@ class loadDataset():
         depth = cv2.undistort(depth, self.K, self.dist, None, self.new_camera)
 
         return (rgb, depth)
-    
+
     def procImg(self, images, mp_hand):
         rgb, depth = images
         image_rows, image_cols, _ = rgb.shape
@@ -560,27 +565,26 @@ class loadDataset():
 
         return [bbox, img2bb_trans, bb2img_trans, procImgSet, kps]
 
-
     def extractBbox(self, idx_to_coord, image_rows, image_cols):
-            # consider fixed size bbox
-            x_min = min(idx_to_coord.values(), key=lambda x: x[0])[0]
-            x_max = max(idx_to_coord.values(), key=lambda x: x[0])[0]
-            y_min = min(idx_to_coord.values(), key=lambda x: x[1])[1]
-            y_max = max(idx_to_coord.values(), key=lambda x: x[1])[1]
+        # consider fixed size bbox
+        x_min = min(idx_to_coord.values(), key=lambda x: x[0])[0]
+        x_max = max(idx_to_coord.values(), key=lambda x: x[0])[0]
+        y_min = min(idx_to_coord.values(), key=lambda x: x[1])[1]
+        y_max = max(idx_to_coord.values(), key=lambda x: x[1])[1]
 
-            x_avg = (x_min + x_max) / 2
-            y_avg = (y_min + y_max) / 2
+        x_avg = (x_min + x_max) / 2
+        y_avg = (y_min + y_max) / 2
 
-            x_min = max(0, x_avg - (self.bbox_width / 2))
-            y_min = max(0, y_avg - (self.bbox_height / 2))
+        x_min = max(0, x_avg - (self.bbox_width / 2))
+        y_min = max(0, y_avg - (self.bbox_height / 2))
 
-            if (x_min + self.bbox_width) > image_cols:
-                x_min = image_cols - self.bbox_width
-            if (y_min + self.bbox_height) > image_rows:
-                y_min = image_rows - self.bbox_height
+        if (x_min + self.bbox_width) > image_cols:
+            x_min = image_cols - self.bbox_width
+        if (y_min + self.bbox_height) > image_rows:
+            y_min = image_rows - self.bbox_height
 
-            bbox = [x_min, y_min, self.bbox_width, self.bbox_height]
-            return bbox
+        bbox = [x_min, y_min, self.bbox_width, self.bbox_height]
+        return bbox
 
     def translateKpts(self, kps, img2bb):
         uv1 = np.concatenate((kps[:, :2], np.ones_like(kps[:, :1])), 1)
@@ -589,7 +593,6 @@ class loadDataset():
 
     def segmentation(self, idx, procImgSet, kps, img2bb):
         rgb, depth = procImgSet
-
 
         obj_kps = self.translateKpts(self.marker_proj, img2bb)
         ps = []
@@ -620,8 +623,8 @@ class loadDataset():
         for i in range(len(segIndices) - 1):
             point1 = np.int32(kps[0, :2])
             point2 = np.int32(kps[segIndices[i], :2])
-            point3 = np.int32(kps[segIndices[i+1], :2])
-            point4 = np.int32(kps[segIndices[i]+1, :2])
+            point3 = np.int32(kps[segIndices[i + 1], :2])
+            point4 = np.int32(kps[segIndices[i] + 1, :2])
             cv2.line(mask, point1, point2, cv2.GC_FGD, 1)
             cv2.line(mask, point3, point2, cv2.GC_FGD, 1)
             cv2.line(mask, point4, point2, cv2.GC_FGD, 1)
@@ -635,10 +638,10 @@ class loadDataset():
                 cv2.line(mask, p, p_, cv2.GC_BGD, 2)
                 # cv2.line(debug_image, p, p_, (0, 255, 0), 2)
 
-        bgdModel = np.zeros((1,65),np.float64)
-        fgdModel = np.zeros((1,65),np.float64)
-        mask, bgdModel, fgdModel = cv2.grabCut(seg_image,mask,None,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_MASK)
-        mask_hand = np.where((mask==2)|(mask==0),0,1).astype('uint8')
+        bgdModel = np.zeros((1, 65), np.float64)
+        fgdModel = np.zeros((1, 65), np.float64)
+        mask, bgdModel, fgdModel = cv2.grabCut(seg_image, mask, None, bgdModel, fgdModel, 5, cv2.GC_INIT_WITH_MASK)
+        mask_hand = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
         mask_hand = np.where(depth > 1000, 0, mask_hand)
 
         # extract obj mask
@@ -663,12 +666,21 @@ class loadDataset():
         #     # cv2.imshow("rgb_hand", np.uint8(rgb.copy()) * mask_hand[:, :, np.newaxis] / 255.0)
         #     cv2.waitKey(0)
 
-
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.segResDir, imgName), mask_hand * 255)
-        cv2.imwrite(os.path.join(self.segVisDir, imgName), rgb*mask_hand[:,:,np.newaxis])
+        cv2.imwrite(os.path.join(self.segVisDir, imgName), rgb * mask_hand[:, :, np.newaxis])
 
+    def deepSegmentation(self, idx, procImgSet):
+        rgb, depth = procImgSet
 
+        print(type(rgb))
+        assert isinstance(rgb, np.ndarray), "rgb type is not np.ndarray"
+
+        mask, vis_mask = deepSegPredict(rgb)
+        maskName = str(self.camID) + '_' + format(idx, '04') + '.png'
+        visName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
+        mask.save(os.path.join(self.deepSegMaskDir, maskName))
+        vis_mask.save(os.path.join(self.deepSegVisDir, visName))
 
     def postProcessNone(self, idx):
         meta_info = {'bb': None, 'img2bb': None,
@@ -678,7 +690,6 @@ class loadDataset():
         jsonPath = os.path.join(self.metaDir, metaName)
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
-
 
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts):
 
@@ -700,7 +711,6 @@ class loadDataset():
         jsonPath = os.path.join(self.metaDir, metaName)
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
-
 
 
 def preprocess_single_cam(db, tqdm_func, global_tqdm):
@@ -728,6 +738,8 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
 
                 if flag_segmentation:
                     db.segmentation(save_idx, procImgSet, procKps, img2bb)
+                if flag_deep_segmentation:
+                    db.deepSegmentation(save_idx, procImgSet)
 
             progress.update()
             global_tqdm.update()
@@ -737,13 +749,14 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
 
     return True
 
-def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
+def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
     with tqdm_func(total=len(dbs[0])) as progress:
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.9, min_tracking_confidence=0.95)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.9,
+                                     min_tracking_confidence=0.95)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
@@ -775,6 +788,8 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
                         if flag_segmentation:
                             db.segmentation(save_idx, procImgSet, procKps, img2bb)
+                        if flag_deep_segmentation:
+                            db.deepSegmentation(save_idx, procImgSet)
                     else:
                         db.postProcessNone(save_idx)
                 progress.update()
@@ -790,13 +805,14 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
     return True
 
 
-
 def error_callback(result):
     print("Error!")
+
 
 def done_callback(result):
     # print("Done. Result: ", result)
     return
+
 
 ################# depth scale value need to be update #################
 def main(argv):
@@ -812,7 +828,6 @@ def main(argv):
 
     tasks = []
     process_count = 1
-
 
     total_count = 0
     t1 = time.time()
@@ -846,12 +861,12 @@ def main(argv):
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
             for camID in camIDset:
-                anno_dir = os.path.join(baseDir, FLAGS.db+'_result', seqName, trialName, 'annotation', camID)
+                anno_dir = os.path.join(baseDir, FLAGS.db + '_result', seqName, trialName, 'annotation', camID)
                 num_anno = len(os.listdir(anno_dir))
                 total_num += num_anno
 
         print("total json num in seq %s : %s" % (seqName, total_num))
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     app.run(main)
