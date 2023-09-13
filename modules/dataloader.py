@@ -92,7 +92,7 @@ class DataLoader:
         # #Get data from files
         self.cam_parameter = self.load_cam_parameters()
 
-        self.db_len = len(glob(os.path.join(self.rgb_path, self.cam, '*.jpg')))
+        self.db_len = len(glob(os.path.join(self.rgb_raw_path, self.cam, '*.jpg')))
 
         # set preprocessed sample as pickle
         sample_dict = {}

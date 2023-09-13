@@ -51,8 +51,8 @@ def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, op
         losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame)
 
         ### visualization for debug
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
-        #                     camIdxSet=[3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
+                            camIdxSet=[0, 1, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
             for k in CFG_LOSS_DICT:

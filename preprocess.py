@@ -367,8 +367,8 @@ class loadDataset():
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
-            # obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
-            # self.obj_pose_sampled[str(save_idx)] = obj_pose_data
+            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
+            self.obj_pose_sampled[str(save_idx)] = obj_pose_data
 
         else:
             self.marker_sampled[str(save_idx)] = None

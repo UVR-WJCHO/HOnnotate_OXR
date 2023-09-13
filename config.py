@@ -4,7 +4,7 @@ from enum import IntEnum
 
 ## Debug Flags ##
 
-CFG_WITH_OBJ = False
+CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = False
 
 CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth_rel']#, 'seg']#, 'depth'] #, 'contact']
@@ -19,6 +19,13 @@ CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,0.3,0.3,0.3],
                          'sub1':[0.0,0.3,0.3,1.0,1.0],
                          'sub2':[0.0, 1.0,1.0,1.0,1.0],
                          'sub3':[0.0,1.0,1.0,1.0,1.0]}
+
+
+CFG_vertspermarker = {
+    "mug" : [1282, 1329, 965, 756],
+    "cardboard_box" : [39,1313,716,1294],
+}
+
 
 ## Config
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
@@ -39,19 +46,11 @@ CFG_CROP_IMG_HEIGHT = 480
 
 CFG_LOSS_THRESHOLD = 3500
 CFG_PATIENCE = 30
-
 CFG_PATIENCE_v2 = 50
 
 CFG_CONTACT_START_THRESHOLD = 15000 # use contact loss when kpts_loss < 15000
 CFG_CONTACT_DIST = 8
 CFG_CONTACT_LOSS_WEIGHT = 4
-
-CFG_vertspermarker = {
-    "mug" : [1282, 1329, 965, 756],
-    "cardboard_box" : [36,759,25,1294],
-}
-#[18, 763, 42, 776]
-
 
 
 class GRASPType(IntEnum):

@@ -307,9 +307,9 @@ class MultiViewLossFunc(nn.Module):
                 depth_input = np.squeeze(self.gt_depth.cpu().numpy())
                 seg_input = np.squeeze(self.gt_seg.cpu().numpy())
 
-                cv2.imshow("rgb input", rgb_input)
-                cv2.imshow("depth_input", np.asarray(depth_input/1000 * 255, dtype=np.uint8))
-                cv2.waitKey(0)
+                # cv2.imshow("rgb input", rgb_input)
+                # cv2.imshow("depth_input", np.asarray(depth_input/1000 * 255, dtype=np.uint8))
+                # cv2.waitKey(0)
 
                 # rendered image is original size (1080, 1920)
                 rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
