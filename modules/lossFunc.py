@@ -170,12 +170,12 @@ class MultiViewLossFunc(nn.Module):
                 shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1)
 
                 ## wrong adoption? check parameter's order
-                # thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
-                # phyConst = torch.sum(thetaConstMin ** 2 + thetaConstMax ** 2)
-                pose_tip = torch.squeeze(joints_set[camIdx][:, [4, 8, 12, 16, 20], :])
-                pose_center = torch.mean(pose_tip, dim=0)
-                dist = torch.sum(torch.abs(pose_tip - pose_center))
-                loss['reg'] = pose_reg + shape_reg #+ dist * 100#+ phyConst * 100.0
+                thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
+                phyConst = torch.sum(thetaConstMin ** 2 + thetaConstMax ** 2)
+                # pose_tip = torch.squeeze(joints_set[camIdx][:, [4, 8, 12, 16, 20], :])
+                # pose_center = torch.mean(pose_tip, dim=0)
+                # dist = torch.sum(torch.abs(pose_tip - pose_center))
+                loss['reg'] = pose_reg + shape_reg + phyConst * 10000.0
 
                 if pred_obj is not None:
                     pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
