@@ -106,9 +106,12 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ks = self.Ks[main_cam_idx]
         self.main_Ms = self.Ms[main_cam_idx]
 
-    def forward(self, pred, pred_obj, camIdxSet, frame, contact=False):
+    def forward(self, pred, pred_obj, camIdxSet, frame, loss_dict, contact=False):
+
+        self.loss_dict = loss_dict
+
         render = False
-        if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
+        if 'depth' in loss_dict or 'seg' in loss_dict:
             render = True
 
         verts_set = {}
@@ -141,9 +144,16 @@ class MultiViewLossFunc(nn.Module):
             loss = {}
             self.set_gt(camIdx, frame)
 
+            if 'kpts_palm' in self.loss_dict:
+                pred_kpts2d_palm = projectPoints(joints_set[camIdx], self.Ks[camIdx])[:, CFG_PALM_IDX, :]
+                gt_kpts2d_palm = self.gt_kpts2d[:, CFG_PALM_IDX, :]
+
+                loss_palm = torch.sqrt((pred_kpts2d_palm - gt_kpts2d_palm) ** 2)
+                loss_palm = torch.sum(loss_palm.reshape(self.bs, -1), -1)
+                loss['kpts_palm'] = loss_palm * 10.0
+
             if 'kpts2d' in self.loss_dict:
                 pred_kpts2d = projectPoints(joints_set[camIdx], self.Ks[camIdx])
-
 
                 # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d) #* self.vis[camIdx]
                 loss_kpts2d = torch.sqrt((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
@@ -172,9 +182,7 @@ class MultiViewLossFunc(nn.Module):
                 ## wrong adoption? check parameter's order
                 thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
                 phyConst = torch.sum(thetaConstMin ** 2 + thetaConstMax ** 2)
-                # pose_tip = torch.squeeze(joints_set[camIdx][:, [4, 8, 12, 16, 20], :])
-                # pose_center = torch.mean(pose_tip, dim=0)
-                # dist = torch.sum(torch.abs(pose_tip - pose_center))
+
                 loss['reg'] = pose_reg + shape_reg + phyConst * 10000.0
 
                 if pred_obj is not None:

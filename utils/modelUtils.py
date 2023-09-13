@@ -11,7 +11,7 @@ def set_lr_forHand(model, init_lr):
     lr_rot = []
     lr_pose = []
     lr_shape = []
-    lr_tip = []
+    lr_scale = []
 
     params_dict = dict(model.named_parameters())
     for key, value in params_dict.items():
@@ -26,14 +26,14 @@ def set_lr_forHand(model, init_lr):
                 lr_pose.append(value)
             elif 'input_shape' in key:
                 lr_shape.append(value)
-            elif 'input_tip_pose' in key:
-                lr_tip.append(value)
+            elif 'input_scale' in key:
+                lr_scale.append(value)
 
     model_params = [{'params': lr_xyz_root, 'lr': init_lr * 20},
                     {'params': lr_rot, 'lr': init_lr},
                     {'params': lr_pose, 'lr': init_lr},
                     {'params': lr_shape, 'lr': init_lr},
-                    {'params': lr_tip, 'lr': init_lr}]
+                    {'params': lr_scale, 'lr': init_lr}]
     return model_params
 
 def set_lr_forObj(model, init_lr):

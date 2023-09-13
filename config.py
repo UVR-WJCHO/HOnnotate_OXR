@@ -52,6 +52,7 @@ CFG_CONTACT_START_THRESHOLD = 15000 # use contact loss when kpts_loss < 15000
 CFG_CONTACT_DIST = 8
 CFG_CONTACT_LOSS_WEIGHT = 4
 
+CFG_PALM_IDX = [0, 1, 5, 9, 13, 17]
 
 class GRASPType(IntEnum):
     '''

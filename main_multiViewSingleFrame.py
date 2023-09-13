@@ -34,13 +34,16 @@ flags.DEFINE_integer('initNum', 30, 'initial frame num of trial_0, check mediapi
 
 FLAGS(sys.argv)
 
-def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=30):
-    kps_loss = {}
+def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=50):
+
+    model.change_grads(root=True, rot=True, pose=False, shape=False, scale=True)
+    loss_dict_global = ['kpts_palm', 'reg']
+
     for iter in range(iter):
         t_iter = time.time()
 
-        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'depth_rel': 0.0}
-        loss_weight = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0}
+        loss_all = {'kpts2d': 0.0, 'reg': 0.0, 'kpts_palm': 0.0, 'depth_rel': 0.0}
+        loss_weight = {'kpts2d': 1.0, 'reg': 1.0, 'kpts_palm': 1.0, 'depth_rel': 1.0}
 
         hand_param = model()
         if CFG_WITH_OBJ:
@@ -48,31 +51,30 @@ def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, op
         else:
             obj_param = None
 
-        losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame)
+        losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
+                           loss_dict=loss_dict_global)
 
         ### visualization for debug
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
-        #                 camIdxSet=[0, 1, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
+                        camIdxSet=[0, 1, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
-            for k in CFG_LOSS_DICT:
+            for k in loss_dict_global:
                 loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
 
-        total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
+        total_loss = sum(loss_all[k] * loss_weight[k] for k in loss_dict_global) / len(detected_cams)
 
         optimizer.zero_grad()
         total_loss.backward(retain_graph=True)
         optimizer.step()
         # lr_scheduler.step()
 
-        cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
-        kps_loss[iter] = cur_kpt_loss
 
         iter_t = time.time() - t_iter
         logs = ["[{} - frame {}] [t : {:.2f} sec] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter_t, iter,
                                                                                  total_loss.item())]
         logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
-                 key in CFG_LOSS_DICT]
+                 key in loss_dict_global]
         logging.info(''.join(logs))
 
 
@@ -87,6 +89,8 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
     ealry_stopping_patience = 0
     ealry_stopping_patience_v2 = 0
 
+    model.change_grads(root=True, rot=True, pose=True, shape=True, scale=False)
+
     for iter in range(iter):
         t_iter = time.time()
 
@@ -99,7 +103,7 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
         else:
             obj_param = None
 
-        losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, contact=use_contact_loss)
+        losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
 
         loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
@@ -230,11 +234,9 @@ def main(argv):
             # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
 
             ### update global pos, rot first
-            model.change_grads(root=True, rot=True, pose=False, shape=False, scale=False)
             __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=30)
 
             ### update all
-            model.change_grads(root=True, rot=True, pose=True, shape=True, scale=True)
             __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=CFG_NUM_ITER)
 
 
