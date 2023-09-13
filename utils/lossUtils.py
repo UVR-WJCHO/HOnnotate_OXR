@@ -19,6 +19,7 @@ class Constraints():
     def __init__(self):
         self.device = 'cuda'
         self.thetaLimits()
+        self.zero = torch.zeros((1), dtype=torch.float32).to(self.device)
 
     def thetaLimits(self):
         MINBOUND = -5.
@@ -33,18 +34,35 @@ class Constraints():
         self.invalidThetaIDs = np.array(invalidThetaIDsList)
 
         self.minThetaVals = torch.FloatTensor([MINBOUND, MINBOUND, MINBOUND,  # global rot
-                                      0, -0.15, 0.1, -0.3, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # index
-                                      MINBOUND, -0.15, 0.1, -0.5, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # middle
-                                      -1.5, -0.15, -0.1, MINBOUND, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # pinky
-                                      -0.5, -0.25, 0.1, -0.4, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # ring
-                                      MINBOUND, -0.83, -0.0, -0.15, MINBOUND, 0, MINBOUND, -0.5, -1.57, ]).to(self.device)  # thumb
+                                               MINBOUND, -0.83, -0.0, -0.15, MINBOUND, 0, MINBOUND, -0.5, -1.57, # thumb
+                                               0, -0.15, 0.1, -0.3, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # index
+                                      MINBOUND, -0.15, 0.1, -0.5, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,# middle
+                                               -0.5, -0.25, 0.1, -0.4, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # ring
+                                      -1.5, -0.15, -0.1, MINBOUND, MINBOUND, -0.0, MINBOUND, MINBOUND, 0]).to(self.device)   # pinky
+
+
 
         self.maxThetaVals = torch.FloatTensor([MAXBOUND, MAXBOUND, MAXBOUND,  # global
+                                               MAXBOUND, 0.66, 0.5, 1.6, MAXBOUND, 0.5, MAXBOUND, 0, 1.08,  # thumb
                                       0.45, 0.2, 1.8, 0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # index
                                       MAXBOUND, 0.15, 2.0, -0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # middle
-                                      -0.2, 0.15, 1.6, MAXBOUND, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # pinky
-                                      -0.4, 0.10, 1.6, -0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # ring
-                                      MAXBOUND, 0.66, 0.5, 1.6, MAXBOUND, 0.5, MAXBOUND, 0, 1.08]).to(self.device)  # thumb
+                                      -0.4, 0.10, 1.6, -0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25, # ring
+                                     -0.2, 0.15, 1.6, MAXBOUND, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25 ]).to(self.device)  # pinky
+
+
+
+
+        """
+        ensor([[ 
+        0.0133, -0.1278, -0.3035, -0.0095,  0.0053,  0.4009, -0.0138, -0.0017, 0.9236, 
+        
+        -0.0197,  0.2448,  0.1409,  0.0100,  0.0157,  0.1495,  0.0093,  0.0011,  0.2551, 
+        -0.0581,  0.4941, -0.2347,  0.0797, -0.0047, -0.5662,  0.0018, -0.0113, -0.4145, 
+        -0.0505, -0.1397, -0.1844,  0.0128, -0.0059, -0.6347,  0.0032,  0.0107, -0.6212,
+         -0.5660,  0.1788,  0.2408, -0.0166,-0.3562, -0.0082, -0.0113, -0.7498, -0.5683]], 
+         
+         device='cuda:0'
+        """
 
 
     def getHandJointConstraints(self, theta, isValidTheta=False):
@@ -62,8 +80,8 @@ class Constraints():
             assert (theta.shape)[-1] == len(self.validThetaIDs[3:])
             validTheta = theta
 
-        phyConstMax = (torch.max(self.minThetaVals[self.validThetaIDs[3:]] - validTheta))
-        phyConstMin = (torch.max(validTheta - self.maxThetaVals[self.validThetaIDs[3:]]))
+        phyConstMax = (torch.maximum(self.minThetaVals[self.validThetaIDs[3:]] - validTheta, self.zero))
+        phyConstMin = (torch.maximum(validTheta - self.maxThetaVals[self.validThetaIDs[3:]], self.zero))
 
         return phyConstMin, phyConstMax
 

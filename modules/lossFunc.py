@@ -40,11 +40,17 @@ class MultiViewLossFunc(nn.Module):
             self.Ks.append(Ks)
             self.Ms.append(Ms)
 
-        self.default_zero = torch.tensor([0.0], requires_grad=True).cuda()
-        self.const = Constraints()
+        self.default_zero = torch.tensor([0.0], requires_grad=True).to(self.device)
+
 
         self.vis = self.set_visibility_weight(CFG_CAM_PER_FINGER_VIS)
 
+        self.const = Constraints()
+        self.rot_min = torch.tensor(np.asarray(params.rot_min_list)).to(self.device)
+        self.rot_max = torch.tensor(np.asarray(params.rot_max_list)).to(self.device)
+
+        self.prev_hand_pose = None
+        self.prev_hand_shape = None
 
     def set_visibility_weight(self, CFG_W):
         vis = {}
@@ -161,14 +167,13 @@ class MultiViewLossFunc(nn.Module):
 
             if 'reg' in self.loss_dict:
                 pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
-                shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1) * 0.5e1
+                shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1)
 
                 ## wrong adoption, check HOnnotate_refine
-                # thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
-                # loss_constMin = 5e1 * thetaConstMin
-                # loss_constMax = 5e1 * thetaConstMax
+                thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
+                phyConst = torch.sum(thetaConstMin ** 2 + thetaConstMax ** 2)
 
-                loss['reg'] = pose_reg + shape_reg
+                loss['reg'] = pose_reg + shape_reg + phyConst * 100.0
 
                 if pred_obj is not None:
                     pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
@@ -263,6 +268,15 @@ class MultiViewLossFunc(nn.Module):
                 else:
                     loss['contact'] = self.default_zero
 
+            if 'temporal' in self.loss_dict:
+                if self.prev_hand_pose == None:
+                    loss['temporal'] = 0
+                    self.prev_hand_pose = pred['pose'].detach()
+                    self.prev_hand_shape = pred['shape'].detach()
+                else:
+                    loss['temporal'] = torch.sqrt(pred['pose'] - self.prev_hand_pose) + \
+                                       torch.sqrt(pred['shape'] - self.prev_hand_shape)
+
             losses[camIdx] = loss
 
         return losses
@@ -274,6 +288,7 @@ class MultiViewLossFunc(nn.Module):
             self.set_gt(camIdx, frame)
             # set camera status for projection
 
+            debug = np.squeeze(self.gt_kpts3d.cpu().detach().numpy())
             ## HAND ##
             # project hand joint
             joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)

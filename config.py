@@ -4,10 +4,10 @@ from enum import IntEnum
 
 ## Debug Flags ##
 
-CFG_WITH_OBJ = True
+CFG_WITH_OBJ = False
 CFG_EARLYSTOPPING = False
 
-CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth_rel']#, 'seg']#, 'depth'] #, 'contact']
+CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'seg', 'depth']#, 'depth_rel'] #, 'contact', 'temporal']
 
 CFG_LR_INIT = 0.05
 CFG_LR_INIT_OBJ = 0.1

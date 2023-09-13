@@ -51,8 +51,8 @@ def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, op
         losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame)
 
         ### visualization for debug
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
-                            camIdxSet=[0, 1, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
+        #                     camIdxSet=[0], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
             for k in CFG_LOSS_DICT:
@@ -101,7 +101,7 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
 
         losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, contact=use_contact_loss)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
             for k in CFG_LOSS_DICT:
@@ -127,6 +127,8 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
         ## criteria for contact loss
         if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
             use_contact_loss = True
+
+
 
         ## sparse criterion on converge for v1 db release, need to be tight
         if CFG_EARLYSTOPPING:

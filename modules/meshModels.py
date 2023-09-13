@@ -104,7 +104,8 @@ class HandModel(nn.Module):
 
         hand_faces = self.mano_layer.th_faces.repeat(self.batch_size, 1, 1)
 
-        return {'verts':hand_verts, 'faces':hand_faces, 'joints':hand_joints, 'xyz_root':xyz_root, 'scale':self.input_scale, 'rot':self.input_rot, 'pose':self.pose_, 'shape':self.shape_}
+        return {'verts':hand_verts, 'faces':hand_faces, 'joints':hand_joints, 'xyz_root':xyz_root,
+                'scale':self.input_scale, 'rot':self.input_rot, 'pose':self.pose_, 'shape':self.shape_}
 
 
 class ObjModel(nn.Module):
