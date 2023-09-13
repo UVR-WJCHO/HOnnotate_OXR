@@ -198,6 +198,8 @@ class loadDataset():
                     f.write(new_camera)
                     f.write("\n")
 
+
+
         ### object pose ###
         self.marker_sampled = {}
         self.marker_cam_sampled = {}
@@ -349,7 +351,8 @@ class loadDataset():
         info['calibration']['error'] = self.calib_err
         Exts = self.extrinsics[self.camID]
         info['calibration']['extrinsic'] = Exts.tolist()
-        Ks = self.intrinsics[self.camID]
+
+        Ks = self.intrinsic_undistort[self.camID]
         info['calibration']['intrinsic'] = str(Ks[0,0]) + "," + str(Ks[1,1]) + "," + str(Ks[0,2]) + "," + str(Ks[1,2]) #fx, fy, cx, cy
 
         info['object']['id'] = self.obj_id

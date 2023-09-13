@@ -35,24 +35,30 @@ class HandModel(nn.Module):
         self.xy_root = nn.Parameter(
             torch.tensor([-0.9094, 12.0501], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
         self.z_root = nn.Parameter(torch.tensor([65.0], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
-        # initial_pose = torch.tensor([[-0.1072, 0.1475, -0.7427, -0.1397, 0.1483, -0.0789, -0.0184, 0.0225,
-        #          7.2649, -0.1668, 0.8281, 0.7914, -0.0104, 0.1238, 2.4139, 0.0329,
-        #          0.0267, 2.3347, -0.0112, 0.4245, 0.5857, 0.1500, 0.0563, 1.5343,
-        #          -0.0234, -0.0344, 3.6133, -0.0661, 0.6330, 0.5967, -0.0478, 0.0238,
-        #          2.9334, 0.0396, -0.0266, 2.5399, -0.2902, 0.2651, 0.1446, 0.1516,
-        #          3.0003, -0.0806, 0.0826, 3.0492, -0.4458]])
+        # initial_pose = torch.tensor([[-1.2770e-02,  3.5734e-02,  1.0304e-01, -1.2469e-02,  1.7843e-02,
+        #           1.3339e+00,  0.0000e+00,  0.0000e+00,  0.0000e+00, -2.6089e-03,
+        #           8.1811e-01,  6.0679e-01,  7.8873e-03,  5.2546e-03,  1.0138e+00,
+        #           0.0000e+00,  0.0000e+00,  0.0000e+00, -3.1368e-02,  1.5023e+00,
+        #           9.1416e-01,  9.1727e-02,  4.5114e-03, -1.1004e-01,  0.0000e+00,
+        #           0.0000e+00,  0.0000e+00, -1.4536e-02,  1.0635e+00,  1.5662e+00,
+        #           1.7692e-02,  4.9017e-03, -7.8507e-01,  0.0000e+00,  0.0000e+00,
+        #           0.0000e+00, -5.0363e-01, -4.4525e-01,  2.8814e-01,  1.1674e-02,
+        #          -7.1911e-01, -1.3209e-03,  0.0000e+00,  0.0000e+00,  0.0000e+00]])
         initial_rot = torch.tensor([[-1.7276, -1.6758, 2.1557]])
-        initial_pose = torch.zeros((1, 30), dtype=torch.float32)
-        initial_tip_pose = torch.zeros((1, 15), dtype=torch.float32)
+        initial_pose = torch.zeros((1, 45), dtype=torch.float32)
+        initial_pose[-9] = torch.tensor(-0.5)
+        # initial_pose = torch.zeros((1, 30), dtype=torch.float32)
+        # initial_tip_pose = torch.zeros((1, 15), dtype=torch.float32)
 
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
         self.input_pose = nn.Parameter(initial_pose.to(device))
-        self.input_tip_pose = nn.Parameter(initial_tip_pose.to(device))
+        # self.input_tip_pose = nn.Parameter(initial_tip_pose.to(device))
 
         self.input_shape = nn.Parameter(initial_shape.repeat(self.batch_size, 1).to(device))
 
         # Inital set up
-        pose_all = self.compute_pose_all(self.input_pose, self.input_tip_pose)  # (1, 45)
+        # pose_all = self.compute_pose_all(self.input_pose, self.input_tip_pose)  # (1, 45)
+        pose_all = self.input_pose
         self.pose_all = torch.cat((self.input_rot, pose_all), 1)
         # normalize scale
         hand_verts, hand_joints = self.mano_layer(self.pose_all, self.input_shape)
@@ -89,8 +95,8 @@ class HandModel(nn.Module):
 
         # need clipping?
         # self.pose_.data = clip_mano_hand_pose(self.input_pose)
-        # self.pose_.data = self.input_pose
-        self.pose_ = self.compute_pose_all(self.input_pose, self.input_tip_pose)
+        self.pose_.data = self.input_pose
+        # self.pose_ = self.compute_pose_all(self.input_pose, self.input_tip_pose)
 
         mano_param = torch.cat([self.input_rot, self.pose_], dim=1)
 

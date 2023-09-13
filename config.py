@@ -9,7 +9,7 @@ CFG_EARLYSTOPPING = False
 
 CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'seg', 'depth']#, 'depth_rel'] #, 'contact', 'temporal']
 
-CFG_LR_INIT = 0.05
+CFG_LR_INIT = 0.1
 CFG_LR_INIT_OBJ = 0.1
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
