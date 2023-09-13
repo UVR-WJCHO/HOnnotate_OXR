@@ -175,7 +175,7 @@ class MultiViewLossFunc(nn.Module):
                 pose_tip = torch.squeeze(joints_set[camIdx][:, [4, 8, 12, 16, 20], :])
                 pose_center = torch.mean(pose_tip, dim=0)
                 dist = torch.sum(torch.abs(pose_tip - pose_center))
-                loss['reg'] = pose_reg + shape_reg + dist * 100#+ phyConst * 100.0
+                loss['reg'] = pose_reg + shape_reg #+ dist * 100#+ phyConst * 100.0
 
                 if pred_obj is not None:
                     pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]

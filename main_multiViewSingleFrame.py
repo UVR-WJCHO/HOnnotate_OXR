@@ -51,8 +51,8 @@ def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, op
         losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame)
 
         ### visualization for debug
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
-                            camIdxSet=[0], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
+        #                 camIdxSet=[0, 1, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
             for k in CFG_LOSS_DICT:
@@ -101,7 +101,7 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
 
         losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, contact=use_contact_loss)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
             for k in CFG_LOSS_DICT:
@@ -230,11 +230,11 @@ def main(argv):
             # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
 
             ### update global pos, rot first
-            model.change_grads(root=True, rot=True, pose=False, shape=False, scale=False, tip=False)
+            model.change_grads(root=True, rot=True, pose=False, shape=False, scale=False)
             __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=30)
 
             ### update all
-            model.change_grads(root=True, rot=True, pose=True, shape=True, scale=True, tip=False)
+            model.change_grads(root=True, rot=True, pose=True, shape=True, scale=True)
             __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=CFG_NUM_ITER)
 
 

@@ -46,7 +46,22 @@ class HandModel(nn.Module):
         #          -7.1911e-01, -1.3209e-03,  0.0000e+00,  0.0000e+00,  0.0000e+00]])
         initial_rot = torch.tensor([[-1.7276, -1.6758, 2.1557]])
         initial_pose = torch.zeros((1, 45), dtype=torch.float32)
-        initial_pose[-9] = torch.tensor(-0.5)
+
+        ## grab last tip
+        # initial_pose[0, 43] = torch.tensor(-1.5)    # thumb
+        # initial_pose[0, 35] = torch.tensor(1.5)  # ring
+        # initial_pose[0, 26] = torch.tensor(1.5)  # pinky
+        # initial_pose[0, 17] = torch.tensor(1.5)  # middle
+        # initial_pose[0, 8] = torch.tensor(1.5)  # index
+        #
+        # initial_pose[0, 40] = torch.tensor(-1)  # thumb
+        # initial_pose[0, 32] = torch.tensor(1.)  # ring
+        # initial_pose[0, 23] = torch.tensor(1.)  # pinky
+        # initial_pose[0, 14] = torch.tensor(1.)  # middle
+        # initial_pose[0, 5] = torch.tensor(1.)  # index
+        #
+        # initial_pose[0, 25] = torch.tensor(1.)  # pinky
+
         # initial_pose = torch.zeros((1, 30), dtype=torch.float32)
         # initial_tip_pose = torch.zeros((1, 15), dtype=torch.float32)
 
@@ -79,23 +94,22 @@ class HandModel(nn.Module):
     def compute_normalized_scale(self, hand_joints):
         return (torch.sum((hand_joints[0, self.mcp_idx] - hand_joints[0, self.wrist_idx])**2)**0.5)/self.key_bone_len
 
-    def change_grads(self, root=False, rot=False, pose=False, shape=False, scale=False, tip=False):
+    def change_grads(self, root=False, rot=False, pose=False, shape=False, scale=False):
         self.xy_root.requires_grad = root
         self.z_root.requires_grad = root
         self.input_rot.requires_grad = rot
         self.input_pose.requires_grad = pose
         self.input_shape.requires_grad = shape
         self.input_scale.requires_grad = scale
-        self.input_tip_pose.requires_grad = tip
 
     def forward(self):
         self.shape_ = self.input_shape
 
-        # self.pose_ = self.input_pose
+        self.pose_ = self.input_pose
 
         # need clipping?
         # self.pose_.data = clip_mano_hand_pose(self.input_pose)
-        self.pose_.data = self.input_pose
+        # self.pose_.data = self.input_pose
         # self.pose_ = self.compute_pose_all(self.input_pose, self.input_tip_pose)
 
         mano_param = torch.cat([self.input_rot, self.pose_], dim=1)
