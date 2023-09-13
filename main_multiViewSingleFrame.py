@@ -31,7 +31,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
 flags.DEFINE_integer('initNum', 30, 'initial frame num of trial_0, check mediapipe results')
-
+flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 FLAGS(sys.argv)
 
 def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=30):
@@ -101,7 +101,7 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
 
         losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, contact=use_contact_loss)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
 
         for camIdx in detected_cams:
             for k in CFG_LOSS_DICT:
@@ -180,8 +180,8 @@ def main(argv):
         dataloader_set = [mas_dataloader, sub1_dataloader, sub2_dataloader, sub3_dataloader]
         renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
 
-        if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
-            raise ValueError("The number of data is not same between cameras")
+        # if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
+        #     raise ValueError("The number of data is not same between cameras")
 
         ## Initialize loss function
         loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT).to(CFG_DEVICE)
@@ -249,7 +249,7 @@ def main(argv):
 
             ### visualization results of frame
             loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True)
+                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
 
             ### save annotation per frame as json format
             save_annotation(target_dir_result, trialName, frame,  FLAGS.seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)
@@ -258,8 +258,11 @@ def main(argv):
             save_num += 1
 
             ####### debug #############
-            cv2.waitKey(0)
-            break
+            try:
+                cv2.waitKey(0)
+                break
+            except:
+                break
 
     print("end time : ", time.ctime())
     print("total processed frames : ", save_num)
