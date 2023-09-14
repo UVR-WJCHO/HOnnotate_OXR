@@ -26,7 +26,7 @@ class HandModel(nn.Module):
 
         self.xy_root = nn.Parameter(
             torch.tensor([-0.9094, 12.0501], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
-        self.z_root = nn.Parameter(torch.tensor([65.0], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
+        self.z_root = nn.Parameter(torch.tensor([6.5], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
 
         initial_rot = torch.tensor([[-1.7276, -1.6758, 2.1557]])
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
@@ -112,7 +112,7 @@ class HandModel(nn.Module):
 
         hand_verts, hand_joints = self.mano_layer(mano_param, self.shape_)
 
-        xyz_root = torch.cat([self.xy_root, self.z_root], dim=-1)
+        xyz_root = torch.cat([self.xy_root, self.z_root*10.0], dim=-1)
         hand_verts = hand_verts / self.input_scale
         hand_verts = hand_verts + xyz_root[:, None, :]
         hand_joints = hand_joints / self.input_scale

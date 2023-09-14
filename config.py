@@ -7,10 +7,12 @@ from enum import IntEnum
 CFG_WITH_OBJ = False
 CFG_EARLYSTOPPING = False
 
-CFG_LOSS_DICT = ['kpts2d', 'reg', 'depth_rel']#, 'seg', 'depth']#, ] #, 'contact', 'temporal']
+CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth_rel']#, 'seg', 'depth']#, ] #, 'contact', 'temporal']
 
 CFG_LR_INIT = 0.1
 CFG_LR_INIT_OBJ = 0.1
+
+CFG_NUM_ITER = 50
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
@@ -33,7 +35,7 @@ CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 
-CFG_NUM_ITER = 150
+
 CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')

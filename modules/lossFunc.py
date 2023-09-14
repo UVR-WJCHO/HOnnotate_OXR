@@ -196,7 +196,7 @@ class MultiViewLossFunc(nn.Module):
                 if pred_obj is not None:
                     pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
                     pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
-                    loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 100000.0
+                    loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 10000.0
                     loss['reg'] += torch.sum(loss_reg_obj)
 
             if render:
@@ -383,11 +383,11 @@ class MultiViewLossFunc(nn.Module):
                 depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
                 seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
 
-            blend_gt_name = "blend_gt_" + camID + "_" + str(frame)
-            blend_pred_name = "blend_pred_" + camID + "_" + str(frame)
-            blend_pred_seg_name = "blend_pred_seg_" + camID + "_" + str(frame)
-            blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
-            blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
+            blend_gt_name = "blend_gt_" + camID #+ "_" + str(frame)
+            blend_pred_name = "blend_pred_" + camID #+ "_" + str(frame)
+            blend_pred_seg_name = "blend_pred_seg_" + camID #+ "_" + str(frame)
+            blend_depth_name = "blend_depth_" + camID #+ "_" + str(frame)
+            blend_seg_name = "blend_seg_" + camID #+ "_" + str(frame)
 
             try:
                 cv2.imshow(blend_gt_name, img_blend_gt)
