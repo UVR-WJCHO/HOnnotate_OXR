@@ -9,8 +9,8 @@ CFG_EARLYSTOPPING = False
 
 CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth_rel']#, 'seg', 'depth']#, ] #, 'contact', 'temporal']
 
-CFG_LR_INIT = 0.1
-CFG_LR_INIT_OBJ = 0.1
+CFG_LR_INIT = 0.05
+CFG_LR_INIT_OBJ = 0.05
 
 CFG_NUM_ITER = 50
 

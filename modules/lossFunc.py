@@ -149,22 +149,22 @@ class MultiViewLossFunc(nn.Module):
                 pred_kpts2d_palm = projectPoints(joints_set[camIdx], self.Ks[camIdx])[:, CFG_PALM_IDX, :]
                 gt_kpts2d_palm = self.gt_kpts2d[:, CFG_PALM_IDX, :]
 
-                loss_palm = torch.sqrt((pred_kpts2d_palm - gt_kpts2d_palm) ** 2)
+                loss_palm = (pred_kpts2d_palm - gt_kpts2d_palm) ** 2
                 loss_palm = torch.sum(loss_palm.reshape(self.bs, -1), -1)
-                loss['kpts_palm'] = loss_palm * 10.0
+                loss['kpts_palm'] = loss_palm
 
             elif 'kpts2d' in self.loss_dict:
                 pred_kpts2d = projectPoints(joints_set[camIdx], self.Ks[camIdx])
 
                 if parts == -1 or parts == 2:
-                    loss_kpts2d = torch.sqrt((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
+                    loss_kpts2d = ((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
                 else:
                     valid_idx = CFG_valid_index[parts]
-                    loss_kpts2d = torch.sqrt((pred_kpts2d[:, valid_idx, :] - self.gt_kpts2d[:, valid_idx, :]) ** 2) \
+                    loss_kpts2d = ((pred_kpts2d[:, valid_idx, :] - self.gt_kpts2d[:, valid_idx, :]) ** 2) \
                                   * self.vis[camIdx][valid_idx]
 
                 loss_kpts2d = torch.sum(loss_kpts2d.reshape(self.bs, -1), -1)
-                loss['kpts2d'] = loss_kpts2d * 10.0
+                loss['kpts2d'] = loss_kpts2d
 
 
             if 'depth_rel' in self.loss_dict:
@@ -292,8 +292,8 @@ class MultiViewLossFunc(nn.Module):
                     self.prev_hand_pose = pred['pose'].detach()
                     self.prev_hand_shape = pred['shape'].detach()
                 else:
-                    loss['temporal'] = torch.sqrt(pred['pose'] - self.prev_hand_pose) + \
-                                       torch.sqrt(pred['shape'] - self.prev_hand_shape)
+                    loss['temporal'] = (pred['pose'] - self.prev_hand_pose) ** 2 + \
+                                       (pred['shape'] - self.prev_hand_shape) ** 2
 
             losses[camIdx] = loss
 
