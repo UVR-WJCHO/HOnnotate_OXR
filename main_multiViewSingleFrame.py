@@ -30,7 +30,7 @@ from pstats import Stats
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
-flags.DEFINE_integer('initNum', 30, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 
 FLAGS(sys.argv)
 
@@ -84,7 +84,9 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, optimize
     loss_dict_parts = ['kpts2d', 'reg']#, 'depth_rel']
 
     for step in range(3):
-        model.change_grads_parts(root=True, rot=True, pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2], shape=False, scale=True)
+        model.change_grads_parts(root=True, rot=True,
+                                 pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2],
+                                 shape=False, scale=True)
 
         for iter in range(iterperpart):
             t_iter = time.time()
@@ -280,6 +282,20 @@ def main(argv):
             ### initialize optimizer, scheduler
             optimizer = initialize_optimizer(model, model_obj, CFG_LR_INIT, CFG_WITH_OBJ, CFG_LR_INIT_OBJ)
             # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
+
+
+            #TODO
+            """
+            - step 별 lr update
+            - temporal loss, lr update
+            
+            - 중간 iteration 이후에 2d kpts loss weight 낮추는 방식 결과 확인.
+            
+            - object pose update issue
+            - contact loss check
+            
+            - GT tip loss 추가
+            """
 
             ### update global pose
             """
