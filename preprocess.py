@@ -51,7 +51,7 @@ import modules.common.transforms as tf
 from natsort import natsorted
 
 
-flag_2D_tip_exist = False
+flag_2D_tip_exist = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -526,7 +526,7 @@ class loadDataset():
                 for tip in tip_data:
                     tip_name = tip['label']
                     tip_2d = tip['points'][0]
-                    tip_kpts[tip_name] = tip_2d
+                    tip_kpts[tip_name] = np.round(tip_2d, 2)
 
                 # debug = tip_data_path[:-5] + '.jpg'
                 # debug = cv2.imread(debug)

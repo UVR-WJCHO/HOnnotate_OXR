@@ -161,6 +161,9 @@ class DataLoader:
             sample['kpts3d'] = meta['kpts']
             sample['kpts2d'] = meta['kpts'][:, :2]
 
+            if '2D_tip_gt' in meta:
+                sample['tip2d'] = meta['2D_tip_gt']
+
             #get imgs
             # sample['rgb'], depth, seg, rgb_raw, depth_raw = self.get_img(index)
             # # masking depth, need to modify
