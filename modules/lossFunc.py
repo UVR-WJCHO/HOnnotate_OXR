@@ -184,7 +184,7 @@ class MultiViewLossFunc(nn.Module):
                 loss['depth_rel'] = loss_depth_rel * 5e1
 
             if 'reg' in self.loss_dict:
-                pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
+                pose_reg = torch.sum((pred['pose'] ** 2).view(self.bs, -1), -1)
                 shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1)
 
                 ## wrong adoption? check parameter's order

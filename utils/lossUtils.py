@@ -37,13 +37,13 @@ class Constraints():
                                       MINBOUND, -0.15, 0.1, -0.5, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # middle
                                       -1.5, -0.15, -0.1, MINBOUND,-0.5, -0.0, MINBOUND, MINBOUND, 0,  # pinky
                                       -0.5, -0.25, 0.1, -0.4, MINBOUND, -0.0, MINBOUND, MINBOUND, 0,  # ring
-                                      0.0, -0.83, -0.0, -0.15, MINBOUND, 0, MINBOUND, -0.5, -1.57])  # thumb
+                                      MINBOUND, MINBOUND, MINBOUND, MINBOUND, MINBOUND, MINBOUND, MINBOUND, MINBOUND, MINBOUND])  # thumb
 
         self.maxThetaVals = np.array([0.45, 0.2, 1.8, 0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # index
                                       MAXBOUND, 0.15, 2.0, -0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # middle
                                       -0.2, 0.6, 1.6, MAXBOUND, MAXBOUND, MAXBOUND, MAXBOUND, MAXBOUND, MAXBOUND,  # pinky
                                       -0.4, 0.10, 1.8, -0.2, MAXBOUND, 2.0, MAXBOUND, MAXBOUND, 1.25,  # ring
-                                      2.0, 0.66, 0.5, 1.6, MAXBOUND, 0.5, MAXBOUND, 0, 1.08])  # thumb
+                                      2.0,2.0, 1.0, 1.6, MAXBOUND, 0.5, MAXBOUND, 0, 1.08])  # thumb
 
         self.minTensor = torch.tensor(self.minThetaVals).to(self.device)
         self.maxTensor = torch.tensor(self.maxThetaVals).to(self.device)

@@ -39,6 +39,9 @@ class HandModel(nn.Module):
         initial_pose_1 = torch.zeros((1, 15), dtype=torch.float32)
         initial_pose_2 = torch.zeros((1, 15), dtype=torch.float32)
         initial_pose_3 = torch.zeros((1, 15), dtype=torch.float32)
+
+        # initial_pose_1[0, -2] = 1.0
+
         self.input_pose_1 = nn.Parameter(initial_pose_1.to(device))
         self.input_pose_2 = nn.Parameter(initial_pose_2.to(device))
         self.input_pose_3 = nn.Parameter(initial_pose_3.to(device))

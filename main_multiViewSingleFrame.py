@@ -56,7 +56,7 @@ def __update_global__(model, model_obj, loss_func, detected_cams, frame, optimiz
 
         ### visualization for debug
         # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
-        #                 camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        #                 camIdxSet=[0, 2], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
             for k in loss_dict_global:
@@ -81,7 +81,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, optimize
     kps_loss = {}
 
     grad_order = [[True, False, False], [True, True, False], [True, True, True]]
-    loss_dict_parts = ['kpts2d', 'reg', 'depth_rel']
+    loss_dict_parts = ['kpts2d', 'reg']#, 'depth_rel']
 
     for step in range(3):
         model.change_grads_parts(root=True, rot=True, pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2], shape=False, scale=True)
@@ -99,8 +99,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, optimize
                 obj_param = None
 
             losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
-
-            loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 1], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+            # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 1], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
             for camIdx in detected_cams:
                 for k in loss_dict_parts:
