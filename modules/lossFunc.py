@@ -298,7 +298,7 @@ class MultiViewLossFunc(nn.Module):
             self.set_gt(camIdx, frame)
             # set camera status for projection
 
-            debug = np.squeeze(self.gt_kpts3d.cpu().detach().numpy())
+            # debug = np.squeeze(self.gt_kpts3d.cpu().detach().numpy())
             ## HAND ##
             # project hand joint
             joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
@@ -385,7 +385,7 @@ class MultiViewLossFunc(nn.Module):
                 cv2.imshow(blend_gt_name, img_blend_gt)
                 cv2.imshow(blend_pred_name, img_blend_pred)
                 # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-                cv2.imshow(blend_depth_name, depth_gap)
+                # cv2.imshow(blend_depth_name, depth_gap)
                 # cv2.imshow(blend_seg_name, seg_gap)
                 cv2.waitKey(0)
             except:

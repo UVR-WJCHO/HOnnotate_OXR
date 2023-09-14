@@ -15,7 +15,7 @@ CFG_LR_INIT_OBJ = 0.1
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
-CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,0.3,0.3,0.3],
+CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
                          'sub1':[1.0,0.3,0.3,1.0,1.0],
                          'sub2':[1.0, 1.0,1.0,1.0,1.0],
                          'sub3':[0.7,1.0,1.0,1.0,1.0]}
@@ -52,7 +52,7 @@ CFG_CONTACT_START_THRESHOLD = 15000 # use contact loss when kpts_loss < 15000
 CFG_CONTACT_DIST = 8
 CFG_CONTACT_LOSS_WEIGHT = 4
 
-CFG_PALM_IDX = [0, 1, 5, 9, 13, 17]
+CFG_PALM_IDX = [0, 5, 9, 13]
 
 class GRASPType(IntEnum):
     '''

@@ -60,7 +60,8 @@ class HandModel(nn.Module):
         # initial_pose[0, 14] = torch.tensor(1.)  # middle
         # initial_pose[0, 5] = torch.tensor(1.)  # index
         #
-        # initial_pose[0, 24] = torch.tensor(1.)  # pinky
+        # initial_pose[0, 21] = torch.tensor(-1.5)  # pinky
+        # initial_pose[0, 23] = torch.tensor(-1.5)  # pinky
 
         # initial_pose = torch.zeros((1, 30), dtype=torch.float32)
         # initial_tip_pose = torch.zeros((1, 15), dtype=torch.float32)
@@ -78,7 +79,7 @@ class HandModel(nn.Module):
         # normalize scale
         hand_verts, hand_joints = self.mano_layer(self.pose_all, self.input_shape)
         scale = torch.tensor([[self.compute_normalized_scale(hand_joints)]])
-        # scale = torch.tensor([[11.0]])
+        # scale = torch.tensor([[8.0]])
         self.input_scale = nn.Parameter(scale.repeat(self.batch_size, 1).to(device))
 
 
@@ -122,7 +123,6 @@ class HandModel(nn.Module):
         hand_verts = hand_verts + xyz_root[:, None, :]
         hand_joints = hand_joints / self.input_scale
         hand_joints = hand_joints + xyz_root[:, None, :]
-
 
         hand_faces = self.mano_layer.th_faces.repeat(self.batch_size, 1, 1)
 

@@ -29,11 +29,11 @@ def set_lr_forHand(model, init_lr):
             elif 'input_scale' in key:
                 lr_scale.append(value)
 
-    model_params = [{'params': lr_xyz_root, 'lr': init_lr * 20},
+    model_params = [{'params': lr_xyz_root, 'lr': init_lr * 5e0},
                     {'params': lr_rot, 'lr': init_lr},
                     {'params': lr_pose, 'lr': init_lr},
                     {'params': lr_shape, 'lr': init_lr},
-                    {'params': lr_scale, 'lr': init_lr}]
+                    {'params': lr_scale, 'lr': init_lr* 2e0}]
     return model_params
 
 def set_lr_forObj(model, init_lr):
