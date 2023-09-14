@@ -106,7 +106,7 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ks = self.Ks[main_cam_idx]
         self.main_Ms = self.Ms[main_cam_idx]
 
-    def forward(self, pred, pred_obj, camIdxSet, frame, loss_dict, contact=False):
+    def forward(self, pred, pred_obj, camIdxSet, frame, loss_dict, contact=False, parts=-1):
 
         self.loss_dict = loss_dict
 
@@ -117,10 +117,10 @@ class MultiViewLossFunc(nn.Module):
         verts_set = {}
         verts_obj_set = {}
         joints_set = {}
-
         pred_render_set = {}
         pred_obj_render_set = {}
 
+        ## compute per cam predictions
         for camIdx in camIdxSet:
             verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms[camIdx]), 0)
             joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
@@ -138,10 +138,11 @@ class MultiViewLossFunc(nn.Module):
                     verts_obj_set[camIdx] = verts_obj_cam
                     pred_obj_render_set[camIdx] = pred_obj_rendered
 
-
+        ## compute losses
         losses = {}
         for camIdx in camIdxSet:
             loss = {}
+
             self.set_gt(camIdx, frame)
 
             if 'kpts_palm' in self.loss_dict:
@@ -152,11 +153,15 @@ class MultiViewLossFunc(nn.Module):
                 loss_palm = torch.sum(loss_palm.reshape(self.bs, -1), -1)
                 loss['kpts_palm'] = loss_palm * 10.0
 
-            if 'kpts2d' in self.loss_dict:
+            elif 'kpts2d' in self.loss_dict:
                 pred_kpts2d = projectPoints(joints_set[camIdx], self.Ks[camIdx])
 
-                # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d) #* self.vis[camIdx]
-                loss_kpts2d = torch.sqrt((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
+                if parts == -1 or parts == 2:
+                    loss_kpts2d = torch.sqrt((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
+                else:
+                    valid_idx = CFG_valid_index[parts]
+                    loss_kpts2d = torch.sqrt((pred_kpts2d[:, valid_idx, :] - self.gt_kpts2d[:, valid_idx, :]) ** 2) \
+                                  * self.vis[camIdx][valid_idx]
 
                 loss_kpts2d = torch.sum(loss_kpts2d.reshape(self.bs, -1), -1)
                 loss['kpts2d'] = loss_kpts2d * 10.0
@@ -171,8 +176,11 @@ class MultiViewLossFunc(nn.Module):
                 ratio = joint_scale / gt_scale
 
                 gt_depth_rel = torch.mul(gt_depth_rel, ratio)
-
-                loss_depth_rel = self.mse_loss(joint_depth_rel, gt_depth_rel)
+                if parts == -1 or parts == 2:
+                    loss_depth_rel = self.mse_loss(joint_depth_rel, gt_depth_rel)
+                else:
+                    valid_idx = CFG_valid_index[parts]
+                    loss_depth_rel = self.mse_loss(joint_depth_rel[:, valid_idx], gt_depth_rel[:, valid_idx])
                 loss['depth_rel'] = loss_depth_rel * 5e1
 
             if 'reg' in self.loss_dict:

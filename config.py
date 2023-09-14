@@ -15,9 +15,9 @@ CFG_LR_INIT_OBJ = 0.1
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
-CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
-                         'sub1':[1.0,0.3,0.3,1.0,1.0],
-                         'sub2':[1.0, 1.0,1.0,1.0,1.0],
+CFG_CAM_PER_FINGER_VIS = {'mas':[0.7, 1.0,1.0,1.0,1.0],
+                         'sub1':[1.0,0.7,0.7,1.0,1.0],
+                         'sub2':[0.7, 1.0,1.0,1.0,1.0],
                          'sub3':[0.7,1.0,1.0,1.0,1.0]}
 
 
@@ -26,6 +26,8 @@ CFG_vertspermarker = {
     "cardboard_box" : [39,1313,716,1294],
 }
 
+CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],
+                   [0, 1,2,3, 5,6,7, 9,10,11, 13,14,15, 17,18,19]]
 
 ## Config
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')

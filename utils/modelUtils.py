@@ -20,14 +20,14 @@ def set_lr_forHand(model, init_lr):
                 lr_xyz_root.append(value)
             elif 'z_root' in key:
                 lr_xyz_root.append(value)
-            elif 'input_rot' in key:
-                lr_rot.append(value)
-            elif 'input_pose' in key:
-                lr_pose.append(value)
-            elif 'input_shape' in key:
-                lr_shape.append(value)
             elif 'input_scale' in key:
                 lr_scale.append(value)
+            elif 'input_rot' in key:
+                lr_rot.append(value)
+            elif 'input_shape' in key:
+                lr_shape.append(value)
+            else:       # input_pose
+                lr_pose.append(value)
 
     model_params = [{'params': lr_xyz_root, 'lr': init_lr * 5e0},
                     {'params': lr_rot, 'lr': init_lr},
