@@ -112,10 +112,7 @@ class HandModel(nn.Module):
         # self.pose_.data = self.input_pose
         # self.pose_ = self.compute_pose_all(self.input_pose, self.input_tip_pose)
 
-        mano_param = torch.cat([self.input_rot, clip_mano_hand_pose(self.pose_)], dim=1)
-        print(mano_param)
-        for tmp_idx in range(7, 13):
-            mano_param[:, tmp_idx*3:tmp_idx*3+3] = -mano_param[:, tmp_idx*3:tmp_idx*3+3]
+        mano_param = torch.cat([self.input_rot, self.pose_], dim=1)
 
         hand_verts, hand_joints = self.mano_layer(mano_param, self.shape_)
 
