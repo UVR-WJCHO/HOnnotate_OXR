@@ -52,6 +52,11 @@ class MultiViewLossFunc(nn.Module):
         self.prev_hand_pose = None
         self.prev_hand_shape = None
 
+
+    def reset_prev_pose(self):
+        self.prev_hand_pose = None
+        self.prev_hand_shape = None
+
     def set_visibility_weight(self, CFG_W):
         vis = {}
         for camIdx in range(len(CFG_CAMID_SET)):
@@ -138,8 +143,8 @@ class MultiViewLossFunc(nn.Module):
                     verts_obj_set[camIdx] = verts_obj_cam
                     pred_obj_render_set[camIdx] = pred_obj_rendered
 
-        ## compute losses
-        losses = {}
+        ## compute losses per cam
+        losses_cam = {}
         for camIdx in camIdxSet:
             loss = {}
 
@@ -153,7 +158,7 @@ class MultiViewLossFunc(nn.Module):
                 loss_palm = torch.sum(loss_palm.reshape(self.bs, -1), -1)
                 loss['kpts_palm'] = loss_palm
 
-            elif 'kpts2d' in self.loss_dict:
+            if 'kpts2d' in self.loss_dict:
                 pred_kpts2d = projectPoints(joints_set[camIdx], self.Ks[camIdx])
 
                 if parts == -1 or parts == 2:
@@ -165,7 +170,6 @@ class MultiViewLossFunc(nn.Module):
 
                 loss_kpts2d = torch.sum(loss_kpts2d.reshape(self.bs, -1), -1)
                 loss['kpts2d'] = loss_kpts2d
-
 
             if 'depth_rel' in self.loss_dict:
                 joint_depth_rel = joints_set[camIdx][:, :, -1] - joints_set[camIdx][:, 0, -1]
@@ -182,22 +186,6 @@ class MultiViewLossFunc(nn.Module):
                     valid_idx = CFG_valid_index[parts]
                     loss_depth_rel = self.mse_loss(joint_depth_rel[:, valid_idx], gt_depth_rel[:, valid_idx])
                 loss['depth_rel'] = loss_depth_rel * 5e1
-
-            if 'reg' in self.loss_dict:
-                pose_reg = torch.sum((pred['pose'] ** 2).view(self.bs, -1), -1)
-                shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1)
-
-                ## wrong adoption? check parameter's order
-                thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
-                phyConst = torch.sum(thetaConstMin ** 2 + thetaConstMax ** 2)
-
-                loss['reg'] = pose_reg + shape_reg + phyConst * 10000.0
-
-                if pred_obj is not None:
-                    pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
-                    pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
-                    loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 10000.0
-                    loss['reg'] += torch.sum(loss_reg_obj)
 
             if render:
                 pred_rendered = pred_render_set[camIdx]
@@ -274,30 +262,51 @@ class MultiViewLossFunc(nn.Module):
                         # cv2.imshow("depth_gap_vis", depth_gap_vis)
                         # cv2.waitKey(0)
 
-            if 'contact' in self.loss_dict:
-                if contact and pred_obj is not None:
-                    hand_pcd = Pointclouds(points=verts_set[camIdx])
-                    obj_mesh = Meshes(verts=verts_obj_set[camIdx].detach(), faces=pred_obj['faces']) # optimize only hand meshes
+            losses_cam[camIdx] = loss
 
-                    inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
-                    contact_mask = inter_dist < CFG_CONTACT_DIST
+        ## compute single losses
+        losses_single = {}
+        if 'reg' in self.loss_dict:
+            pose_reg = torch.sum((pred['pose'] ** 2).view(self.bs, -1), -1)
+            shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1)
 
-                    loss['contact'] = inter_dist[contact_mask].sum() * CFG_CONTACT_LOSS_WEIGHT
-                else:
-                    loss['contact'] = self.default_zero
+            ## wrong adoption? check parameter's order
+            thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
+            phyConst = torch.sum(thetaConstMin ** 2 + thetaConstMax ** 2)
 
-            if 'temporal' in self.loss_dict:
-                if self.prev_hand_pose == None:
-                    loss['temporal'] = 0
-                    self.prev_hand_pose = pred['pose'].detach()
-                    self.prev_hand_shape = pred['shape'].detach()
-                else:
-                    loss['temporal'] = (pred['pose'] - self.prev_hand_pose) ** 2 + \
-                                       (pred['shape'] - self.prev_hand_shape) ** 2
+            losses_single['reg'] = pose_reg + shape_reg + phyConst * 10000.0
 
-            losses[camIdx] = loss
+            if pred_obj is not None:
+                pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
+                pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
+                loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 10000.0
+                losses_single['reg'] += torch.sum(loss_reg_obj)
 
-        return losses
+        if 'contact' in self.loss_dict:
+            if contact and pred_obj is not None:
+                hand_pcd = Pointclouds(points=verts_set[camIdx])
+                obj_mesh = Meshes(verts=verts_obj_set[camIdx].detach(),
+                                  faces=pred_obj['faces'])  # optimize only hand meshes
+
+                inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
+                contact_mask = inter_dist < CFG_CONTACT_DIST
+
+                losses_single['contact'] = inter_dist[contact_mask].sum() * CFG_CONTACT_LOSS_WEIGHT
+            else:
+                losses_single['contact'] = self.default_zero
+
+
+        if 'temporal' in self.loss_dict:
+            if self.prev_hand_pose == None:
+                losses_single['temporal'] = self.default_zero
+                self.prev_hand_pose = pred['pose'].detach()
+                self.prev_hand_shape = pred['shape'].detach()
+            else:
+                loss_temporal = torch.sum((pred['pose'] - self.prev_hand_pose) ** 2) + \
+                                   torch.sum((pred['shape'] - self.prev_hand_shape) ** 2)
+                losses_single['temporal'] = loss_temporal * 100000.
+
+        return losses_cam, losses_single
 
     def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False):
         for camIdx in camIdxSet:

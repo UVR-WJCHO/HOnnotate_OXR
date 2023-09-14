@@ -57,7 +57,7 @@ def __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init
         else:
             obj_param = None
 
-        losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
+        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
                            loss_dict=loss_dict_global)
 
         ### visualization for debug
@@ -65,8 +65,12 @@ def __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init
         #                 camIdxSet=[0], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
-            for k in loss_dict_global:
-                loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
+            loss_cam = losses[camIdx]
+            for key in loss_cam.keys():
+                loss_all[key] += loss_cam[key] * float(CFG_CAM_WEIGHT[camIdx])
+
+        for key in losses_single.keys():
+            loss_all[key] += losses_single[key]
 
         total_loss = sum(loss_all[k] * loss_weight[k] for k in loss_dict_global) / len(detected_cams)
 
@@ -86,7 +90,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
     kps_loss = {}
 
     grad_order = [[True, False, False], [True, True, False], [True, True, True]]
-    loss_dict_parts = ['kpts2d', 'reg']#, 'depth_rel']
+    loss_dict_parts = ['kpts2d', 'reg', 'depth_rel']
 
     for step in range(3):
         model.change_grads_parts(root=True, rot=True,
@@ -111,12 +115,16 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
             else:
                 obj_param = None
 
-            losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
+            losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
             # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
             for camIdx in detected_cams:
-                for k in loss_dict_parts:
-                    loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
+                loss_cam = losses[camIdx]
+                for key in loss_cam.keys():
+                    loss_all[key] += loss_cam[key] * float(CFG_CAM_WEIGHT[camIdx])
+
+            for key in losses_single.keys():
+                loss_all[key] += losses_single[key]
 
             total_loss = sum(loss_all[k] * loss_weight[k] for k in loss_dict_parts) / len(detected_cams)
 
@@ -154,13 +162,12 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
     optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=0.1, ratio_scale=0.1, ratio_pose=0.1)
 
-    loss_weight = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0}
+    loss_weight = CFG_LOSS_WEIGHT
     for iter in range(iter):
         t_iter = time.time()
 
         optimizer.zero_grad()
-
-        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'depth_rel': 0.0}
+        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'depth_rel': 0.0, 'temporal': 1.0}
 
         hand_param = model()
         if CFG_WITH_OBJ:
@@ -168,13 +175,19 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         else:
             obj_param = None
 
-        losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
+        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
         # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
+        ## apply cam weight
         for camIdx in detected_cams:
-            for k in CFG_LOSS_DICT:
-                loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
+            loss_cam = losses[camIdx]
+            for key in loss_cam.keys():
+                loss_all[key] += loss_cam[key] * float(CFG_CAM_WEIGHT[camIdx])
 
+        for key in losses_single.keys():
+            loss_all[key] += losses_single[key]
+
+        ## apply loss weight
         total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
 
         total_loss.backward(retain_graph=True)
@@ -268,6 +281,8 @@ def main(argv):
         flag_start = True
         ## Start optimization per frame
         for frame in range(len(mas_dataloader)):
+            loss_func.reset_prev_pose()
+
             t_start = time.time()
 
             # check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
@@ -294,7 +309,7 @@ def main(argv):
 
             #TODO
             """
-            - step 별 lr update
+            - (done)step 별 lr update
             - temporal loss, lr update
             
             - 중간 iteration 이후에 2d kpts loss weight 낮추는 방식 결과 확인.
@@ -317,15 +332,17 @@ def main(argv):
             ### update global pose
             """
                 loss : 'kpts_palm' ~ multi-view 2D kpts loss for palm joints (0, 2, 3, 4)
-                target param : wrist pose/rot, hand scale 
+                target : wrist pose/rot, hand scale
+                except : hand shape, hand pose 
             """
             __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName)
 
             ### update incrementally
             """
-                loss : 'kpts2d' ~ multi-view 2D kpts loss for each set of hand parts(wrist to tip)
-                       'reg'
-                target param : wrist pose/rot, hand scale, hand pose(each part) 
+                loss : 'kpts2d', 'reg', 'depth_rel'
+                    ~ multi-view 2D kpts loss for each set of hand parts(wrist to tip)                       
+                target : wrist pose/rot, hand scale, hand pose(each part) 
+                except : hand shape
             """
             __update_parts__(model, model_obj, loss_func, detected_cams, frame,
                              lr_init, lr_init_obj, trialName, iterperpart=20)

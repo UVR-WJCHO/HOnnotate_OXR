@@ -7,7 +7,9 @@ from enum import IntEnum
 CFG_WITH_OBJ = False
 CFG_EARLYSTOPPING = False
 
-CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth_rel']#, 'seg', 'depth']#, ] #, 'contact', 'temporal']
+CFG_LOSS_DICT = ['kpts2d', 'reg', 'depth_rel', 'temporal']#, ]#, 'seg', 'depth']#, ] #, 'contact', 'temporal']
+
+CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0, 'temporal': 1.0}
 
 CFG_LR_INIT = 0.05
 CFG_LR_INIT_OBJ = 0.05
