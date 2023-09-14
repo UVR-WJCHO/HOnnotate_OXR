@@ -11,7 +11,7 @@ def set_lr_forHand(model, init_lr):
     lr_rot = []
     lr_pose = []
     lr_shape = []
-    lr_tip = []
+    lr_scale = []
 
     params_dict = dict(model.named_parameters())
     for key, value in params_dict.items():
@@ -20,20 +20,20 @@ def set_lr_forHand(model, init_lr):
                 lr_xyz_root.append(value)
             elif 'z_root' in key:
                 lr_xyz_root.append(value)
+            elif 'input_scale' in key:
+                lr_scale.append(value)
             elif 'input_rot' in key:
                 lr_rot.append(value)
-            elif 'input_pose' in key:
-                lr_pose.append(value)
             elif 'input_shape' in key:
                 lr_shape.append(value)
-            elif 'input_tip_pose' in key:
-                lr_tip.append(value)
+            else:       # input_pose
+                lr_pose.append(value)
 
-    model_params = [{'params': lr_xyz_root, 'lr': init_lr * 20},
+    model_params = [{'params': lr_xyz_root, 'lr': init_lr * 5e0},
                     {'params': lr_rot, 'lr': init_lr},
                     {'params': lr_pose, 'lr': init_lr},
                     {'params': lr_shape, 'lr': init_lr},
-                    {'params': lr_tip, 'lr': init_lr}]
+                    {'params': lr_scale, 'lr': init_lr * 2e0}]
     return model_params
 
 def set_lr_forObj(model, init_lr):
@@ -47,17 +47,30 @@ def set_lr_forObj(model, init_lr):
     return model_params
 
 
-def initialize_optimizer(model, model_obj, CFG_LR_INIT, CFG_WITH_OBJ, CFG_LR_INIT_OBJ):
+def initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj):
 
-    params_hand = set_lr_forHand(model, CFG_LR_INIT)
+    params_hand = set_lr_forHand(model, lr_init)
     if not CFG_WITH_OBJ:
         optimizer = torch.optim.Adam(params_hand)
     else:
-        params_obj = set_lr_forObj(model_obj, CFG_LR_INIT_OBJ)
+        params_obj = set_lr_forObj(model_obj, lr_init_obj)
         params = list(params_hand) + list(params_obj)
         optimizer = torch.optim.Adam(params)
 
     return optimizer
+
+def update_optimizer(optimizer, ratio_root=1.0, ratio_rot=1.0, ratio_pose=1.0, ratio_shape=1.0, ratio_scale=1.0):
+    # order : ': lr_xyz_root, lr_rot, lr_pose, lr_shape, lr_scale
+
+    optimizer.param_groups[0]['lr'] *= ratio_root
+    optimizer.param_groups[1]['lr'] *= ratio_rot
+    optimizer.param_groups[2]['lr'] *= ratio_pose
+    optimizer.param_groups[3]['lr'] *= ratio_shape
+    optimizer.param_groups[4]['lr'] *= ratio_scale
+
+    return optimizer
+
+
 
 
 def clip_mano_hand_rot(rot_tensor):

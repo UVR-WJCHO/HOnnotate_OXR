@@ -7,16 +7,18 @@ from enum import IntEnum
 CFG_WITH_OBJ = False
 CFG_EARLYSTOPPING = False
 
-CFG_LOSS_DICT = ['kpts2d', 'reg', 'depth_rel']#, 'seg', 'depth']#, ] #, 'contact', 'temporal']
+CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth_rel']#, 'seg', 'depth']#, ] #, 'contact', 'temporal']
 
 CFG_LR_INIT = 0.1
 CFG_LR_INIT_OBJ = 0.1
 
+CFG_NUM_ITER = 50
+
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
-CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,0.3,0.3,0.3],
-                         'sub1':[1.0,0.3,0.3,1.0,1.0],
+CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
+                         'sub1':[1.0,0.7,0.7,1.0,1.0],
                          'sub2':[1.0, 1.0,1.0,1.0,1.0],
                          'sub3':[0.7,1.0,1.0,1.0,1.0]}
 
@@ -26,12 +28,14 @@ CFG_vertspermarker = {
     "cardboard_box" : [39,1313,716,1294],
 }
 
+CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],
+                   [0, 1,2,3, 5,6,7, 9,10,11, 13,14,15, 17,18,19]]
 
 ## Config
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 
-CFG_NUM_ITER = 150
+
 CFG_DEVICE = 'cuda'
 CFG_BATCH_SIZE = 1
 CFG_MANO_PATH = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
@@ -52,6 +56,7 @@ CFG_CONTACT_START_THRESHOLD = 15000 # use contact loss when kpts_loss < 15000
 CFG_CONTACT_DIST = 8
 CFG_CONTACT_LOSS_WEIGHT = 4
 
+CFG_PALM_IDX = [0, 5, 9, 13]
 
 class GRASPType(IntEnum):
     '''

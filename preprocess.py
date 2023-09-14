@@ -51,7 +51,7 @@ import modules.common.transforms as tf
 from natsort import natsorted
 
 
-
+flag_2D_tip_exist = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -98,6 +98,7 @@ flag_deep_segmentation = True
 
 num_global = 0
 
+CFG_TIP_NAME = ['thumb', 'index', 'middle', 'ring', 'pinky']
 
 def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir):
     # print(type(rgb))
@@ -176,6 +177,8 @@ class loadDataset():
 
         self.prev_bbox = None
         self.wrist_px = None
+
+        self.tip_db_dir = os.path.join(camResultDir, '2D_tip_data')
 
         intrinsics, dist_coeffs, extrinsics, err = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
         self.intrinsics = intrinsics
@@ -306,6 +309,8 @@ class loadDataset():
         self.new_camera = self.intrinsic_undistort[camID]
 
         self.prev_bbox = self.init_bbox[camID]
+
+        self.tip_data_dir = os.path.join(self.tip_db_dir, camID)
 
     def init_info(self):
         self.annotCamDir = os.path.join(self.annotDir, self.camID)
@@ -459,7 +464,6 @@ class loadDataset():
 
         return pose_calc
 
-
     def saveObjdata(self):
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker.pkl'), 'wb') as f:
             pickle.dump(self.marker_sampled, f, pickle.HIGHEST_PROTOCOL)
@@ -509,8 +513,33 @@ class loadDataset():
         with open(os.path.join(self.annotCamDir, "anno_%04d.json"%save_idx), "w") as w:
             json.dump(self.info, w, ensure_ascii=False)
 
-
         self.debug = rgb.copy()
+
+        if flag_2D_tip_exist:
+            tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
+            tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
+            if os.path.exists(tip_data_path):
+                with open(tip_data_path, "r") as data:
+                    tip_data = json.load(data)['shapes']
+
+                tip_kpts = {}
+                for tip in tip_data:
+                    tip_name = tip['label']
+                    tip_2d = tip['points'][0]
+                    tip_kpts[tip_name] = tip_2d
+
+                # debug = tip_data_path[:-5] + '.jpg'
+                # debug = cv2.imread(debug)
+                #
+                # for key, value in tip_kpts.items():
+                #     cv2.circle(debug, (int(value[0]), int(value[1])), radius=2, thickness=-1, color=(0, 0, 255))
+                #
+                # cv2.imshow("vis", debug)
+                # cv2.waitKey(0)
+
+                self.tip_data = tip_kpts
+            else:
+                self.tip_data = None
 
         return (rgb, depth)
 
@@ -584,7 +613,6 @@ class loadDataset():
         self.prev_bbox = np.copy(bbox)
 
         return [bbox, img2bb_trans, bb2img_trans, procImgSet, kps]
-
 
     def extractBbox(self, idx_to_coord, image_rows, image_cols):
             # consider fixed size bbox
@@ -694,8 +722,6 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.segVisDir, imgName), rgb*mask_hand[:,:,np.newaxis])
 
 
-
-
     def postProcessNone(self, idx):
         meta_info = {'bb': None, 'img2bb': None,
                      'bb2img': None, 'kpts': None, 'kpts_crop': None}
@@ -719,7 +745,12 @@ class loadDataset():
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
-        meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
+        if flag_2D_tip_exist:
+            meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
+                         'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts),
+                         '2D_tip_gt': self.tip_data}
+        else:
+            meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
 
         metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
@@ -728,7 +759,7 @@ class loadDataset():
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
 
-
+"""
 def preprocess_single_cam(db, tqdm_func, global_tqdm):
     with tqdm_func(total=len(db)) as progress:
         progress.set_description(f"{db.seq} - {db.trial} [{db.camID}]")
@@ -764,7 +795,7 @@ def preprocess_single_cam(db, tqdm_func, global_tqdm):
         db.saveObjdata()
 
     return True
-
+"""
 def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
     with tqdm_func(total=len(dbs[0])) as progress:
@@ -793,24 +824,20 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 images_list.append(images)
                 output_list.append(output)
 
-            if not all(x is None for x in output_list):
-                for db, images, output in zip(dbs, images_list, output_list):
-                    if output is not None:
-                        bb, img2bb, bb2img, procImgSet, kps = output
-                        procKps = db.translateKpts(np.copy(kps), img2bb)
-                        db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
-                        db.updateObjdata(idx, save_idx)
+            for db, images, output in zip(dbs, images_list, output_list):
+                if output is not None:
+                    bb, img2bb, bb2img, procImgSet, kps = output
+                    procKps = db.translateKpts(np.copy(kps), img2bb)
+                    db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
+                    db.updateObjdata(idx, save_idx)
 
-                        if flag_segmentation:
-                            db.segmentation(save_idx, procImgSet, procKps, img2bb)
-                    else:
-                        db.postProcessNone(save_idx)
-                progress.update()
-                global_tqdm.update()
-                save_idx += 1
-            else:
-                progress.update()
-                global_tqdm.update()
+                    if flag_segmentation:
+                        db.segmentation(save_idx, procImgSet, procKps, img2bb)
+                else:
+                    db.postProcessNone(save_idx)
+            progress.update()
+            global_tqdm.update()
+            save_idx += 1
 
         for db in dbs:
             db.saveObjdata()

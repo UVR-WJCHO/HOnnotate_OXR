@@ -106,18 +106,21 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ks = self.Ks[main_cam_idx]
         self.main_Ms = self.Ms[main_cam_idx]
 
-    def forward(self, pred, pred_obj, camIdxSet, frame, contact=False):
+    def forward(self, pred, pred_obj, camIdxSet, frame, loss_dict, contact=False, parts=-1):
+
+        self.loss_dict = loss_dict
+
         render = False
-        if 'depth' in CFG_LOSS_DICT or 'seg' in CFG_LOSS_DICT:
+        if 'depth' in loss_dict or 'seg' in loss_dict:
             render = True
 
         verts_set = {}
         verts_obj_set = {}
         joints_set = {}
-
         pred_render_set = {}
         pred_obj_render_set = {}
 
+        ## compute per cam predictions
         for camIdx in camIdxSet:
             verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms[camIdx]), 0)
             joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
@@ -135,18 +138,30 @@ class MultiViewLossFunc(nn.Module):
                     verts_obj_set[camIdx] = verts_obj_cam
                     pred_obj_render_set[camIdx] = pred_obj_rendered
 
-
+        ## compute losses
         losses = {}
         for camIdx in camIdxSet:
             loss = {}
+
             self.set_gt(camIdx, frame)
 
-            if 'kpts2d' in self.loss_dict:
+            if 'kpts_palm' in self.loss_dict:
+                pred_kpts2d_palm = projectPoints(joints_set[camIdx], self.Ks[camIdx])[:, CFG_PALM_IDX, :]
+                gt_kpts2d_palm = self.gt_kpts2d[:, CFG_PALM_IDX, :]
+
+                loss_palm = torch.sqrt((pred_kpts2d_palm - gt_kpts2d_palm) ** 2)
+                loss_palm = torch.sum(loss_palm.reshape(self.bs, -1), -1)
+                loss['kpts_palm'] = loss_palm * 10.0
+
+            elif 'kpts2d' in self.loss_dict:
                 pred_kpts2d = projectPoints(joints_set[camIdx], self.Ks[camIdx])
 
-
-                # loss_kpts2d = self.mse_loss(pred_kpts2d, self.gt_kpts2d) #* self.vis[camIdx]
-                loss_kpts2d = torch.sqrt((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
+                if parts == -1 or parts == 2:
+                    loss_kpts2d = torch.sqrt((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
+                else:
+                    valid_idx = CFG_valid_index[parts]
+                    loss_kpts2d = torch.sqrt((pred_kpts2d[:, valid_idx, :] - self.gt_kpts2d[:, valid_idx, :]) ** 2) \
+                                  * self.vis[camIdx][valid_idx]
 
                 loss_kpts2d = torch.sum(loss_kpts2d.reshape(self.bs, -1), -1)
                 loss['kpts2d'] = loss_kpts2d * 10.0
@@ -161,26 +176,27 @@ class MultiViewLossFunc(nn.Module):
                 ratio = joint_scale / gt_scale
 
                 gt_depth_rel = torch.mul(gt_depth_rel, ratio)
-
-                loss_depth_rel = self.mse_loss(joint_depth_rel, gt_depth_rel)
+                if parts == -1 or parts == 2:
+                    loss_depth_rel = self.mse_loss(joint_depth_rel, gt_depth_rel)
+                else:
+                    valid_idx = CFG_valid_index[parts]
+                    loss_depth_rel = self.mse_loss(joint_depth_rel[:, valid_idx], gt_depth_rel[:, valid_idx])
                 loss['depth_rel'] = loss_depth_rel * 5e1
 
             if 'reg' in self.loss_dict:
-                pose_reg = self.compute_reg_loss(pred['pose'], self.pose_mean_tensor, self.pose_reg_tensor)
+                pose_reg = torch.sum((pred['pose'] ** 2).view(self.bs, -1), -1)
                 shape_reg = torch.sum((pred['shape'] ** 2).view(self.bs, -1), -1)
 
                 ## wrong adoption? check parameter's order
                 thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
                 phyConst = torch.sum(thetaConstMin ** 2 + thetaConstMax ** 2)
-                # pose_tip = torch.squeeze(joints_set[camIdx][:, [4, 8, 12, 16, 20], :])
-                # pose_center = torch.mean(pose_tip, dim=0)
-                # dist = torch.sum(torch.abs(pose_tip - pose_center))
+
                 loss['reg'] = pose_reg + shape_reg + phyConst * 10000.0
 
                 if pred_obj is not None:
                     pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
                     pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
-                    loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 100000.0
+                    loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 10000.0
                     loss['reg'] += torch.sum(loss_reg_obj)
 
             if render:
@@ -290,7 +306,7 @@ class MultiViewLossFunc(nn.Module):
             self.set_gt(camIdx, frame)
             # set camera status for projection
 
-            debug = np.squeeze(self.gt_kpts3d.cpu().detach().numpy())
+            # debug = np.squeeze(self.gt_kpts3d.cpu().detach().numpy())
             ## HAND ##
             # project hand joint
             joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
@@ -370,17 +386,17 @@ class MultiViewLossFunc(nn.Module):
                 depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
                 seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
 
-            blend_gt_name = "blend_gt_" + camID + "_" + str(frame)
-            blend_pred_name = "blend_pred_" + camID + "_" + str(frame)
-            blend_pred_seg_name = "blend_pred_seg_" + camID + "_" + str(frame)
-            blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
-            blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
+            blend_gt_name = "blend_gt_" + camID #+ "_" + str(frame)
+            blend_pred_name = "blend_pred_" + camID #+ "_" + str(frame)
+            blend_pred_seg_name = "blend_pred_seg_" + camID #+ "_" + str(frame)
+            blend_depth_name = "blend_depth_" + camID #+ "_" + str(frame)
+            blend_seg_name = "blend_seg_" + camID #+ "_" + str(frame)
 
             if not flag_headless:
                 cv2.imshow(blend_gt_name, img_blend_gt)
                 cv2.imshow(blend_pred_name, img_blend_pred)
                 # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-                cv2.imshow(blend_depth_name, depth_gap)
+                # cv2.imshow(blend_depth_name, depth_gap)
                 # cv2.imshow(blend_seg_name, seg_gap)
                 cv2.waitKey(0)
             else:

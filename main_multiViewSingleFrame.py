@@ -12,7 +12,7 @@ from modules.renderer import Renderer
 from modules.meshModels import HandModel, ObjModel
 from modules.lossFunc import MultiViewLossFunc
 from utils import *
-from utils.modelUtils import initialize_optimizer, set_lr_forHand, set_lr_forObj
+from utils.modelUtils import initialize_optimizer, update_optimizer
 
 from absl import flags
 from absl import app
@@ -34,13 +34,20 @@ flags.DEFINE_integer('initNum', 30, 'initial frame num of trial_0, check mediapi
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 FLAGS(sys.argv)
 
-def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=30):
-    kps_loss = {}
+def __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=50):
+
+    loss_dict_global = ['kpts_palm']  # , 'reg']
+
+    model.change_grads_all(root=True, rot=True, pose=False, shape=False, scale=True)
+    optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
+    # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
+
+    loss_weight = {'kpts_palm': 1.0, 'reg': 1.0}
     for iter in range(iter):
         t_iter = time.time()
+        optimizer.zero_grad()
 
-        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'depth_rel': 0.0}
-        loss_weight = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0}
+        loss_all = {'kpts_palm': 0.0, 'reg': 0.0}
 
         hand_param = model()
         if CFG_WITH_OBJ:
@@ -48,35 +55,87 @@ def __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, op
         else:
             obj_param = None
 
-        losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame)
+        losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
+                           loss_dict=loss_dict_global)
 
         ### visualization for debug
         # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
-        #                 camIdxSet=[0, 1, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        #                 camIdxSet=[0], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         for camIdx in detected_cams:
-            for k in CFG_LOSS_DICT:
+            for k in loss_dict_global:
                 loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
 
-        total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
+        total_loss = sum(loss_all[k] * loss_weight[k] for k in loss_dict_global) / len(detected_cams)
 
-        optimizer.zero_grad()
         total_loss.backward(retain_graph=True)
         optimizer.step()
         # lr_scheduler.step()
 
-        cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
-        kps_loss[iter] = cur_kpt_loss
-
         iter_t = time.time() - t_iter
-        logs = ["[{} - frame {}] [t : {:.2f} sec] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter_t, iter,
-                                                                                 total_loss.item())]
+        logs = ["[{} - frame {}] [Global] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
         logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
-                 key in CFG_LOSS_DICT]
+                 key in loss_dict_global]
         logging.info(''.join(logs))
 
 
-def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=150):
+def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iterperpart=20):
+
+    kps_loss = {}
+
+    grad_order = [[True, False, False], [True, True, False], [True, True, True]]
+    loss_dict_parts = ['kpts2d', 'reg']#, 'depth_rel']
+
+    for step in range(3):
+        model.change_grads_parts(root=True, rot=True,
+                                 pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2],
+                                 shape=False, scale=True)
+
+        optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
+        # optimizer = update_optimizer(optimizer, ratio_root=0.2, ratio_rot=0.2, ratio_scale=0.2)
+        # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
+
+        loss_weight = {'kpts2d': 1.0, 'reg': 1.0, 'depth_rel': 1.0}
+        for iter in range(iterperpart):
+            t_iter = time.time()
+
+            optimizer.zero_grad()
+
+            loss_all = {'kpts2d': 0.0, 'reg': 0.0, 'depth_rel': 0.0}
+
+            hand_param = model()
+            if CFG_WITH_OBJ:
+                obj_param = model_obj()
+            else:
+                obj_param = None
+
+            losses = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
+            # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 1], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+
+            for camIdx in detected_cams:
+                for k in loss_dict_parts:
+                    loss_all[k] += losses[camIdx][k] * float(CFG_CAM_WEIGHT[camIdx])
+
+            total_loss = sum(loss_all[k] * loss_weight[k] for k in loss_dict_parts) / len(detected_cams)
+
+            total_loss.backward(retain_graph=True)
+            optimizer.step()
+            # lr_scheduler.step()
+
+            cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
+            kps_loss[iter] = cur_kpt_loss
+
+            iter_t = time.time() - t_iter
+            logs = ["[{} - frame {}] [Parts] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter,
+                                                                                     total_loss.item())]
+            logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
+                     key in loss_dict_parts]
+            logging.info(''.join(logs))
+
+
+
+
+def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=150):
 
     kps_loss = {}
     use_contact_loss = False
@@ -87,11 +146,21 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
     ealry_stopping_patience = 0
     ealry_stopping_patience_v2 = 0
 
+    # model.change_grads(root=True, rot=True, pose=True, shape=True, scale=False)
+
+    model.change_grads_all(root=True, rot=True, pose=True, shape=True, scale=True)
+    optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
+    # optimizer = update_optimizer(optimizer, ratio_root=0.5, ratio_rot=0.5, ratio_scale=0.5, ratio_pose=0.5)
+
+    loss_weight = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0}
     for iter in range(iter):
         t_iter = time.time()
 
+        optimizer.zero_grad()
+        # if frame == 1 and iter == 721:
+        #     print("ss")
+
         loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'depth_rel': 0.0}
-        loss_weight = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0}
 
         hand_param = model()
         if CFG_WITH_OBJ:
@@ -109,7 +178,6 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
 
         total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
 
-        optimizer.zero_grad()
         total_loss.backward(retain_graph=True)
         optimizer.step()
         # lr_scheduler.step()
@@ -118,15 +186,14 @@ def __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optim
         kps_loss[iter] = cur_kpt_loss
 
         iter_t = time.time() - t_iter
-        logs = ["[{} - frame {}] [t : {:.2f} sec] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter_t, iter,
-                                                                                 total_loss.item())]
+        logs = ["[{} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
         logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
                  key in CFG_LOSS_DICT]
         logging.info(''.join(logs))
 
         ## criteria for contact loss
-        if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
-            use_contact_loss = True
+        # if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
+        #     use_contact_loss = True
 
 
 
@@ -199,12 +266,13 @@ def main(argv):
             model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh).to(CFG_DEVICE)
             loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
 
+        flag_start = True
         ## Start optimization per frame
         for frame in range(len(mas_dataloader)):
             t_start = time.time()
 
             # check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
-            if trialIdx == 0 and frame < FLAGS.initNum:
+            if trialIdx == 0 and frame < FLAGS.initNum - 1:
                 continue
 
             ### skip the frame if detected hand is less than 3
@@ -225,18 +293,48 @@ def main(argv):
                 marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
                 loss_func.set_object_marker_pose(marker_cam_pose, CFG_vertspermarker[obj_dataloader.obj_name])
 
-            ### initialize optimizer, scheduler
-            optimizer = initialize_optimizer(model, model_obj, CFG_LR_INIT, CFG_WITH_OBJ, CFG_LR_INIT_OBJ)
-            # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=30, eta_min=1e-9)
+            #TODO
+            """
+            - step 별 lr update
+            - temporal loss, lr update
+            
+            - 중간 iteration 이후에 2d kpts loss weight 낮추는 방식 결과 확인.
+            
+            - object pose update issue
+            - contact loss check
+            
+            - GT tip loss 추가
+            """
 
-            ### update global pos, rot first
-            model.change_grads(root=True, rot=True, pose=False, shape=False, scale=False)
-            __update_global_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=30)
+            ### initialize optimizer, scheduler
+            lr_init = CFG_LR_INIT * 0.1
+            lr_init_obj = CFG_LR_INIT_OBJ * 0.1
+
+            if flag_start:
+                lr_init *= 10.0
+                lr_init_obj *= 10.0
+                flag_start = False
+
+            ### update global pose
+            """
+                loss : 'kpts_palm' ~ multi-view 2D kpts loss for palm joints (0, 2, 3, 4)
+                target param : wrist pose/rot, hand scale 
+            """
+            __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName)
+
+            ### update incrementally
+            """
+                loss : 'kpts2d' ~ multi-view 2D kpts loss for each set of hand parts(wrist to tip)
+                       'reg'
+                target param : wrist pose/rot, hand scale, hand pose(each part) 
+            """
+            __update_parts__(model, model_obj, loss_func, detected_cams, frame,
+                             lr_init, lr_init_obj, trialName, iterperpart=20)
+
 
             ### update all
-            model.change_grads(root=True, rot=True, pose=True, shape=True, scale=True)
-            __update_all_pose__(model, model_obj, loss_func, detected_cams, frame, optimizer, trialName, iter=CFG_NUM_ITER)
-
+            __update_all__(model, model_obj, loss_func, detected_cams, frame,
+                           lr_init, lr_init_obj, trialName, iter=CFG_NUM_ITER)
 
             ### final result of frame
             pred_hand = model()
@@ -256,13 +354,6 @@ def main(argv):
 
             print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
             save_num += 1
-
-            ####### debug #############
-            try:
-                cv2.waitKey(0)
-                break
-            except:
-                break
 
     print("end time : ", time.ctime())
     print("total processed frames : ", save_num)
