@@ -13,6 +13,8 @@ CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact
 
 CFG_temporal_loss_weight = 0.5e5
 
+# given original images, tipGT generated for every 30 frames. We sample it to 1/3
+CFG_tipGT_interval = 10
 
 CFG_LR_INIT = 0.05
 CFG_LR_INIT_OBJ = 0.05

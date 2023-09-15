@@ -297,7 +297,7 @@ def main(argv):
                 continue
 
             ## if prev frame has tip GT, increase current frame's temporal loss
-            if frame > 0 and mas_dataloader[frame - 1]['tip2d'] is not None:
+            if frame > 0 and frame % CFG_tipGT_interval == 0:
                 print("increase temp weight")
                 loss_func.temp_weight = CFG_temporal_loss_weight * 10.0
             else:
