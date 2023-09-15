@@ -30,8 +30,9 @@ from pstats import Stats
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
-flags.DEFINE_integer('initNum',0, 'initial frame num of trial_0, check mediapipe results')
 
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 FLAGS(sys.argv)
 
 # torch.autograd.set_detect_anomaly(True)
@@ -173,9 +174,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             obj_param = model_obj()
         else:
             obj_param = None
-
+            
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
 
         ## apply cam weight
@@ -266,8 +267,8 @@ def main(argv):
         dataloader_set = [mas_dataloader, sub1_dataloader, sub2_dataloader, sub3_dataloader]
         renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
 
-        if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
-            raise ValueError("The number of data is not same between cameras")
+        # if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
+        #     raise ValueError("The number of data is not same between cameras")
 
         ## Initialize loss function
         loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT).to(CFG_DEVICE)
@@ -368,9 +369,9 @@ def main(argv):
                 pred_obj = None
                 pred_obj_anno = [None, None]
 
-            ### save or show visualization results of frame
+            ### visualization results of frame
             loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True)
+                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
 
             ### save annotation per frame as json format
             save_annotation(target_dir_result, trialName, frame,  FLAGS.seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)

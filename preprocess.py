@@ -100,14 +100,17 @@ num_global = 0
 
 CFG_TIP_NAME = ['thumb', 'index', 'middle', 'ring', 'pinky']
 
-def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir):
+def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, obj_id):
     # print(type(rgb))
     assert isinstance(rgb, np.ndarray), "rgb type is not np.ndarray"
-    mask, vis_mask = deepSegPredict(rgb)
+    mask, vis_mask = deepSegPredict(rgb, obj_id)
     maskName = image_name + '.png'
     visName = image_name + '.jpg'
-    mask.save(os.path.join(deepSegMaskDir, maskName))
-    vis_mask.save(os.path.join(deepSegVisDir, visName))
+    if mask is not None and vis_mask is not None:
+        mask.save(os.path.join(deepSegMaskDir, maskName))
+        vis_mask.save(os.path.join(deepSegVisDir, visName))
+    else:
+        print("no deep segmentation ckpt")
 
 
 class loadDataset():
@@ -911,7 +914,7 @@ def main(argv):
                         assert os.path.exists(rgbPath), f'{rgbPath} rgb image does not exist'
                         rgb = cv2.imread(rgbPath)
                         image_name = image[:-4]
-                        deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir)
+                        deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, db.obj_id)
 
     print("end segmentation - deeplab_v3")
 
