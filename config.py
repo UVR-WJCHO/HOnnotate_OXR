@@ -4,15 +4,22 @@ from enum import IntEnum
 
 ## Debug Flags ##
 
-CFG_WITH_OBJ = False
-CFG_EARLYSTOPPING = False
+CFG_WITH_OBJ = True
+CFG_EARLYSTOPPING = True
 
-CFG_LOSS_DICT = ['kpts2d', 'reg']#, 'depth_rel']#, 'seg', 'depth']#, ] #, 'contact', 'temporal']
+CFG_LOSS_DICT = ['kpts2d', 'reg', 'depth_rel', 'temporal', 'seg', 'depth', 'kpts_tip']
 
-CFG_LR_INIT = 0.1
-CFG_LR_INIT_OBJ = 0.1
+CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0}
 
-CFG_NUM_ITER = 50
+CFG_temporal_loss_weight = 0.5e5
+
+# given original images, tipGT generated for every 30 frames. We sample it to 1/3
+CFG_tipGT_interval = 10
+
+CFG_LR_INIT = 0.05
+CFG_LR_INIT_OBJ = 0.05
+
+CFG_NUM_ITER = 150
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
@@ -57,6 +64,9 @@ CFG_CONTACT_DIST = 8
 CFG_CONTACT_LOSS_WEIGHT = 4
 
 CFG_PALM_IDX = [0, 5, 9, 13]
+CFG_TIP_IDX = {'thumb':4, 'index':8, 'middle':12, 'ring':16, 'pinky':20}
+
+
 
 class GRASPType(IntEnum):
     '''

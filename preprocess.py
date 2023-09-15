@@ -51,7 +51,7 @@ import modules.common.transforms as tf
 from natsort import natsorted
 
 
-flag_2D_tip_exist = False
+flag_2D_tip_exist = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -233,7 +233,7 @@ class loadDataset():
         # load marker set pose
         self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
         obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
-        print(obj_pose_data)
+        # print(obj_pose_data)
         assert os.path.isfile(obj_pose_data),"no obj pose data"
 
         obj_data = {}
@@ -516,7 +516,10 @@ class loadDataset():
         self.debug = rgb.copy()
 
         if flag_2D_tip_exist:
-            tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
+            # currently tip data processed on sampled data.
+            # will be update to unsampled data
+            # tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
+            tip_data_name = str(self.camID) + '_' + str(save_idx) + '.json'
             tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
             if os.path.exists(tip_data_path):
                 with open(tip_data_path, "r") as data:
@@ -526,16 +529,7 @@ class loadDataset():
                 for tip in tip_data:
                     tip_name = tip['label']
                     tip_2d = tip['points'][0]
-                    tip_kpts[tip_name] = tip_2d
-
-                # debug = tip_data_path[:-5] + '.jpg'
-                # debug = cv2.imread(debug)
-                #
-                # for key, value in tip_kpts.items():
-                #     cv2.circle(debug, (int(value[0]), int(value[1])), radius=2, thickness=-1, color=(0, 0, 255))
-                #
-                # cv2.imshow("vis", debug)
-                # cv2.waitKey(0)
+                    tip_kpts[tip_name] = np.round(tip_2d, 2)
 
                 self.tip_data = tip_kpts
             else:
@@ -744,6 +738,7 @@ class loadDataset():
         vis = paint_kpts(None, procImgSet[0], processed_kpts)
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+
 
         if flag_2D_tip_exist:
             meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),

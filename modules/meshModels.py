@@ -26,7 +26,7 @@ class HandModel(nn.Module):
 
         self.xy_root = nn.Parameter(
             torch.tensor([-0.9094, 12.0501], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
-        self.z_root = nn.Parameter(torch.tensor([6.5], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
+        self.z_root = nn.Parameter(torch.tensor([65.0], dtype=torch.float32).repeat(self.batch_size, 1).to(device))
 
         initial_rot = torch.tensor([[-1.7276, -1.6758, 2.1557]])
         self.input_rot = nn.Parameter(clip_mano_hand_rot(initial_rot.to(device)))
@@ -39,8 +39,6 @@ class HandModel(nn.Module):
         initial_pose_1 = torch.zeros((1, 15), dtype=torch.float32)
         initial_pose_2 = torch.zeros((1, 15), dtype=torch.float32)
         initial_pose_3 = torch.zeros((1, 15), dtype=torch.float32)
-
-        # initial_pose_1[0, -2] = 1.0
 
         self.input_pose_1 = nn.Parameter(initial_pose_1.to(device))
         self.input_pose_2 = nn.Parameter(initial_pose_2.to(device))
@@ -112,7 +110,7 @@ class HandModel(nn.Module):
 
         hand_verts, hand_joints = self.mano_layer(mano_param, self.shape_)
 
-        xyz_root = torch.cat([self.xy_root, self.z_root*10.0], dim=-1)
+        xyz_root = torch.cat([self.xy_root, self.z_root], dim=-1)
         hand_verts = hand_verts / self.input_scale
         hand_verts = hand_verts + xyz_root[:, None, :]
         hand_joints = hand_joints / self.input_scale
@@ -152,11 +150,11 @@ class ObjModel(nn.Module):
         obj_mat = torch.cat([self.obj_pose, self.h], dim=-1)
         return np.squeeze(obj_mat.detach().cpu().numpy())
 
-    def update_pose(self, pose):
+    def update_pose(self, pose, grad=False):
         obj_pose = torch.tensor(pose, dtype=torch.float32)
         obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
-        self.obj_pose.requires_grad = True
+        self.obj_pose.requires_grad = grad
 
     def apply_transform(self, obj_pose, obj_verts):
         obj_pose = obj_pose.view(3, 4)
