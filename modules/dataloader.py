@@ -145,6 +145,7 @@ class DataLoader:
                 sample_torch['kpts3d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d']), 0).to(self.device)
                 sample_torch['rgb'] = torch.FloatTensor(sample['rgb']).to(self.device)
                 sample_torch['depth'] = torch.unsqueeze(torch.FloatTensor(sample['depth']), 0).to(self.device)
+                sample_torch['depth_obj'] = torch.unsqueeze(torch.FloatTensor(sample['depth_obj']), 0).to(self.device)
                 sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
                 sample_torch['seg_obj'] =torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
 
@@ -210,7 +211,7 @@ class DataLoader:
             # sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
             # return sample
 
-            sample['rgb'], sample['depth'], sample['seg'], sample['seg_obj'], rgb_raw, depth_raw = self.get_img(index)
+            sample['rgb'], sample['depth'], sample['depth_obj'], sample['seg'], sample['seg_obj'], rgb_raw, depth_raw = self.get_img(index)
 
 
             ## compute visibility?
@@ -311,12 +312,16 @@ class DataLoader:
         depth[depth < depth_near_th] = 0
         depth[depth > depth_far_th] = 0
 
+        depth_obj = depth.copy()
+        depth_obj[seg_obj == 0] = 0
+        depth[seg == 0] = 0
+
         depth[seg == 0] = 0
 
         # cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
         # cv2.waitKey(0)
 
-        return rgb, depth, seg, seg_obj, rgb_raw, depth_raw
+        return rgb, depth, depth_obj, seg, seg_obj, rgb_raw, depth_raw
     
     def get_meta(self, idx):
         meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)

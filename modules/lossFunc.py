@@ -99,6 +99,7 @@ class MultiViewLossFunc(nn.Module):
 
         self.gt_rgb = gt_sample['rgb']
         self.gt_depth = gt_sample['depth']
+        self.gt_depth_obj = gt_sample['depth_obj']
 
         # if no gt seg, mask is 1 in every pixel
         self.gt_seg = gt_sample['seg']
@@ -265,7 +266,7 @@ class MultiViewLossFunc(nn.Module):
 
                     if pred_obj is not None:
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                        depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth)
+                        depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth_obj)
                         depth_obj_gap[pred_depth_obj== 0] = 0
 
                         loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
@@ -294,10 +295,11 @@ class MultiViewLossFunc(nn.Module):
             losses_single['reg'] = pose_reg * 1e2 + shape_reg * 1e2 + phyConst * 1e4
 
             if pred_obj is not None:
-                pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
-                pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
-                loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 1e4
-                losses_single['reg'] += torch.sum(loss_reg_obj)
+                #pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
+                #pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
+                #loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 1e4
+                pred_obj_pose_diff = torch.norm(pred_obj['pose'][:, :-3], dim=0)
+                losses_single['reg'] += torch.sum(pred_obj_pose_diff)
 
         if 'contact' in self.loss_dict:
             if contact and pred_obj is not None:
@@ -308,7 +310,7 @@ class MultiViewLossFunc(nn.Module):
                 inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
                 contact_mask = inter_dist < CFG_CONTACT_DIST
 
-                losses_single['contact'] = inter_dist[contact_mask].sum() * CFG_CONTACT_LOSS_WEIGHT
+                losses_single['contact'] = inter_dist[contact_mask].sum()
             else:
                 losses_single['contact'] = self.default_zero
 

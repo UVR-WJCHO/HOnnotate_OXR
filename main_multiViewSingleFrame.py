@@ -42,7 +42,7 @@ def __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init
     loss_dict_global = ['kpts_palm', 'reg']
 
     model.change_grads_all(root=True, rot=True, pose=False, shape=False, scale=True)
-    optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
+    optimizer = initialize_optimizer(model, model_obj, lr_init, False, lr_init_obj)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
     loss_weight = {'kpts_palm': 1.0, 'reg': 1.0}
@@ -98,7 +98,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
                                  pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2],
                                  shape=True, scale=True)
 
-        optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
+        optimizer = initialize_optimizer(model, model_obj, lr_init, False, lr_init_obj)
         optimizer = update_optimizer(optimizer, ratio_root=0.5 ** step, ratio_rot=0.5 ** step, ratio_scale=0.5 ** step, ratio_pose=0.5 ** step)
         # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 

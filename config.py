@@ -4,10 +4,10 @@ from enum import IntEnum
 
 ## Debug Flags ##
 
-CFG_WITH_OBJ = False
+CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = True
 
-CFG_LOSS_DICT = ['kpts2d', 'reg', 'temporal', 'seg', 'depth', 'kpts_tip'] # 'depth_rel',
+CFG_LOSS_DICT = ['kpts2d', 'reg', 'temporal', 'seg', 'depth', 'kpts_tip', 'contact'] # 'depth_rel',
 
 CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0}
 
@@ -17,7 +17,7 @@ CFG_temporal_loss_weight = 0.5e5
 CFG_tipGT_interval = 10
 
 CFG_LR_INIT = 0.05
-CFG_LR_INIT_OBJ = 0.05
+CFG_LR_INIT_OBJ = 0.0005
 
 CFG_NUM_ITER = 150
 
@@ -59,9 +59,8 @@ CFG_LOSS_THRESHOLD = 3500
 CFG_PATIENCE = 30
 CFG_PATIENCE_v2 = 50
 
-CFG_CONTACT_START_THRESHOLD = 15000 # use contact loss when kpts_loss < 15000
-CFG_CONTACT_DIST = 8
-CFG_CONTACT_LOSS_WEIGHT = 4
+CFG_CONTACT_START_THRESHOLD = 5000 # use contact loss when kpts_loss < 5000
+CFG_CONTACT_DIST = 12
 
 CFG_PALM_IDX = [0, 5, 9, 13]
 CFG_TIP_IDX = {'thumb':4, 'index':8, 'middle':12, 'ring':16, 'pinky':20}
