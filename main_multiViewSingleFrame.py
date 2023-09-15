@@ -30,7 +30,7 @@ from pstats import Stats
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
-flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum',0, 'initial frame num of trial_0, check mediapipe results')
 
 FLAGS(sys.argv)
 
@@ -142,7 +142,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
                      key in loss_dict_parts]
             logging.info(''.join(logs))
 
-def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=150):
+def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=100):
 
     kps_loss = {}
     use_contact_loss = False
@@ -158,10 +158,10 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
     model.change_grads_all(root=True, rot=True, pose=True, shape=True, scale=True)
     optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
-    optimizer = update_optimizer(optimizer, ratio_root=0.4, ratio_rot=0.4, ratio_shape=0.4, ratio_scale=0.4, ratio_pose=0.2)
+    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=1.0, ratio_pose=0.4)
 
     loss_weight = CFG_LOSS_WEIGHT
-    # loss_weight['kpts2d'] = 0.8
+    loss_weight['kpts2d'] = 0.5
     for iter in range(iter):
         t_iter = time.time()
 
@@ -175,7 +175,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             obj_param = None
 
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
 
         ## apply cam weight
@@ -213,7 +213,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
         ## sparse criterion on converge for v1 db release, need to be tight
         if CFG_EARLYSTOPPING:
-            if abs(prev_kps_loss - cur_kpt_loss) < 0.5 or abs(prev_depthseg_loss - cur_depthseg_loss) < 1.0:
+            if abs(prev_kps_loss - cur_kpt_loss) < 2.0 or abs(prev_depthseg_loss - cur_depthseg_loss) < 10.0:
                 ealry_stopping_patience_v2 += 1
 
             if cur_kpt_loss < best_loss:
@@ -320,16 +320,6 @@ def main(argv):
 
                 marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
                 loss_func.set_object_marker_pose(marker_cam_pose, CFG_vertspermarker[obj_dataloader.obj_name])
-
-            #TODO
-            """            
-            - 중간 iteration 이후에 2d kpts loss weight 낮추는 방식 결과 확인.
-            
-            - object pose updaissue
-            - contact loss check
-            
-            - GT tip loss 추가
-            """
 
             ### initialize optimizer, scheduler
             lr_init = CFG_LR_INIT * 0.1

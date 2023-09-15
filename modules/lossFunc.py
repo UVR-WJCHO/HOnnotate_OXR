@@ -186,7 +186,7 @@ class MultiViewLossFunc(nn.Module):
                                   * self.vis[camIdx][valid_idx]
 
                 loss_kpts2d = torch.sum(loss_kpts2d.reshape(self.bs, -1), -1)
-                loss['kpts2d'] = loss_kpts2d
+                loss['kpts2d'] = loss_kpts2d * 2e0
 
             if 'depth_rel' in self.loss_dict:
                 joint_depth_rel = joints_set[camIdx][:, :, -1] - joints_set[camIdx][:, 0, -1]
@@ -219,7 +219,7 @@ class MultiViewLossFunc(nn.Module):
 
                     seg_gap = torch.abs(pred_seg - self.gt_seg)
                     loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
-                    loss['seg'] = loss_seg / 5e0
+                    loss['seg'] = loss_seg * 3e-1
 
                     # if camIdx == 0:
                     #     pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
@@ -261,7 +261,7 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.waitKey(0)
 
                     loss_depth = torch.mean(depth_gap.view(self.bs, -1), -1)
-                    loss['depth'] = loss_depth * 4e2
+                    loss['depth'] = loss_depth * 2e2
 
                     if pred_obj is not None:
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
@@ -269,7 +269,7 @@ class MultiViewLossFunc(nn.Module):
                         depth_obj_gap[pred_depth_obj== 0] = 0
 
                         loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
-                        loss['depth'] += loss_depth_obj * 4e2
+                        loss['depth'] += loss_depth_obj * 2e2
 
                         # pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                         # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
@@ -291,12 +291,12 @@ class MultiViewLossFunc(nn.Module):
             thetaConstMin, thetaConstMax = self.const.getHandJointConstraints(pred['pose'])
             phyConst = torch.sum(thetaConstMin ** 2 + thetaConstMax ** 2)
 
-            losses_single['reg'] = pose_reg + shape_reg + phyConst * 10000.0
+            losses_single['reg'] = pose_reg * 1e2 + shape_reg * 1e2 + phyConst * 1e4
 
             if pred_obj is not None:
                 pred_obj_rot = pred_obj['pose'].view(3, 4)[:, :-1]
                 pred_obj_scale = torch.norm(pred_obj_rot, dim=0)
-                loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 10000.0
+                loss_reg_obj = torch.abs(pred_obj_scale - self.obj_scale) * 1e4
                 losses_single['reg'] += torch.sum(loss_reg_obj)
 
         if 'contact' in self.loss_dict:

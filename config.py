@@ -4,7 +4,7 @@ from enum import IntEnum
 
 ## Debug Flags ##
 
-CFG_WITH_OBJ = True
+CFG_WITH_OBJ = False
 CFG_EARLYSTOPPING = True
 
 CFG_LOSS_DICT = ['kpts2d', 'reg', 'depth_rel', 'temporal', 'seg', 'depth', 'kpts_tip']
@@ -24,10 +24,10 @@ CFG_NUM_ITER = 150
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
-CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
-                         'sub1':[1.0,0.7,0.7,1.0,1.0],
+CFG_CAM_PER_FINGER_VIS = {'mas':[2.0, 1.0,1.0,1.0,1.0],
+                         'sub1':[1.0,0.5,0.5,1.0,1.0],
                          'sub2':[1.0, 1.0,1.0,1.0,1.0],
-                         'sub3':[0.7,1.0,1.0,1.0,1.0]}
+                         'sub3':[0.5,1.0,1.0,1.0,1.0]}
 
 
 CFG_vertspermarker = {

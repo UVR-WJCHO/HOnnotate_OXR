@@ -58,6 +58,20 @@ def split_ext(fpath:str):
     '''
     return os.path.splitext(os.path.basename(fpath))
 
+
+def extract_depth(depth_raw, kpts2d, i):
+    depth_point = depth_raw[int(kpts2d[i, 1]), int(kpts2d[i, 0])]
+    if depth_point == 0.0:
+        depth_point = depth_raw[int(kpts2d[i, 1]) + 2, int(kpts2d[i, 0]) + 2]
+    if depth_point == 0.0:
+        depth_point = depth_raw[int(kpts2d[i, 1]) + 2, int(kpts2d[i, 0]) - 2]
+    if depth_point == 0.0:
+        depth_point = depth_raw[int(kpts2d[i, 1]) - 2, int(kpts2d[i, 0]) + 2]
+    if depth_point == 0.0:
+        depth_point = depth_raw[int(kpts2d[i, 1]) - 2, int(kpts2d[i, 0]) - 2]
+
+    return depth_point
+
 class DataLoader:
     def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, cam:str, device='cuda'):
 
@@ -196,7 +210,40 @@ class DataLoader:
             # sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
             # return sample
 
-            sample['rgb'], sample['depth'], sample['seg'], sample['seg_obj'], _, _ = self.get_img(index)
+            sample['rgb'], sample['depth'], sample['seg'], sample['seg_obj'], rgb_raw, depth_raw = self.get_img(index)
+
+
+            ## compute visibility?
+            # if index > 9:
+            #     kpts2d = np.copy(meta['kpts'][:, :2])
+            #     kpts_depth_rel = np.abs(np.copy(meta['kpts'][:, -1] - meta['kpts'][0, -1]))
+            #     kpts_scale = kpts_depth_rel[5] - kpts_depth_rel[0]
+            #
+            #     wrist_depth = extract_depth(depth_raw, kpts2d, 0)
+            #     gt_scale = extract_depth(depth_raw, kpts2d, 5)
+            #
+            #     scale = np.abs(gt_scale - wrist_depth) / kpts_scale
+            #
+            #     kpts_depth_rel = kpts_depth_rel * scale
+            #     depth_rel = []
+            #     for i in range(21):
+            #         depth_point = extract_depth(depth_raw, kpts2d, i)
+            #         d_rel = np.abs(depth_point - wrist_depth)
+            #         depth_rel.append(d_rel)
+            #
+            #     depth_gap = np.abs(depth_rel - kpts_depth_rel)
+            #     flag_vis = depth_gap < 50.
+            #     debug = rgb_raw
+            #     for i in range(21):
+            #         r = 2
+            #         if flag_vis[i]:
+            #             r=8
+            #
+            #         value = kpts2d[i, :]
+            #         cv2.circle(debug, (int(value[0]), int(value[1])), radius=r, thickness=-1, color=(0, 0, 255))
+            #     cv2.imshow("vis", debug)
+            #     cv2.waitKey(0)
+
             return sample
 
 
@@ -222,8 +269,8 @@ class DataLoader:
         return [cam_intrinsic, cam_extrinsic, dist_coeff]
 
     def get_img(self, idx):
-        rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam + '_%01d.jpg' % idx)
-        depth_raw_path = os.path.join(self.depth_raw_path, self.cam + '_%01d.png' % idx)
+        rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam, self.cam + '_%01d.jpg' % idx)
+        depth_raw_path = os.path.join(self.depth_raw_path, self.cam, self.cam + '_%01d.png' % idx)
 
         rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.jpg'%idx)
         depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
@@ -237,10 +284,10 @@ class DataLoader:
         assert os.path.exists(rgb_path)
         assert os.path.exists(depth_path)
 
-        # rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
-        # depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
-        rgb_raw = None
-        depth_raw = None
+        rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
+        depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
+        # rgb_raw = None
+        # depth_raw = None
 
         rgb = np.asarray(cv2.imread(rgb_path))
         depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
