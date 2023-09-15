@@ -150,11 +150,11 @@ class ObjModel(nn.Module):
         obj_mat = torch.cat([self.obj_pose, self.h], dim=-1)
         return np.squeeze(obj_mat.detach().cpu().numpy())
 
-    def update_pose(self, pose):
+    def update_pose(self, pose, grad=False):
         obj_pose = torch.tensor(pose, dtype=torch.float32)
         obj_pose = obj_pose.view(self.batch_size, -1)
         self.obj_pose = nn.Parameter(obj_pose.to(self.device))
-        self.obj_pose.requires_grad = True
+        self.obj_pose.requires_grad = grad
 
     def apply_transform(self, obj_pose, obj_verts):
         obj_pose = obj_pose.view(3, 4)

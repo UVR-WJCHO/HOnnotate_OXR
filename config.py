@@ -4,12 +4,15 @@ from enum import IntEnum
 
 ## Debug Flags ##
 
-CFG_WITH_OBJ = False
+CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = True
 
 CFG_LOSS_DICT = ['kpts2d', 'reg', 'depth_rel', 'temporal', 'seg', 'depth', 'kpts_tip']
 
 CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0}
+
+CFG_temporal_loss_weight = 0.5e5
+
 
 CFG_LR_INIT = 0.05
 CFG_LR_INIT_OBJ = 0.05

@@ -51,7 +51,7 @@ class MultiViewLossFunc(nn.Module):
         self.prev_hand_pose = None
         self.prev_hand_shape = None
 
-        self.temp_weight = 1e6
+        self.temp_weight = CFG_temporal_loss_weight
 
     def reset_prev_pose(self):
         self.prev_hand_pose = None
@@ -163,7 +163,7 @@ class MultiViewLossFunc(nn.Module):
                     pred_kpts2d_tip = pred_kpts2d[:, self.valid_tip_idx, :]
                     loss_tip = (pred_kpts2d_tip - self.gt_tip2d) ** 2
                     loss_tip = torch.sum(loss_tip.reshape(self.bs, -1), -1)
-                    loss['kpts_tip'] = loss_tip * 1e3
+                    loss['kpts_tip'] = loss_tip * 0.5e2
                 else:
                     loss['kpts_tip'] = self.default_zero
 
@@ -261,7 +261,7 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.waitKey(0)
 
                     loss_depth = torch.mean(depth_gap.view(self.bs, -1), -1)
-                    loss['depth'] = loss_depth * 1e2
+                    loss['depth'] = loss_depth * 4e2
 
                     if pred_obj is not None:
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
@@ -269,7 +269,7 @@ class MultiViewLossFunc(nn.Module):
                         depth_obj_gap[pred_depth_obj== 0] = 0
 
                         loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
-                        loss['depth'] += loss_depth_obj * 1e2
+                        loss['depth'] += loss_depth_obj * 4e2
 
                         # pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                         # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
@@ -316,8 +316,6 @@ class MultiViewLossFunc(nn.Module):
         if 'temporal' in self.loss_dict:
             if self.prev_hand_pose == None:
                 losses_single['temporal'] = self.default_zero
-                self.prev_hand_pose = pred['pose'].detach()
-                self.prev_hand_shape = pred['shape'].detach()
             else:
                 loss_temporal = torch.sum((pred['pose'] - self.prev_hand_pose) ** 2) + \
                                    torch.sum((pred['shape'] - self.prev_hand_shape) ** 2)

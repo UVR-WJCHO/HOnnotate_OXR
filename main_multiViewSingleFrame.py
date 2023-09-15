@@ -30,7 +30,7 @@ from pstats import Stats
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
-flags.DEFINE_integer('initNum', 10, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 
 FLAGS(sys.argv)
 
@@ -148,8 +148,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     use_contact_loss = False
 
     # set initial loss, early stopping threshold
-    best_kps_loss = torch.inf
+    best_loss = torch.inf
     prev_kps_loss = 0
+    prev_depthseg_loss = 0
     ealry_stopping_patience = 0
     ealry_stopping_patience_v2 = 0
 
@@ -160,7 +161,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     optimizer = update_optimizer(optimizer, ratio_root=0.4, ratio_rot=0.4, ratio_shape=0.4, ratio_scale=0.4, ratio_pose=0.2)
 
     loss_weight = CFG_LOSS_WEIGHT
-    loss_weight['kpts2d'] = 0.2
+    # loss_weight['kpts2d'] = 0.8
     for iter in range(iter):
         t_iter = time.time()
 
@@ -174,7 +175,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             obj_param = None
 
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[-1]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -192,8 +194,6 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         optimizer.step()
         # lr_scheduler.step()
 
-        cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
-        kps_loss[iter] = cur_kpt_loss
 
         iter_t = time.time() - t_iter
         logs = ["[{} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
@@ -201,19 +201,23 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                  key in CFG_LOSS_DICT]
         logging.info(''.join(logs))
 
+
+        cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
+        kps_loss[iter] = cur_kpt_loss
+        cur_depthseg_loss = (loss_all['depth'].item() + loss_all['seg'].item()) / len(detected_cams)
+
         ## criteria for contact loss
         if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
             use_contact_loss = True
 
 
-
         ## sparse criterion on converge for v1 db release, need to be tight
         if CFG_EARLYSTOPPING:
-            if abs(prev_kps_loss - cur_kpt_loss) < 0.5:
+            if abs(prev_kps_loss - cur_kpt_loss) < 0.5 or abs(prev_depthseg_loss - cur_depthseg_loss) < 1.0:
                 ealry_stopping_patience_v2 += 1
 
-            if cur_kpt_loss < best_kps_loss:
-                best_kps_loss = cur_kpt_loss
+            if cur_kpt_loss < best_loss:
+                best_loss = cur_kpt_loss
             if cur_kpt_loss < CFG_LOSS_THRESHOLD:
                 ealry_stopping_patience += 1
 
@@ -223,7 +227,11 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             if ealry_stopping_patience_v2 > CFG_PATIENCE_v2:
                 logging.info('Early stopping(converged) at iter %d' % iter)
                 break
+
             prev_kps_loss = cur_kpt_loss
+            prev_depthseg_loss = cur_depthseg_loss
+
+
 
 
 def main(argv):
@@ -278,10 +286,11 @@ def main(argv):
             loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
 
         flag_start = True
+
+        loss_func.reset_prev_pose()
         ## Start optimization per frame
         for frame in range(len(mas_dataloader)):
             t_start = time.time()
-            loss_func.reset_prev_pose()
 
             ## check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
             if trialIdx == 0 and frame < FLAGS.initNum:
@@ -290,9 +299,9 @@ def main(argv):
             ## if prev frame has tip GT, increase current frame's temporal loss
             if frame > 0 and mas_dataloader[frame - 1]['tip2d'] is not None:
                 print("increase temp weight")
-                loss_func.temp_weight = 1e7
+                loss_func.temp_weight = CFG_temporal_loss_weight * 10.0
             else:
-                loss_func.temp_weight = 1e6
+                loss_func.temp_weight = CFG_temporal_loss_weight
 
             ## skip the frame if detected hand is less than 3
             detected_cams = []
@@ -307,7 +316,7 @@ def main(argv):
             if CFG_WITH_OBJ:
                 obj_pose = obj_dataloader[frame][:-1, :]
                 obj_pose[:3, -1] *= 0.1
-                model_obj.update_pose(pose=obj_pose)
+                model_obj.update_pose(pose=obj_pose, grad=False)
 
                 marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
                 loss_func.set_object_marker_pose(marker_cam_pose, CFG_vertspermarker[obj_dataloader.obj_name])
@@ -316,7 +325,7 @@ def main(argv):
             """            
             - 중간 iteration 이후에 2d kpts loss weight 낮추는 방식 결과 확인.
             
-            - object pose update issue
+            - object pose updaissue
             - contact loss check
             
             - GT tip loss 추가
@@ -337,7 +346,8 @@ def main(argv):
                 target : wrist pose/rot, hand scale
                 except : hand shape, hand pose 
             """
-            __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName)
+            __update_global__(model, model_obj, loss_func, detected_cams, frame,
+                              lr_init, lr_init_obj, trialName)
 
             ### update incrementally
             """
@@ -354,8 +364,13 @@ def main(argv):
             __update_all__(model, model_obj, loss_func, detected_cams, frame,
                            lr_init, lr_init_obj, trialName, iter=CFG_NUM_ITER)
 
-            ### final result of frame
+            # update prev pose if temporal loss activated
             pred_hand = model()
+            if 'temporal' in CFG_LOSS_DICT:
+                loss_func.prev_hand_pose = pred_hand['pose'].clone().detach()
+                loss_func.prev_hand_shape = pred_hand['shape'].clone().detach()
+
+            ### final result of frame
             if CFG_WITH_OBJ:
                 pred_obj = model_obj()
                 pred_obj_anno = [model_obj.get_object_mat().tolist(), obj_dataloader.obj_mesh_name]
