@@ -86,17 +86,17 @@ def __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init
         logging.info(''.join(logs))
 
 
-def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iterperpart=20):
+def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iterperpart=40):
 
     kps_loss = {}
 
     grad_order = [[True, False, False], [True, True, False], [True, True, True]]
-    loss_dict_parts = ['kpts2d', 'reg', 'depth_rel']
+    loss_dict_parts = ['kpts2d', 'reg']#, 'depth_rel']
 
     for step in range(3):
         model.change_grads_parts(root=True, rot=True,
                                  pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2],
-                                 shape=False, scale=True)
+                                 shape=True, scale=True)
 
         optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
         optimizer = update_optimizer(optimizer, ratio_root=0.5 ** step, ratio_rot=0.5 ** step, ratio_scale=0.5 ** step, ratio_pose=0.5 ** step)
@@ -159,10 +159,10 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
     model.change_grads_all(root=True, rot=True, pose=True, shape=True, scale=True)
     optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
-    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=1.0, ratio_pose=0.4)
+    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=1.0, ratio_pose=0.3)
 
     loss_weight = CFG_LOSS_WEIGHT
-    loss_weight['kpts2d'] = 0.5
+    # loss_weight['kpts2d'] = 0.5
     for iter in range(iter):
         t_iter = time.time()
 
@@ -177,8 +177,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ,
-                            flag_crop=True, flag_headless=FLAGS.headless)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0], flag_obj=CFG_WITH_OBJ,
+        #                     flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -349,7 +349,7 @@ def main(argv):
                 except : hand shape
             """
             __update_parts__(model, model_obj, loss_func, detected_cams, frame,
-                             lr_init, lr_init_obj, trialName, iterperpart=20)
+                             lr_init, lr_init_obj, trialName, iterperpart=40)
 
 
             ### update all

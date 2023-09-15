@@ -7,7 +7,7 @@ from enum import IntEnum
 CFG_WITH_OBJ = False
 CFG_EARLYSTOPPING = True
 
-CFG_LOSS_DICT = ['kpts2d', 'reg', 'depth_rel', 'temporal', 'seg', 'depth', 'kpts_tip']
+CFG_LOSS_DICT = ['kpts2d', 'reg', 'temporal', 'seg', 'depth', 'kpts_tip'] # 'depth_rel',
 
 CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0}
 
@@ -24,7 +24,7 @@ CFG_NUM_ITER = 150
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
-CFG_CAM_PER_FINGER_VIS = {'mas':[2.0, 1.0,1.0,1.0,1.0],
+CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
                          'sub1':[1.0,0.5,0.5,1.0,1.0],
                          'sub2':[1.0, 1.0,1.0,1.0,1.0],
                          'sub3':[0.5,1.0,1.0,1.0,1.0]}

@@ -364,14 +364,14 @@ class MultiViewLossFunc(nn.Module):
                 depth_input = np.squeeze(self.gt_depth.cpu().numpy())
                 seg_input = np.squeeze(self.gt_seg.cpu().numpy())
 
-                if save_path is not None:
-                    if not flag_headless:
-                        cv2.imshow("rgb input", rgb_input)
-                        cv2.imshow("depth_input", np.asarray(depth_input/1000 * 255, dtype=np.uint8))
-                        cv2.waitKey(0)
-                    else:
-                        cv2.imwrite(os.path.join("./for_headless_server", 'rgb_input.png'), rgb_input)
-                        cv2.imwrite(os.path.join("./for_headless_server", 'depth_input.png'), np.asarray(depth_input/1000 * 255, dtype=np.uint8))
+                # if save_path is not None:
+                #     if not flag_headless:
+                #         cv2.imshow("rgb input", rgb_input)
+                #         cv2.imshow("depth_input", np.asarray(depth_input/1000 * 255, dtype=np.uint8))
+                #         cv2.waitKey(0)
+                #     else:
+                #         cv2.imwrite(os.path.join("./for_headless_server", 'rgb_input.png'), rgb_input)
+                #         cv2.imwrite(os.path.join("./for_headless_server", 'depth_input.png'), np.asarray(depth_input/1000 * 255, dtype=np.uint8))
 
                 # rendered image is original size (1080, 1920)
                 rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
@@ -418,20 +418,20 @@ class MultiViewLossFunc(nn.Module):
             blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
             blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
 
-            if not flag_headless:
-                cv2.imshow(blend_gt_name, img_blend_gt)
-                cv2.imshow(blend_pred_name, img_blend_pred)
-                # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-                # cv2.imshow(blend_depth_name, depth_gap)
-                # cv2.imshow(blend_seg_name, seg_gap)
-                cv2.waitKey(0)
+            if save_path is None:
+                if not flag_headless:
+                    cv2.imshow(blend_gt_name, img_blend_gt)
+                    cv2.imshow(blend_pred_name, img_blend_pred)
+                    # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+                    # cv2.imshow(blend_depth_name, depth_gap)
+                    # cv2.imshow(blend_seg_name, seg_gap)
+                    cv2.waitKey(0)
+                else:
+                    print("show resutls")
+                    cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
+                    cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
+                    cv2.imwrite(os.path.join("./for_headless_server", blend_depth_name + '.png'), depth_gap)
             else:
-                print("show resutls")
-                cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
-                cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
-                cv2.imwrite(os.path.join("./for_headless_server", blend_depth_name + '.png'), depth_gap)
-
-            if save_path is not None:
                 save_path_cam = os.path.join(save_path, camID)
                 os.makedirs(save_path_cam, exist_ok=True)
                 cv2.imwrite(os.path.join(save_path_cam, blend_pred_name + '.png'), img_blend_pred)
