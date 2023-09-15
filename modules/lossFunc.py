@@ -42,7 +42,6 @@ class MultiViewLossFunc(nn.Module):
 
         self.default_zero = torch.tensor([0.0], requires_grad=True).to(self.device)
 
-
         self.vis = self.set_visibility_weight(CFG_CAM_PER_FINGER_VIS)
 
         self.const = Constraints()
@@ -52,6 +51,7 @@ class MultiViewLossFunc(nn.Module):
         self.prev_hand_pose = None
         self.prev_hand_shape = None
 
+        self.temp_weight = 1e6
 
     def reset_prev_pose(self):
         self.prev_hand_pose = None
@@ -104,9 +104,15 @@ class MultiViewLossFunc(nn.Module):
         self.gt_seg = gt_sample['seg']
         self.gt_seg_obj = gt_sample['seg_obj']
 
+        if gt_sample['tip2d'] is not None:
+            self.gt_tip2d = gt_sample['tip2d']
+            self.valid_tip_idx = gt_sample['validtip']
+        else:
+            self.gt_tip2d = None
+
 
     def set_main_cam(self, main_cam_idx=0):
-        main_cam_params = self.dataloaders[main_cam_idx].cam_parameter
+        # main_cam_params = self.dataloaders[main_cam_idx].cam_parameter
 
         self.main_Ks = self.Ks[main_cam_idx]
         self.main_Ms = self.Ms[main_cam_idx]
@@ -150,8 +156,19 @@ class MultiViewLossFunc(nn.Module):
 
             self.set_gt(camIdx, frame)
 
+            pred_kpts2d = projectPoints(joints_set[camIdx], self.Ks[camIdx])
+
+            if 'kpts_tip' in self.loss_dict:
+                if self.gt_tip2d != None:
+                    pred_kpts2d_tip = pred_kpts2d[:, self.valid_tip_idx, :]
+                    loss_tip = (pred_kpts2d_tip - self.gt_tip2d) ** 2
+                    loss_tip = torch.sum(loss_tip.reshape(self.bs, -1), -1)
+                    loss['kpts_tip'] = loss_tip * 1e3
+                else:
+                    loss['kpts_tip'] = self.default_zero
+
             if 'kpts_palm' in self.loss_dict:
-                pred_kpts2d_palm = projectPoints(joints_set[camIdx], self.Ks[camIdx])[:, CFG_PALM_IDX, :]
+                pred_kpts2d_palm = pred_kpts2d[:, CFG_PALM_IDX, :]
                 gt_kpts2d_palm = self.gt_kpts2d[:, CFG_PALM_IDX, :]
 
                 loss_palm = (pred_kpts2d_palm - gt_kpts2d_palm) ** 2
@@ -159,10 +176,10 @@ class MultiViewLossFunc(nn.Module):
                 loss['kpts_palm'] = loss_palm
 
             if 'kpts2d' in self.loss_dict:
-                pred_kpts2d = projectPoints(joints_set[camIdx], self.Ks[camIdx])
-
+                # all
                 if parts == -1 or parts == 2:
                     loss_kpts2d = ((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
+                # parts
                 else:
                     valid_idx = CFG_valid_index[parts]
                     loss_kpts2d = ((pred_kpts2d[:, valid_idx, :] - self.gt_kpts2d[:, valid_idx, :]) ** 2) \
@@ -202,7 +219,7 @@ class MultiViewLossFunc(nn.Module):
 
                     seg_gap = torch.abs(pred_seg - self.gt_seg)
                     loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
-                    loss['seg'] = loss_seg / 100.0
+                    loss['seg'] = loss_seg / 5e0
 
                     # if camIdx == 0:
                     #     pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
@@ -304,7 +321,7 @@ class MultiViewLossFunc(nn.Module):
             else:
                 loss_temporal = torch.sum((pred['pose'] - self.prev_hand_pose) ** 2) + \
                                    torch.sum((pred['shape'] - self.prev_hand_shape) ** 2)
-                losses_single['temporal'] = loss_temporal * 100000.
+                losses_single['temporal'] = loss_temporal * self.temp_weight
 
         return losses_cam, losses_single
 
@@ -392,21 +409,22 @@ class MultiViewLossFunc(nn.Module):
                 depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
                 seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
 
-            blend_gt_name = "blend_gt_" + camID #+ "_" + str(frame)
-            blend_pred_name = "blend_pred_" + camID #+ "_" + str(frame)
-            blend_pred_seg_name = "blend_pred_seg_" + camID #+ "_" + str(frame)
-            blend_depth_name = "blend_depth_" + camID #+ "_" + str(frame)
-            blend_seg_name = "blend_seg_" + camID #+ "_" + str(frame)
+            blend_gt_name = "blend_gt_" + camID + "_" + str(frame)
+            blend_pred_name = "blend_pred_" + camID + "_" + str(frame)
+            blend_pred_seg_name = "blend_pred_seg_" + camID + "_" + str(frame)
+            blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
+            blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
 
-            try:
-                cv2.imshow(blend_gt_name, img_blend_gt)
-                cv2.imshow(blend_pred_name, img_blend_pred)
-                # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-                # cv2.imshow(blend_depth_name, depth_gap)
-                # cv2.imshow(blend_seg_name, seg_gap)
-                cv2.waitKey(0)
-            except:
-                print("headless server")
+            if save_path is None:
+                try:
+                    cv2.imshow(blend_gt_name, img_blend_gt)
+                    cv2.imshow(blend_pred_name, img_blend_pred)
+                    # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+                    # cv2.imshow(blend_depth_name, depth_gap)
+                    # cv2.imshow(blend_seg_name, seg_gap)
+                    cv2.waitKey(0)
+                except:
+                    print("headless server")
 
             if save_path is not None:
                 save_path_cam = os.path.join(save_path, camID)

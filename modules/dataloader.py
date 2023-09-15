@@ -134,6 +134,27 @@ class DataLoader:
                 sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
                 sample_torch['seg_obj'] =torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
 
+                if sample['tip2d'] is not None:
+                    # # debug
+                    # tip_data_path = os.path.join(self.cam_path, '2D_tip_data',self.cam)
+                    # debug = self.cam + '_' + str(idx) + '.jpg'
+                    # debug = cv2.imread(os.path.join(tip_data_path, debug))
+                    # for key, value in sample['tip2d'].items():
+                    #     cv2.circle(debug, (int(value[0]), int(value[1])), radius=2, thickness=-1, color=(0, 0, 255))
+                    # cv2.imshow("vis", debug)
+                    # cv2.waitKey(0)
+                    tip2d_np = []
+                    tip2d_idx = []
+                    for key in sample['tip2d'].keys():
+                        tip2d_np.append(sample['tip2d'][key])
+                        tip2d_idx.append(CFG_TIP_IDX[key])
+
+                    sample_torch['tip2d'] = torch.unsqueeze(torch.FloatTensor(np.array(tip2d_np)), 0).to(self.device)
+                    sample_torch['validtip'] = tip2d_idx
+                else:
+                    sample_torch['tip2d'] = None
+                    sample_torch['validtip'] = None
+
                 sample_dict_torch[idx] = sample_torch
                 sample_kpt[idx] = sample_kpt_
 

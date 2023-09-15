@@ -30,7 +30,7 @@ from pstats import Stats
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
-flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 10, 'initial frame num of trial_0, check mediapipe results')
 
 FLAGS(sys.argv)
 
@@ -98,7 +98,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
                                  shape=False, scale=True)
 
         optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
-        optimizer = update_optimizer(optimizer, ratio_root=0.5 ** step, ratio_rot=0.5 ** step, ratio_scale=0.5 ** step)
+        optimizer = update_optimizer(optimizer, ratio_root=0.5 ** step, ratio_rot=0.5 ** step, ratio_scale=0.5 ** step, ratio_pose=0.5 ** step)
         # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
         loss_weight = {'kpts2d': 1.0, 'reg': 1.0, 'depth_rel': 1.0}
@@ -142,9 +142,6 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
                      key in loss_dict_parts]
             logging.info(''.join(logs))
 
-
-
-
 def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=150):
 
     kps_loss = {}
@@ -160,14 +157,15 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
     model.change_grads_all(root=True, rot=True, pose=True, shape=True, scale=True)
     optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
-    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=0.1, ratio_scale=0.1, ratio_pose=0.1)
+    optimizer = update_optimizer(optimizer, ratio_root=0.4, ratio_rot=0.4, ratio_shape=0.4, ratio_scale=0.4, ratio_pose=0.2)
 
     loss_weight = CFG_LOSS_WEIGHT
+    loss_weight['kpts2d'] = 0.2
     for iter in range(iter):
         t_iter = time.time()
 
         optimizer.zero_grad()
-        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'depth_rel': 0.0, 'temporal': 1.0}
+        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0}
 
         hand_param = model()
         if CFG_WITH_OBJ:
@@ -176,7 +174,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             obj_param = None
 
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[-1]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -229,6 +227,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
 
 def main(argv):
+    t0 = time.time()
     logging.get_absl_handler().setFormatter(None)
     save_num = 0
 
@@ -281,15 +280,21 @@ def main(argv):
         flag_start = True
         ## Start optimization per frame
         for frame in range(len(mas_dataloader)):
+            t_start = time.time()
             loss_func.reset_prev_pose()
 
-            t_start = time.time()
-
-            # check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
-            if trialIdx == 0 and frame < FLAGS.initNum - 1:
+            ## check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
+            if trialIdx == 0 and frame < FLAGS.initNum:
                 continue
 
-            ### skip the frame if detected hand is less than 3
+            ## if prev frame has tip GT, increase current frame's temporal loss
+            if frame > 0 and mas_dataloader[frame - 1]['tip2d'] is not None:
+                print("increase temp weight")
+                loss_func.temp_weight = 1e7
+            else:
+                loss_func.temp_weight = 1e6
+
+            ## skip the frame if detected hand is less than 3
             detected_cams = []
             for camIdx, camID in enumerate(CFG_CAMID_SET):
                 if dataloader_set[camIdx][frame] is not None:
@@ -298,7 +303,7 @@ def main(argv):
                 print('detected hand is less than 3, skip the frame ', frame)
                 continue
 
-            ### set object init pose and marker pose as GT for projected vertex.
+            ## set object init pose and marker pose as GT for projected vertex.
             if CFG_WITH_OBJ:
                 obj_pose = obj_dataloader[frame][:-1, :]
                 obj_pose[:3, -1] *= 0.1
@@ -308,10 +313,7 @@ def main(argv):
                 loss_func.set_object_marker_pose(marker_cam_pose, CFG_vertspermarker[obj_dataloader.obj_name])
 
             #TODO
-            """
-            - (done)step 별 lr update
-            - temporal loss, lr update
-            
+            """            
             - 중간 iteration 이후에 2d kpts loss weight 낮추는 방식 결과 확인.
             
             - object pose update issue
@@ -361,7 +363,7 @@ def main(argv):
                 pred_obj = None
                 pred_obj_anno = [None, None]
 
-            ### visualization results of frame
+            ### save or show visualization results of frame
             loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
                                     save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True)
 
@@ -371,7 +373,7 @@ def main(argv):
             print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
             save_num += 1
 
-    print("end time : ", time.ctime())
+    print("total processed time : ", round((time.time() - t0) / 60., 2))
     print("total processed frames : ", save_num)
 
 
