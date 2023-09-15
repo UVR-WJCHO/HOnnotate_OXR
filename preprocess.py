@@ -51,7 +51,7 @@ import modules.common.transforms as tf
 from natsort import natsorted
 
 
-flag_2D_tip_exist = True
+flag_2D_tip_exist = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
