@@ -175,9 +175,10 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         else:
             obj_param = None
             
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
 
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0, 3], flag_obj=CFG_WITH_OBJ,
+                            flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
