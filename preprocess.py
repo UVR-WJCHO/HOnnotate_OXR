@@ -51,7 +51,6 @@ import modules.common.transforms as tf
 from natsort import natsorted
 
 
-flag_2D_tip_exist = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -115,7 +114,7 @@ def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, obj_id):
 
 class loadDataset():
     def __init__(self, db, seq, trial):
-        self.seq = seq # 230612_S01_obj_01_grasp_01
+        self.seq = seq # 230612_S01_obj_01_grasp_1
         self.db = db    # 230905
         assert len(seq.split('_')) == 6, 'invalid sequence name, ex. 230612_S01_obj_01_grasp_01'
 
@@ -181,7 +180,7 @@ class loadDataset():
         self.prev_bbox = None
         self.wrist_px = None
 
-        self.tip_db_dir = os.path.join(camResultDir, '2D_tip_data')
+        self.tip_db_dir = self.dbDir_result = os.path.join(baseDir, db+'_tip', seq, trial)
 
         intrinsics, dist_coeffs, extrinsics, err = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
         self.intrinsics = intrinsics
@@ -213,7 +212,7 @@ class loadDataset():
 
         self.obj_db_Dir = os.path.join(baseDir, FLAGS.obj_db)
 
-        obj_dir_name = self.seq[:-9] # 230612_S01_obj_01
+        obj_dir_name = "_".join(seq.split('_')[:-2]) # 230612_S01_obj_01
         self.obj_data_Dir = os.path.join(self.obj_db_Dir, obj_dir_name)
 
         self.obj_cam_ext = np.load(os.path.join(camResultDir, 'global_world.npy'))
@@ -234,7 +233,7 @@ class loadDataset():
             origin_z = float(line[3]) * 1000.
 
         # load marker set pose
-        self.obj_pose_name = self.seq + '_0' + str(self.trial_num)
+        self.obj_pose_name = obj_dir_name + '_grasp_' + str("%02d"%int(self.grasp_id))+ '_' + str("%02d"%int(self.trial_num))
         obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
         # print(obj_pose_data)
         assert os.path.isfile(obj_pose_data),"no obj pose data"
@@ -267,11 +266,11 @@ class loadDataset():
         self.marker_proj = np.zeros((self.marker_num, 2))
 
         # load object mesh info
-        obj_class = self.obj_id + '_' + str(OBJType(int(self.obj_id)).name)
-        self.obj_template_dir = os.path.join(baseDir, 'obj_scanned_models', obj_class)
+        self.obj_class = self.obj_id + '_' + str(OBJType(int(self.obj_id)).name)
+        self.obj_template_dir = os.path.join(baseDir, 'obj_scanned_models', self.obj_class)
 
         # load object mesh data (new scanned object need to be load through pytorch3d 'load_obj'
-        obj_mesh_path = os.path.join(self.obj_template_dir, obj_class) + '.obj'
+        obj_mesh_path = os.path.join(self.obj_template_dir, self.obj_class) + '.obj'
         # self.obj_mesh_data = self.read_obj(obj_mesh_path)
         self.obj_mesh_data = {}
         try:
@@ -378,7 +377,7 @@ class loadDataset():
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
-            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_id, self.obj_mesh_data)
+            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data)
             self.obj_pose_sampled[str(save_idx)] = obj_pose_data
 
         else:
@@ -411,11 +410,11 @@ class loadDataset():
 
         return world_coord, reprojected
 
-    def fit_markerToObj(self, marker_pose, obj_type, obj_mesh):
+    def fit_markerToObj(self, marker_pose, obj_class, obj_mesh):
         # generate initial obj pose (4, 4)
         obj_init_pose = generate_pose([0,0,0],[0,0,0])
 
-        vertIDpermarker = CFG_vertspermarker[str(OBJType(int(obj_type)).name)]
+        vertIDpermarker = CFG_vertspermarker[str(obj_class)]
         obj_verts = obj_mesh['verts']
         verts_pose = obj_verts[vertIDpermarker, :]
 
@@ -442,20 +441,18 @@ class loadDataset():
         err = np.sum(abs(verts_debug - marker_debug), axis=1)
         err = np.average(err)
         assert err < 20, f"wrong marker-vert fitting with err {err}, check vert idx"
-        # verts_all = torch.FloatTensor(verts_all)
-        # mesh = Meshes(verts=[verts_all], faces=[obj_faces]).to(self.device)
 
+
+        ### debug
         # projection = self.extrinsics[self.camID].reshape(3, 4)
         # marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
         #                                    projection[:, 3:], self.intrinsics[self.camID], self.distCoeffs[self.camID])
         # marker_reproj = np.squeeze(marker_reproj)
-        #
         # projection = self.extrinsics[self.camID].reshape(3, 4)
         # vert_reproj, _ = cv2.projectPoints(verts_debug, projection[:, :3],
         #                                      projection[:, 3:], self.intrinsics[self.camID],
         #                                      self.distCoeffs[self.camID])
         # vert_reproj = np.squeeze(vert_reproj)
-
         # image = self.debug
         # for k in range(self.marker_num):
         #     point = marker_reproj[k, :]
@@ -518,7 +515,7 @@ class loadDataset():
 
         self.debug = rgb.copy()
 
-        if flag_2D_tip_exist:
+        if CFG_exist_tip_db:
             # currently tip data processed on sampled data.
             # will be update to unsampled data
             # tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
@@ -743,7 +740,7 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
 
-        if flag_2D_tip_exist:
+        if CFG_exist_tip_db:
             meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                          'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts),
                          '2D_tip_gt': self.tip_data}

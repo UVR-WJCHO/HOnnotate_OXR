@@ -37,14 +37,27 @@ def set_lr_forHand(model, init_lr):
     return model_params
 
 def set_lr_forObj(model, init_lr):
-    lr_pose = []
+    lr_rot = []
+    lr_trans = []
 
     params_dict = dict(model.named_parameters())
     for key, value in params_dict.items():
-        lr_pose.append(value)
+        if 'obj_rot' in key:
+            lr_rot.append(value)
+        elif 'obj_trans' in key:
+            lr_trans.append(value)
 
-    model_params = [{'params': lr_pose, 'lr': init_lr}]
+    model_params = [{'params': lr_rot, 'lr': init_lr},
+                    {'params': lr_trans, 'lr': init_lr * 5e0}]
     return model_params
+
+
+def initialize_optimizer_obj(model_obj, lr_init_obj):
+
+    params_obj = set_lr_forObj(model_obj, lr_init_obj)
+    optimizer = torch.optim.Adam(params_obj)
+
+    return optimizer
 
 
 def initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj):
