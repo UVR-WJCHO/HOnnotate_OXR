@@ -7,10 +7,10 @@ from enum import IntEnum
 CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = True
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'kpts_tip','temporal', 'seg', 'depth', 'contact', 'seg_obj', 'depth_obj'] # 'depth_rel',
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'kpts_tip','temporal', 'seg', 'depth', 'contact', 'seg_obj', 'depth_obj', 'pose_obj'] # 'depth_rel',
 
 CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0,
-                   'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0, 'depth_obj': 1.0, 'seg_obj': 1.0,}
+                   'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0, 'depth_obj': 1.0, 'seg_obj': 1.0, 'pose_obj':1.0}
 
 CFG_temporal_loss_weight = 0.5e5
 
@@ -18,7 +18,7 @@ CFG_temporal_loss_weight = 0.5e5
 CFG_tipGT_interval = 10
 
 CFG_LR_INIT = 0.05
-CFG_LR_INIT_OBJ = 0.05
+CFG_LR_INIT_OBJ = 0.025
 
 CFG_NUM_ITER = 150
 
@@ -31,9 +31,11 @@ CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
                          'sub3':[0.5,1.0,1.0,1.0,1.0]}
 
 
+# 230829-230908
 CFG_vertspermarker = {
     "mug" : [1282, 1329, 965, 756],
     "cardboard_box" : [39,1313,716,1294],
+
 }
 
 CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],

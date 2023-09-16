@@ -413,6 +413,8 @@ class ObjectLoader:
         obj_data = {'verts': verts, 'faces': faces}
         return obj_data
 
+    def get_marker_cam_pose(self, index):
+        return self.marker_cam_pose[str(index)]
 
     def __getitem__(self, index: int):
         try:

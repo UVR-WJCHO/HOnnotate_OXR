@@ -168,7 +168,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
         optimizer.zero_grad()
         loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0,
-                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0}
+                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0, 'pose_obj':0.0}
 
         hand_param = model()
         if CFG_WITH_OBJ:
@@ -317,6 +317,9 @@ def main(argv):
 
             ## set object init pose and marker pose as GT for projected vertex.
             if CFG_WITH_OBJ:
+                obj_marker_pose = obj_dataloader.get_marker_cam_pose(frame)
+                loss_func.set_gt_obj(obj_marker_pose, obj_dataloader.obj_name)
+
                 obj_pose = obj_dataloader[frame][:-1, :]
                 obj_pose[:3, -1] *= 0.1
                 model_obj.update_pose(pose=obj_pose, grad=True)

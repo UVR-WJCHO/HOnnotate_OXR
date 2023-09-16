@@ -51,7 +51,7 @@ import modules.common.transforms as tf
 from natsort import natsorted
 
 
-flag_2D_tip_exist = False
+flag_2D_tip_exist = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -103,7 +103,7 @@ CFG_TIP_NAME = ['thumb', 'index', 'middle', 'ring', 'pinky']
 def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, obj_id):
     # print(type(rgb))
     assert isinstance(rgb, np.ndarray), "rgb type is not np.ndarray"
-    mask, vis_mask = deepSegPredict(rgb, obj_id)
+    mask, vis_mask = deepSegPredict(rgb, int(obj_id))
     maskName = image_name + '.png'
     visName = image_name + '.jpg'
     if mask is not None and vis_mask is not None:
@@ -413,7 +413,7 @@ class loadDataset():
 
     def fit_markerToObj(self, marker_pose, obj_type, obj_mesh):
         # generate initial obj pose (4, 4)
-        obj_init_pose = generate_pose([0,180,0],[0,0,0])
+        obj_init_pose = generate_pose([0,0,0],[0,0,0])
 
         vertIDpermarker = CFG_vertspermarker[str(OBJType(int(obj_type)).name)]
         obj_verts = obj_mesh['verts']

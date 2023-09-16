@@ -139,6 +139,8 @@ class ObjModel(nn.Module):
         self.template_faces = template_faces.to(self.device).unsqueeze(0)
         self.template_verts = template_verts.to(self.device)
 
+
+
         # only obj_pose is trainable
         obj_rot = torch.tensor(obj_init_rot).unsqueeze(0)
         obj_rot = matrix_to_axis_angle(obj_rot)
