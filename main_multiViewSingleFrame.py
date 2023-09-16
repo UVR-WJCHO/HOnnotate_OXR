@@ -31,7 +31,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
 
-flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 40, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 FLAGS(sys.argv)
 
@@ -178,8 +178,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0], flag_obj=CFG_WITH_OBJ,
-                            flag_crop=True, flag_headless=FLAGS.headless)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0], flag_obj=CFG_WITH_OBJ,
+        #                     flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -207,7 +207,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
         cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
         kps_loss[iter] = cur_kpt_loss
-        cur_depthseg_loss = (loss_all['depth'].item() + loss_all['seg'].item()) / len(detected_cams)
+        # cur_depthseg_loss = (loss_all['depth'].item() + loss_all['seg'].item()) / len(detected_cams)
 
         ## criteria for contact loss
         if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
@@ -216,7 +216,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
         ## sparse criterion on converge for v1 db release, need to be tight
         if CFG_EARLYSTOPPING:
-            if abs(prev_kps_loss - cur_kpt_loss) < 2.0 or abs(prev_depthseg_loss - cur_depthseg_loss) < 10.0:
+            if abs(prev_kps_loss - cur_kpt_loss) < 2.0:# or abs(prev_depthseg_loss - cur_depthseg_loss) < 10.0:
                 ealry_stopping_patience_v2 += 1
 
             if cur_kpt_loss < best_loss:
@@ -232,7 +232,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                 break
 
             prev_kps_loss = cur_kpt_loss
-            prev_depthseg_loss = cur_depthseg_loss
+            # prev_depthseg_loss = cur_depthseg_loss
 
 
 

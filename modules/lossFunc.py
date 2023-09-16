@@ -218,7 +218,7 @@ class MultiViewLossFunc(nn.Module):
 
                 loss_pose_obj = (pred_obj_verts_marker - gt_obj_verts_marker) ** 2
                 loss_pose_obj = torch.sum(loss_pose_obj.reshape(self.bs, -1), -1)
-                loss['pose_obj'] = loss_pose_obj
+                loss['pose_obj'] = loss_pose_obj * 1e1
 
             if render:
                 pred_rendered = pred_render_set[camIdx]
@@ -235,7 +235,7 @@ class MultiViewLossFunc(nn.Module):
 
                     seg_gap = torch.abs(pred_seg - self.gt_seg)
                     loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
-                    loss['seg'] = loss_seg * 3e-1
+                    loss['seg'] = loss_seg * 1e0
 
                     # if camIdx == 0:
                     #     pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
@@ -254,14 +254,14 @@ class MultiViewLossFunc(nn.Module):
                         seg_obj_gap[self.gt_seg_obj == 0] = 0
 
                         loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
-                        loss['seg_obj'] = loss_seg_obj
+                        loss['seg_obj'] = loss_seg_obj * 1e0
 
                         # pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
                         # seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
                         # gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
                         #
-                        # cv2.imshow("pred_seg_obj"+str(camIdx), pred_seg_obj)
-                        # cv2.imshow("gt_seg_obj"+str(camIdx), gt_seg_obj)
+                        # # cv2.imshow("pred_seg_obj"+str(camIdx), pred_seg_obj)
+                        # # cv2.imshow("gt_seg_obj"+str(camIdx), gt_seg_obj)
                         # cv2.imshow("seg_obj_gap"+str(camIdx), seg_obj_gap)
                         # cv2.waitKey(1)
 
@@ -291,8 +291,8 @@ class MultiViewLossFunc(nn.Module):
                         # pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                         # gt_depth_vis = np.squeeze((self.gt_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                         # depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())).astype(np.uint8)
-                        # cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
-                        # cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)
+                        # # cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
+                        # # cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)
                         # cv2.imshow("depth_gap_vis"+str(camIdx), depth_gap_vis)
                         # cv2.waitKey(1)
 
@@ -435,6 +435,13 @@ class MultiViewLossFunc(nn.Module):
             blend_pred_seg_name = "blend_pred_seg_" + camID + "_" + str(frame)
             blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
             blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
+
+            cv2.imshow(blend_gt_name, img_blend_gt)
+            cv2.imshow(blend_pred_name, img_blend_pred)
+            # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+            # cv2.imshow(blend_depth_name, depth_gap)
+            # cv2.imshow(blend_seg_name, seg_gap)
+            cv2.waitKey(0)
 
             if save_path is None:
                 if not flag_headless:

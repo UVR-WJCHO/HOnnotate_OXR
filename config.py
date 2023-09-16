@@ -18,7 +18,7 @@ CFG_temporal_loss_weight = 0.5e5
 CFG_tipGT_interval = 10
 
 CFG_LR_INIT = 0.05
-CFG_LR_INIT_OBJ = 0.025
+CFG_LR_INIT_OBJ = 0.05
 
 CFG_NUM_ITER = 150
 
