@@ -318,6 +318,11 @@ class DataLoader:
 
         depth[seg == 0] = 0
 
+        # depth_vis = depth_obj / np.max(depth_obj)
+        # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
+        # cv2.imshow("depth", np.asarray(depth_vis * 255, dtype=np.uint8))
+        # cv2.waitKey(0)
+
         # cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
         # cv2.waitKey(0)
 

@@ -235,19 +235,21 @@ class MultiViewLossFunc(nn.Module):
                     if pred_obj is not None:
                         pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
                         pred_seg_obj = torch.div(pred_seg_obj, torch.max(pred_seg_obj))
-                        seg_obj_gap = torch.abs(pred_seg_obj - self.gt_seg_obj) * pred_seg_obj
+                        seg_obj_gap = torch.abs(pred_seg_obj - self.gt_seg_obj)
+                        seg_obj_gap[self.gt_seg_obj == 0] = 0
 
                         loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
-                        loss['seg'] += loss_seg_obj
+                        loss['seg_obj'] = loss_seg_obj
 
-                        # pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-                        # seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-                        # gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-                        #
-                        # cv2.imshow("pred_seg_obj", pred_seg_obj)
-                        # cv2.imshow("seg_obj_gap", seg_obj_gap)
-                        # cv2.imshow("gt_seg_obj", gt_seg_obj)
-                        # cv2.waitKey(0)
+                        if camIdx == 0:
+                            pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                            seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                            gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+
+                            cv2.imshow("pred_seg_obj", pred_seg_obj)
+                            cv2.imshow("gt_seg_obj", gt_seg_obj)
+                            cv2.imshow("seg_obj_gap", seg_obj_gap)
+                            cv2.waitKey(1)
 
                 if 'depth' in self.loss_dict:
                     pred_depth = pred_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
@@ -262,23 +264,24 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.waitKey(0)
 
                     loss_depth = torch.mean(depth_gap.view(self.bs, -1), -1)
-                    loss['depth'] = loss_depth * 2e2
+                    loss['depth'] = loss_depth * 5e3
 
                     if pred_obj is not None:
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                         depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth_obj)
-                        depth_obj_gap[pred_depth_obj== 0] = 0
+                        depth_obj_gap[self.gt_depth_obj == 0] = 0
 
                         loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
-                        loss['depth'] += loss_depth_obj * 2e2
+                        loss['depth_obj'] = loss_depth_obj * 2e2
 
-                        # pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
-                        # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
-                        # depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())).astype(np.uint8)
-                        # cv2.imshow("pred_depth", pred_depth_vis)
-                        # cv2.imshow("gt_depth_vis", gt_depth_vis)
-                        # cv2.imshow("depth_gap_vis", depth_gap_vis)
-                        # cv2.waitKey(0)
+                        if camIdx == 0:
+                            pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
+                            gt_depth_vis = np.squeeze((self.gt_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
+                            depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())).astype(np.uint8)
+                            cv2.imshow("pred_depth", pred_depth_vis)
+                            cv2.imshow("gt_depth_vis", gt_depth_vis)
+                            cv2.imshow("depth_gap_vis", depth_gap_vis)
+                            cv2.waitKey(1)
 
             losses_cam[camIdx] = loss
 

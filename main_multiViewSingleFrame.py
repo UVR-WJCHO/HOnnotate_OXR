@@ -167,7 +167,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         t_iter = time.time()
 
         optimizer.zero_grad()
-        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0}
+        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0,
+                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0}
 
         hand_param = model()
         if CFG_WITH_OBJ:
@@ -177,8 +178,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
 
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0], flag_obj=CFG_WITH_OBJ,
-        #                     flag_crop=True, flag_headless=FLAGS.headless)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0], flag_obj=CFG_WITH_OBJ,
+                            flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -318,7 +319,7 @@ def main(argv):
             if CFG_WITH_OBJ:
                 obj_pose = obj_dataloader[frame][:-1, :]
                 obj_pose[:3, -1] *= 0.1
-                model_obj.update_pose(pose=obj_pose, grad=False)
+                model_obj.update_pose(pose=obj_pose, grad=True)
 
                 marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
                 loss_func.set_object_marker_pose(marker_cam_pose, CFG_vertspermarker[obj_dataloader.obj_name])
