@@ -237,15 +237,14 @@ class MultiViewLossFunc(nn.Module):
                     loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
                     loss['seg'] = loss_seg * 1e0
 
-                    # if camIdx == 0:
-                    #     pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
-                    #     gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
-                    #     seg_gap = np.squeeze((seg_gap[0].cpu().detach().numpy()))
+                    # pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
+                    # gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
+                    # seg_gap = np.squeeze((seg_gap[0].cpu().detach().numpy()))
                     #
-                    #     cv2.imshow("pred_seg", pred_seg)
-                    #     cv2.imshow("gt_seg", gt_seg)
-                    #     cv2.imshow("seg_gap", seg_gap)
-                    #     cv2.waitKey(0)
+                    # cv2.imshow("pred_seg"+str(camIdx), pred_seg)
+                    # cv2.imshow("gt_seg"+str(camIdx), gt_seg)
+                    # cv2.imshow("seg_gap"+str(camIdx), seg_gap)
+                    # cv2.waitKey(1)
 
                     if pred_obj is not None:
                         pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
@@ -272,10 +271,10 @@ class MultiViewLossFunc(nn.Module):
                     # pred_depth_vis = np.squeeze((pred_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                     # gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                     # depth_gap_vis = np.squeeze((depth_gap[0].cpu().detach().numpy())).astype(np.uint8)
-                    # cv2.imshow("pred_depth", pred_depth_vis)
-                    # cv2.imshow("gt_depth_vis", gt_depth_vis)
-                    # cv2.imshow("depth_gap_vis", depth_gap_vis)
-                    # cv2.waitKey(0)
+                    # cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
+                    # cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)
+                    # cv2.imshow("depth_gap_vis"+str(camIdx), depth_gap_vis)
+                    # cv2.waitKey(1)
 
                     loss_depth = torch.mean(depth_gap.view(self.bs, -1), -1)
                     loss['depth'] = loss_depth * 5e3
