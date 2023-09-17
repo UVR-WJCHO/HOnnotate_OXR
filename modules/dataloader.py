@@ -189,8 +189,7 @@ class DataLoader:
             sample['kpts3d'] = meta['kpts']
             sample['kpts2d'] = meta['kpts'][:, :2]
 
-            if CFG_exist_tip_db:
-                assert '2D_tip_gt' in meta, 'set CFG_exist_tip_db=True, and run preprocess.py again'
+            if '2D_tip_gt' in meta:
                 sample['tip2d'] = meta['2D_tip_gt']
 
             #get imgs
