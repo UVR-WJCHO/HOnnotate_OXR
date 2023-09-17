@@ -156,18 +156,20 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     optimizer = initialize_optimizer(model, None, lr_init, False, None)
     optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=1.0, ratio_pose=0.3)
 
-    optimizer_obj = initialize_optimizer_obj(model_obj, lr_init_obj)
+    if CFG_WITH_OBJ:
+        optimizer_obj = initialize_optimizer_obj(model_obj, lr_init_obj)
 
     loss_weight = CFG_LOSS_WEIGHT
     # loss_weight['kpts2d'] = 0.5
 
-    detected_cams = [detected_cams[-2]]
+    # detected_cams = [detected_cams[-2]]
 
     for iter in range(iter):
         t_iter = time.time()
 
         optimizer.zero_grad()
-        optimizer_obj.zero_grad()
+        if CFG_WITH_OBJ:
+            optimizer_obj.zero_grad()
         loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0,
                     'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0, 'pose_obj':0.0}
 
@@ -179,7 +181,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ,
                             flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
@@ -195,8 +197,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
 
         total_loss.backward(retain_graph=True)
-        # optimizer.step()
-        optimizer_obj.step()
+        optimizer.step()
+        if CFG_WITH_OBJ:
+            optimizer_obj.step()
         # lr_scheduler.step()
 
 
@@ -313,8 +316,8 @@ def main(argv):
             for camIdx, camID in enumerate(CFG_CAMID_SET):
                 if dataloader_set[camIdx][frame] is not None:
                     detected_cams.append(camIdx)
-            if len(detected_cams) < 3:
-                print('detected hand is less than 3, skip the frame ', frame)
+            if len(detected_cams) < 2:
+                print('detected hand is less than 2, skip the frame ', frame)
                 continue
 
             ## set object init pose and marker pose as GT for projected vertex.

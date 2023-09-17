@@ -150,14 +150,18 @@ class DataLoader:
                 sample_torch['seg_obj'] =torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
 
                 if CFG_exist_tip_db:
-                    tip2d_np = []
-                    tip2d_idx = []
-                    for key in sample['tip2d'].keys():
-                        tip2d_np.append(sample['tip2d'][key])
-                        tip2d_idx.append(CFG_TIP_IDX[key])
+                    if sample['tip2d'] != None:
+                        tip2d_np = []
+                        tip2d_idx = []
+                        for key in sample['tip2d'].keys():
+                            tip2d_np.append(sample['tip2d'][key])
+                            tip2d_idx.append(CFG_TIP_IDX[key])
 
-                    sample_torch['tip2d'] = torch.unsqueeze(torch.FloatTensor(np.array(tip2d_np)), 0).to(self.device)
-                    sample_torch['validtip'] = tip2d_idx
+                        sample_torch['tip2d'] = torch.unsqueeze(torch.FloatTensor(np.array(tip2d_np)), 0).to(self.device)
+                        sample_torch['validtip'] = tip2d_idx
+                    else:
+                        sample_torch['tip2d'] = None
+                        sample_torch['validtip'] = None
                 else:
                     sample_torch['tip2d'] = None
                     sample_torch['validtip'] = None

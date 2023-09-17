@@ -717,8 +717,12 @@ class loadDataset():
 
 
     def postProcessNone(self, idx):
-        meta_info = {'bb': None, 'img2bb': None,
-                     'bb2img': None, 'kpts': None, 'kpts_crop': None}
+        if CFG_exist_tip_db:
+            meta_info = {'bb': None, 'img2bb': None,
+                         'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt':None}
+        else:
+            meta_info = {'bb': None, 'img2bb': None,
+                         'bb2img': None, 'kpts': None, 'kpts_crop': None}
 
         metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
         jsonPath = os.path.join(self.metaDir, metaName)
@@ -797,7 +801,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.9, min_tracking_confidence=0.95)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.93, min_tracking_confidence=0.9)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
