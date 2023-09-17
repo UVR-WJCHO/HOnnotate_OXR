@@ -4,13 +4,19 @@ from enum import IntEnum
 
 ## Debug Flags ##
 
+# set True if 2D tip annotation data exists(from euclidsoft)
+CFG_exist_tip_db = False
+
 CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = True
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'kpts_tip','temporal', 'seg', 'depth', 'contact', 'seg_obj', 'depth_obj'] # 'depth_rel',
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'kpts_tip','temporal',  'depth', 'seg', 'seg_obj']#,'depth_obj',] # 'depth_rel', , 'pose_obj' 'contact',
+
+if not CFG_exist_tip_db:
+    assert 'pose_obj' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
 
 CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0,
-                   'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0, 'depth_obj': 1.0, 'seg_obj': 1.0,}
+                   'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0, 'depth_obj': 1.0, 'seg_obj': 1.0, 'pose_obj':1.0}
 
 CFG_temporal_loss_weight = 0.5e5
 
@@ -31,9 +37,26 @@ CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
                          'sub3':[0.5,1.0,1.0,1.0,1.0]}
 
 
+# 230829-230908
 CFG_vertspermarker = {
-    "mug" : [1282, 1329, 965, 756],
-    "cardboard_box" : [39,1313,716,1294],
+"01_cracker_box" : [1865,1859,4434,1070],
+    "02_potted_meat_can" : [1157,1127,410],
+    "03_banana" : [158,204,1018],
+    "04_apple" : [81,273,283],
+    "05_wine_glass" : [1195,1950,1990],
+    "06_bowl" : [1010,536,548],
+    "07_mug" : [1363,1571,1346,],
+    "08_plate" : [3400,3480,1040],
+    "09_spoon" : [604,620,610],
+    "10_knife" : [1780,1901,1771],
+    "11_small_maker" : [1636,2131,2003],
+    "12_spatula" : [33,103,115],
+    "13_flat_screwdriver" : [271,2817,2813],
+    "14_hammer" : [2195,2185,170,601],
+    "15_baseball" : [1000,1304,525],
+    "16_golf_ball" : [1120,1016,952],
+    "30_cardboard_box" : [39,1313,716,1294],
+
 }
 
 CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],

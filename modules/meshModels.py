@@ -139,38 +139,45 @@ class ObjModel(nn.Module):
         self.template_faces = template_faces.to(self.device).unsqueeze(0)
         self.template_verts = template_verts.to(self.device)
 
+
+
         # only obj_pose is trainable
         obj_rot = torch.tensor(obj_init_rot).unsqueeze(0)
         obj_rot = matrix_to_axis_angle(obj_rot)
 
         obj_trans = torch.zeros((1, 3))
-        obj_pose = torch.cat((obj_rot, obj_trans), -1)
+        # obj_pose = torch.cat((obj_rot, obj_trans), -1)
 
-        self.obj_pose = nn.Parameter(obj_pose.to(self.device))
-        self.obj_pose.requires_grad = True
+        self.obj_rot = nn.Parameter(obj_rot.to(self.device))
+        self.obj_rot.requires_grad = True
+        self.obj_trans = nn.Parameter(obj_trans.to(self.device))
+        self.obj_trans.requires_grad = True
 
         self.h = torch.tensor([[0, 0, 0, 1]], dtype=torch.float32).to(self.device)
 
     def get_object_mat(self):
-        #obj_mat = torch.cat([self.obj_pose, self.h], dim=-1)
-        obj_rot = axis_angle_to_matrix(self.obj_pose[:, :3]).squeeze()
-        obj_trans = self.obj_pose[:, 3:].T
+        obj_pose = torch.cat((self.obj_rot, self.obj_trans), -1)
+
+        obj_rot = axis_angle_to_matrix(obj_pose[:, :3]).squeeze()
+        obj_trans = obj_pose[:, 3:].T
         obj_pose = torch.cat((obj_rot, obj_trans), -1)
 
         obj_mat = torch.cat([obj_pose, self.h], dim=0)
 
         return np.squeeze(obj_mat.detach().cpu().numpy())
 
-    def update_pose(self, pose, grad=False):
+    def update_pose(self, pose):
         obj_rot = torch.tensor(pose[:, :3], dtype=torch.float32)
         obj_rot = matrix_to_axis_angle(obj_rot)
         obj_rot = obj_rot.view(self.batch_size, -1)
 
         obj_trans = torch.tensor(pose[:, 3:], dtype=torch.float32).T
-        obj_pose = torch.cat((obj_rot, obj_trans), -1)
+        # obj_pose = torch.cat((obj_rot, obj_trans), -1)
 
-        self.obj_pose = nn.Parameter(obj_pose.to(self.device))
-        self.obj_pose.requires_grad = grad
+        self.obj_rot = nn.Parameter(obj_rot.to(self.device))
+        self.obj_trans = nn.Parameter(obj_trans.to(self.device))
+        # self.obj_pose = nn.Parameter(obj_pose.to(self.device))
+        # self.obj_pose.requires_grad = grad
 
     def apply_transform(self, obj_pose, obj_verts):
         obj_rot = axis_angle_to_matrix(obj_pose[:, :3]).squeeze()
@@ -202,8 +209,8 @@ class ObjModel(nn.Module):
         #
         # # Convert back to Cartesian coordinates
         # transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
+        obj_pose = torch.cat((self.obj_rot, self.obj_trans), -1)
+        obj_verts = self.apply_transform(obj_pose, self.template_verts)
 
-        obj_verts = self.apply_transform(self.obj_pose, self.template_verts)
-
-        return {'verts': obj_verts, 'faces': self.template_faces, 'pose': self.obj_pose}
+        return {'verts': obj_verts, 'faces': self.template_faces, 'pose': obj_pose}
 

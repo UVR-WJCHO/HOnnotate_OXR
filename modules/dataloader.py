@@ -149,15 +149,7 @@ class DataLoader:
                 sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
                 sample_torch['seg_obj'] =torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
 
-                if sample['tip2d'] is not None:
-                    # # debug
-                    # tip_data_path = os.path.join(self.cam_path, '2D_tip_data',self.cam)
-                    # debug = self.cam + '_' + str(idx) + '.jpg'
-                    # debug = cv2.imread(os.path.join(tip_data_path, debug))
-                    # for key, value in sample['tip2d'].items():
-                    #     cv2.circle(debug, (int(value[0]), int(value[1])), radius=2, thickness=-1, color=(0, 0, 255))
-                    # cv2.imshow("vis", debug)
-                    # cv2.waitKey(0)
+                if CFG_exist_tip_db:
                     tip2d_np = []
                     tip2d_idx = []
                     for key in sample['tip2d'].keys():
@@ -196,7 +188,9 @@ class DataLoader:
             sample['img2bb'] = meta['img2bb']
             sample['kpts3d'] = meta['kpts']
             sample['kpts2d'] = meta['kpts'][:, :2]
-            if '2D_tip_gt' in meta:
+
+            if CFG_exist_tip_db:
+                assert '2D_tip_gt' in meta, 'set CFG_exist_tip_db=True, and run preprocess.py again'
                 sample['tip2d'] = meta['2D_tip_gt']
 
             #get imgs
@@ -360,15 +354,18 @@ class ObjectLoader:
 
         self.base_path = base_path
         self.obj_dir = os.path.join(base_path, data_date + '_obj')
-        self.obj_pose_dir = os.path.join(self.obj_dir, data_type[:-9])
 
+        obj_dir_name = "_".join(data_type.split('_')[:-2]) # 230612_S01_obj_01
+        self.obj_pose_dir = os.path.join(self.obj_dir, obj_dir_name)
+
+        grasp_idx = data_type.split('_')[-1]
         obj_idx = data_type.split('_')[3]
-        self.obj_name = str(OBJType(int(obj_idx)).name)
-        obj_class = obj_idx + '_' + self.obj_name
-        self.obj_template_dir = os.path.join(base_path, 'obj_scanned_models', obj_class)
+        obj_name = str(OBJType(int(obj_idx)).name)
+        self.obj_class = obj_idx + '_' + obj_name
+        self.obj_template_dir = os.path.join(base_path, 'obj_scanned_models', self.obj_class)
 
         # load object mesh data (new scanned object need to be load through pytorch3d 'load_obj'
-        self.obj_mesh_name = obj_class + '.obj'
+        self.obj_mesh_name = self.obj_class + '.obj'
         obj_mesh_path = os.path.join(self.obj_template_dir, self.obj_mesh_name)
 
         self.obj_mesh_data = {}
@@ -376,12 +373,12 @@ class ObjectLoader:
         self.obj_mesh_data['faces'] = faces.verts_idx
 
         # load from results of preprocess.py
-        obj_pose_data_name = data_type + '_0' + data_trial[-1] + '_obj_pose.pkl'
+        obj_pose_data_name = obj_dir_name + '_grasp_' + str("%02d"%int(grasp_idx)) + '_' + str("%02d"%int(data_trial[-1])) + '_obj_pose.pkl'
         obj_pose_data_path = os.path.join(self.obj_pose_dir, obj_pose_data_name)
         with open(obj_pose_data_path, 'rb') as f:
             self.obj_init_pose = pickle.load(f)
 
-        marker_cam_data_name = data_type + '_0' + data_trial[-1] + '_marker_cam.pkl'
+        marker_cam_data_name = obj_dir_name + '_grasp_' + str("%02d"%int(grasp_idx)) + '_' + str("%02d"%int(data_trial[-1])) + '_marker_cam.pkl'
         marker_cam_data_path = os.path.join(self.obj_pose_dir, marker_cam_data_name)
         with open(marker_cam_data_path, 'rb') as f:
             marker_cam_pose = pickle.load(f)
@@ -411,7 +408,6 @@ class ObjectLoader:
 
         obj_data = {'verts': verts, 'faces': faces}
         return obj_data
-
 
     def __getitem__(self, index: int):
         try:

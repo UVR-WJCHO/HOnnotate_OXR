@@ -12,7 +12,7 @@ from modules.renderer import Renderer
 from modules.meshModels import HandModel, ObjModel
 from modules.lossFunc import MultiViewLossFunc
 from utils import *
-from utils.modelUtils import initialize_optimizer, update_optimizer
+from utils.modelUtils import initialize_optimizer, update_optimizer, initialize_optimizer_obj
 
 from absl import flags
 from absl import app
@@ -29,7 +29,7 @@ from pstats import Stats
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
@@ -37,12 +37,12 @@ FLAGS(sys.argv)
 
 # torch.autograd.set_detect_anomaly(True)
 
-def __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=50):
+def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName, iter=50):
 
     loss_dict_global = ['kpts_palm', 'reg']
 
     model.change_grads_all(root=True, rot=True, pose=False, shape=False, scale=True)
-    optimizer = initialize_optimizer(model, model_obj, lr_init, False, lr_init_obj)
+    optimizer = initialize_optimizer(model, None, lr_init, False, None)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
     loss_weight = {'kpts_palm': 1.0, 'reg': 1.0}
@@ -53,10 +53,7 @@ def __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init
         loss_all = {'kpts_palm': 0.0, 'reg': 0.0}
 
         hand_param = model()
-        if CFG_WITH_OBJ:
-            obj_param = model_obj()
-        else:
-            obj_param = None
+        obj_param = None
 
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
                            loss_dict=loss_dict_global)
@@ -86,7 +83,7 @@ def __update_global__(model, model_obj, loss_func, detected_cams, frame, lr_init
         logging.info(''.join(logs))
 
 
-def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iterperpart=40):
+def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName, iterperpart=40):
 
     kps_loss = {}
 
@@ -98,7 +95,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
                                  pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2],
                                  shape=True, scale=True)
 
-        optimizer = initialize_optimizer(model, model_obj, lr_init, False, lr_init_obj)
+        optimizer = initialize_optimizer(model, None, lr_init, False, None)
         optimizer = update_optimizer(optimizer, ratio_root=0.5 ** step, ratio_rot=0.5 ** step, ratio_scale=0.5 ** step, ratio_pose=0.5 ** step)
         # lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
@@ -111,10 +108,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
             loss_all = {'kpts2d': 0.0, 'reg': 0.0, 'depth_rel': 0.0}
 
             hand_param = model()
-            if CFG_WITH_OBJ:
-                obj_param = model_obj()
-            else:
-                obj_param = None
+            obj_param = None
 
             losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
             # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
@@ -145,7 +139,7 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
 
 def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=100):
     kps_loss = {}
-    use_contact_loss = False
+    use_contact_loss = True
 
     # set initial loss, early stopping threshold
     best_loss = torch.inf
@@ -157,24 +151,34 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     # model.change_grads(root=True, rot=True, pose=True, shape=True, scale=False)
 
     model.change_grads_all(root=True, rot=True, pose=True, shape=True, scale=True)
-    optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
+    # optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
+    optimizer = initialize_optimizer(model, None, lr_init, False, None)
     optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=1.0, ratio_pose=0.3)
+
+    optimizer_obj = initialize_optimizer_obj(model_obj, lr_init_obj)
 
     loss_weight = CFG_LOSS_WEIGHT
     # loss_weight['kpts2d'] = 0.5
+
+    detected_cams = [detected_cams[-2]]
+
     for iter in range(iter):
         t_iter = time.time()
 
         optimizer.zero_grad()
+        optimizer_obj.zero_grad()
         loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0,
-                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0}
+                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0, 'pose_obj':0.0}
+
         hand_param = model()
         if CFG_WITH_OBJ:
             obj_param = model_obj()
         else:
             obj_param = None
-        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0], flag_obj=CFG_WITH_OBJ,
+            
+        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
+
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
                             flag_crop=True, flag_headless=FLAGS.headless)
         ## apply cam weight
         for camIdx in detected_cams:
@@ -189,7 +193,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
 
         total_loss.backward(retain_graph=True)
-        optimizer.step()
+        # optimizer.step()
+        optimizer_obj.step()
         # lr_scheduler.step()
 
 
@@ -202,7 +207,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
         cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
         kps_loss[iter] = cur_kpt_loss
-        cur_depthseg_loss = (loss_all['depth'].item() + loss_all['seg'].item()) / len(detected_cams)
+        # cur_depthseg_loss = (loss_all['depth'].item() + loss_all['seg'].item()) / len(detected_cams)
 
         ## criteria for contact loss
         if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
@@ -211,7 +216,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
         ## sparse criterion on converge for v1 db release, need to be tight
         if CFG_EARLYSTOPPING:
-            if abs(prev_kps_loss - cur_kpt_loss) < 2.0 or abs(prev_depthseg_loss - cur_depthseg_loss) < 10.0:
+            if abs(prev_kps_loss - cur_kpt_loss) < 2.0:# or abs(prev_depthseg_loss - cur_depthseg_loss) < 10.0:
                 ealry_stopping_patience_v2 += 1
 
             if cur_kpt_loss < best_loss:
@@ -227,7 +232,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                 break
 
             prev_kps_loss = cur_kpt_loss
-            prev_depthseg_loss = cur_depthseg_loss
+            # prev_depthseg_loss = cur_depthseg_loss
 
 
 
@@ -314,10 +319,11 @@ def main(argv):
             if CFG_WITH_OBJ:
                 obj_pose = obj_dataloader[frame][:-1, :]
                 obj_pose[:3, -1] *= 0.1
-                model_obj.update_pose(pose=obj_pose, grad=True)
+                model_obj.update_pose(pose=obj_pose)
 
-                marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
-                loss_func.set_object_marker_pose(marker_cam_pose, CFG_vertspermarker[obj_dataloader.obj_name])
+                if CFG_exist_tip_db:
+                    marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
+                    loss_func.set_object_marker_pose(marker_cam_pose,  obj_dataloader.obj_class)
 
             ### initialize optimizer, scheduler
             lr_init = CFG_LR_INIT * 0.1
@@ -334,8 +340,8 @@ def main(argv):
                 target : wrist pose/rot, hand scale
                 except : hand shape, hand pose 
             """
-            __update_global__(model, model_obj, loss_func, detected_cams, frame,
-                              lr_init, lr_init_obj, trialName)
+            # __update_global__(model, loss_func, detected_cams, frame,
+            #                   lr_init, trialName)
 
             ### update incrementally
             """
@@ -344,8 +350,8 @@ def main(argv):
                 target : wrist pose/rot, hand scale, hand pose(each part) 
                 except : hand shape
             """
-            __update_parts__(model, model_obj, loss_func, detected_cams, frame,
-                             lr_init, lr_init_obj, trialName, iterperpart=40)
+            # __update_parts__(model, loss_func, detected_cams, frame,
+            #                  lr_init, trialName, iterperpart=40)
 
 
             ### update all
