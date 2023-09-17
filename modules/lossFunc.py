@@ -250,7 +250,7 @@ class MultiViewLossFunc(nn.Module):
                         seg_obj_gap[self.gt_seg_obj == 0] = 0
 
                         loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
-                        loss['seg_obj'] = loss_seg_obj * 0.5e-1
+                        loss['seg_obj'] = loss_seg_obj * 0.5e1
 
                         pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
                         seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)

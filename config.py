@@ -10,7 +10,7 @@ CFG_exist_tip_db = False
 CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = True
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'kpts_tip','temporal',  'depth','depth_obj', 'seg', 'seg_obj']#,] # 'depth_rel', , 'pose_obj' 'contact',
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'kpts_tip','temporal',  'depth', 'seg', 'seg_obj']#,'depth_obj',] # 'depth_rel', , 'pose_obj' 'contact',
 
 if not CFG_exist_tip_db:
     assert 'pose_obj' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
@@ -24,7 +24,7 @@ CFG_temporal_loss_weight = 0.5e5
 CFG_tipGT_interval = 10
 
 CFG_LR_INIT = 0.05
-CFG_LR_INIT_OBJ = 0.005
+CFG_LR_INIT_OBJ = 0.05
 
 CFG_NUM_ITER = 150
 
