@@ -214,7 +214,7 @@ class Model(nn.Module):
             # Original starting point
             # torch.from_numpy(np.array([3.0,  6.9, +2.5], dtype=np.float32)).to(meshes.device))
             # Set to a starting point closer to the reference depth image
-            torch.from_numpy(np.array([0.0114, 2.3306, 3.0206], dtype=np.float32)).to(meshes.device))
+            torch.from_numpy(np.array([0.0114, 2.3306, 4.0206], dtype=np.float32)).to(meshes.device))
 
 
         obj_rot = torch.FloatTensor(np.eye(3)).unsqueeze(0)
