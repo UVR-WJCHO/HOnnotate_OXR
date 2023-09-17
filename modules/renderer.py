@@ -175,6 +175,8 @@ class Renderer():
 
         depth = self.rasterizer_depth(meshes).zbuf[..., 0]
 
+        debug = depth.clone().detach().cpu().numpy()
+
         # depth map process
         depth[depth == -1] = 0.
         depth = depth * 10.0    # change to mm scale (same as gt)

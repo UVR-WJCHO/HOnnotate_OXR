@@ -166,7 +166,24 @@ depth_ref = depth_ref.cpu().numpy()
 # plt.title("Depth")
 # plt.grid(False)
 # plt.show()
+def sixd2matrot(pose_6d):
+    '''
+    :param pose_6d: Nx6
+    :return: pose_matrot: Nx3x3
+    '''
+    rot_vec_1 = pose_6d[:,:3]
+    rot_vec_2 = pose_6d[:,3:6]
+    rot_vec_3 = torch.cross(rot_vec_1, rot_vec_2)
+    pose_matrot = torch.stack([rot_vec_1,rot_vec_2,rot_vec_3],dim=-1)
+    return pose_matrot
 
+def matrot2sixd(pose_matrot):
+    '''
+    :param pose_matrot: Nx3x3
+    :return: pose_6d: Nx6
+    '''
+    pose_6d = torch.cat([pose_matrot[:,:3,0], pose_matrot[:,:3,1]], dim=1)
+    return pose_6d
 
 ############################
 ### Set up a basic model ###
@@ -197,11 +214,12 @@ class Model(nn.Module):
             # Original starting point
             # torch.from_numpy(np.array([3.0,  6.9, +2.5], dtype=np.float32)).to(meshes.device))
             # Set to a starting point closer to the reference depth image
-            torch.from_numpy(np.array([0.0114, 2.3306, 3.0206], dtype=np.float32)).to(meshes.device))
+            torch.from_numpy(np.array([0.0114, 2.3306, 4.0206], dtype=np.float32)).to(meshes.device))
 
 
         obj_rot = torch.FloatTensor(np.eye(3)).unsqueeze(0)
-        obj_rot = matrix_to_axis_angle(obj_rot)
+        # obj_rot = matrix_to_axis_angle(obj_rot) #[1, 3]
+        obj_rot = matrot2sixd(obj_rot) #[1, 6]
 
         obj_trans = torch.zeros((1, 3))
         self.obj_rot = nn.Parameter(obj_rot.to(self.device))
@@ -221,22 +239,45 @@ class Model(nn.Module):
 
         self.h = torch.tensor([[0, 0, 0, 1]], dtype=torch.float32).to(self.device)
 
-    def apply_transform(self, obj_pose, obj_verts):
-        obj_rot = axis_angle_to_matrix(obj_pose[:, :3]).squeeze()
-        obj_trans = obj_pose[:, 3:].T
-        obj_pose = torch.cat((obj_rot, obj_trans), -1)
-        obj_mat = torch.cat([obj_pose, self.h], dim=0)
+    def apply_transform(self, obj_pose, obj_trans,obj_verts):
+        # obj_rot = axis_angle_to_matrix(obj_pose[:, :3]).squeeze()
+        # obj_trans = obj_pose[:, 3:].T
+        # obj_pose = torch.cat((obj_rot, obj_trans), -1)
+        # obj_mat = torch.cat([obj_pose, self.h], dim=0)
+        rot_mat = sixd2matrot(obj_pose) #[1, 3, 3]
+        obj_mat = torch.cat([rot_mat, obj_trans.unsqueeze(-1)], dim=-1) #[1, 3, 4]
+        obj_mat = torch.cat([obj_mat, self.h.unsqueeze(1)], dim=1) #[1, 4, 4]
+        obj_mat = obj_mat[0]
 
         # Append 1 to each coordinate to convert them to homogeneous coordinates
         h = torch.ones((obj_verts.shape[0], 1), device=self.device)
         homogeneous_points = torch.cat((obj_verts, h), 1)
-
         # Apply matrix multiplication
-        transformed_points = homogeneous_points @ obj_mat.T
+        transformed_points = homogeneous_points @ obj_mat.T #[N, 4] [4, 4]
         # Convert back to Cartesian coordinates
         transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
 
         return transformed_points_cartesian
+    
+    # def apply_transform(self, obj_pose, obj_verts):
+    #     obj_rot = axis_angle_to_matrix(obj_pose[:, :3]).squeeze()
+    #     obj_trans = obj_pose[:, 3:].T
+    #     obj_pose = torch.cat((obj_rot, obj_trans), -1)
+    #     obj_mat = torch.cat([obj_pose, self.h], dim=0)
+    #     # rot_mat = sixd2matrot(obj_pose) #[1, 3, 3]
+    #     # obj_mat = torch.cat([rot_mat, obj_trans.unsqueeze(-1)], dim=-1) #[1, 3, 4]
+    #     # obj_mat = torch.cat([obj_mat, self.h.unsqueeze(1)], dim=1) #[1, 4, 4]
+    #     # obj_mat = obj_mat[0]
+
+    #     # Append 1 to each coordinate to convert them to homogeneous coordinates
+    #     h = torch.ones((obj_verts.shape[0], 1), device=self.device)
+    #     homogeneous_points = torch.cat((obj_verts, h), 1)
+    #     # Apply matrix multiplication
+    #     transformed_points = homogeneous_points @ obj_mat.T #[N, 4] [4, 4]
+    #     # Convert back to Cartesian coordinates
+    #     transformed_points_cartesian = transformed_points[:, :3] / transformed_points[:, 3:]
+
+    #     return transformed_points_cartesian
 
 
     def forward(self):
@@ -245,10 +286,11 @@ class Model(nn.Module):
         R = look_at_rotation(self.camera_position[None, :], device=self.device)  # (1, 3, 3)
         T = -torch.bmm(R.transpose(1, 2), self.camera_position[None, :, None])[:, :, 0]  # (1, 3)
 
-        obj_pose = torch.cat((self.obj_rot, self.obj_trans), -1)
+        # obj_pose = torch.cat((self.obj_rot, self.obj_trans), -1)
 
         init_vert = self.verts.clone().to(device)
-        verts = self.apply_transform(obj_pose, init_vert)
+        # verts = self.apply_transform(obj_pose, init_vert)
+        verts = self.apply_transform(self.obj_rot, self.obj_trans, init_vert)
         teapot_mesh = Meshes(
             verts=[verts.to(device)],
             faces=[self.faces.to(device)],

@@ -250,7 +250,7 @@ class MultiViewLossFunc(nn.Module):
                         seg_obj_gap[self.gt_seg_obj == 0] = 0
 
                         loss_seg_obj = torch.sum(seg_obj_gap.view(self.bs, -1), -1)
-                        loss['seg_obj'] = loss_seg_obj * 0.5e0
+                        loss['seg_obj'] = loss_seg_obj * 0.5e-1
 
                         pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
                         seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
@@ -283,7 +283,7 @@ class MultiViewLossFunc(nn.Module):
                         depth_obj_gap[self.gt_depth_obj == 0] = 0
 
                         loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
-                        loss['depth_obj'] = loss_depth_obj * 1e3
+                        loss['depth_obj'] = loss_depth_obj * 1e2
 
                         pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
                         gt_depth_vis = np.squeeze((self.gt_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
