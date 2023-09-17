@@ -181,7 +181,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ,
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[-2]], flag_obj=CFG_WITH_OBJ,
                             flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
@@ -197,7 +197,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
 
         total_loss.backward(retain_graph=True)
-        optimizer.step()
+
+        # optimizer.step()
         if CFG_WITH_OBJ:
             optimizer_obj.step()
         # lr_scheduler.step()
