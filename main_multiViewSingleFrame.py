@@ -144,7 +144,6 @@ def __update_parts__(model, model_obj, loss_func, detected_cams, frame, lr_init,
             logging.info(''.join(logs))
 
 def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=100):
-
     kps_loss = {}
     use_contact_loss = False
 
@@ -169,18 +168,14 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         optimizer.zero_grad()
         loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0,
                     'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0}
-
         hand_param = model()
         if CFG_WITH_OBJ:
             obj_param = model_obj()
         else:
             obj_param = None
-            
-        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
-
+        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
         loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[0], flag_obj=CFG_WITH_OBJ,
                             flag_crop=True, flag_headless=FLAGS.headless)
-
         ## apply cam weight
         for camIdx in detected_cams:
             loss_cam = losses[camIdx]
@@ -373,7 +368,7 @@ def main(argv):
 
             ### visualization results of frame
             loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
+                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
 
             ### save annotation per frame as json format
             save_annotation(target_dir_result, trialName, frame,  FLAGS.seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)

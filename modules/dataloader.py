@@ -196,7 +196,6 @@ class DataLoader:
             sample['img2bb'] = meta['img2bb']
             sample['kpts3d'] = meta['kpts']
             sample['kpts2d'] = meta['kpts'][:, :2]
-
             if '2D_tip_gt' in meta:
                 sample['tip2d'] = meta['2D_tip_gt']
 
