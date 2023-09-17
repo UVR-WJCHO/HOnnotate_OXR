@@ -286,6 +286,7 @@ class MultiViewLossFunc(nn.Module):
                         self.cam_renderer[camIdx].register_depth(gt_depth_obj)
                         loss_depth_obj, depth_obj_gap = self.cam_renderer[camIdx].compute_depth_loss(self.bb)
 
+
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                         # depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth_obj)
                         # depth_obj_gap[self.gt_depth_obj == 0] = 0

@@ -164,6 +164,7 @@ class Renderer(nn.Module):
         pred_rendered = self.output['depth'][:, bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
 
         depth_gap = (pred_rendered - self.depth_ref) ** 2
+        # depth_gap[pred_rendered == 10.0] = 0          ###### check
 
         # depth_gap[self.depth_ref == 0] = 0
         depth_loss = torch.sum(depth_gap)
