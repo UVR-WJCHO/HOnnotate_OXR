@@ -305,9 +305,9 @@ class DataLoader:
         seg[seg != 1] = 0
         seg_obj[seg_obj != 2] = 0
 
-        depth_near_th, depth_far_th = CFG_DEPTH_RANGE[self.cam]
-        depth[depth < depth_near_th] = 0
-        depth[depth > depth_far_th] = 0
+        # depth_near_th, depth_far_th = CFG_DEPTH_RANGE[self.cam]
+        # depth[depth < depth_near_th] = 0
+        # depth[depth > depth_far_th] = 0
 
         depth_obj = depth.copy()
         depth_obj[seg_obj == 0] = 0
@@ -373,7 +373,8 @@ class ObjectLoader:
         obj_mesh_path = os.path.join(self.obj_template_dir, self.obj_mesh_name)
 
         self.obj_mesh_data = {}
-        self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
+        verts, faces, _ = load_obj(obj_mesh_path)
+        self.obj_mesh_data['verts'] = verts
         self.obj_mesh_data['faces'] = faces.verts_idx
 
         # load from results of preprocess.py

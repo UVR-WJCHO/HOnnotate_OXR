@@ -31,7 +31,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 
-flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 44, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 FLAGS(sys.argv)
 
@@ -162,7 +162,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     loss_weight = CFG_LOSS_WEIGHT
     # loss_weight['kpts2d'] = 0.5
 
-    detected_cams = [detected_cams[-2]]
+    # detected_cams = [detected_cams[-2]]
 
     for iter in range(iter):
         t_iter = time.time()
@@ -323,7 +323,7 @@ def main(argv):
             ## set object init pose and marker pose as GT for projected vertex.
             if CFG_WITH_OBJ:
                 obj_pose = obj_dataloader[frame][:-1, :]
-                obj_pose[:3, -1] *= 0.1
+                # obj_pose[:3, -1] *= 0.1
                 model_obj.update_pose(pose=obj_pose)
 
                 if CFG_exist_tip_db:

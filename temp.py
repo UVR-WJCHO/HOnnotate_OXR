@@ -63,9 +63,14 @@ from pytorch3d.renderer import (
 device = torch.device("cuda:0")
 torch.cuda.set_device(device)
 
+OBJ_MODEL = "./teapot.obj"#"./03_banana.obj"
+
 # Load the obj and ignore the textures and materials.
-verts, faces_idx, _ = load_obj("./teapot.obj")
+verts, faces_idx, _ = load_obj(OBJ_MODEL)
 faces = faces_idx.verts_idx
+# verts *= 0.1
+debug = verts.clone().numpy()
+
 
 # Initialize each vertex to be white in color.
 verts_rgb = torch.ones_like(verts)[None]  # (1, V, 3)
@@ -93,8 +98,8 @@ blend_params = BlendParams(sigma=1e-4, gamma=1e-4)
 # the difference between naive and coarse-to-fine rasterization.
 raster_settings = RasterizationSettings(
     image_size=256,
-    blur_radius=np.log(1. / 1e-4 - 1.) * blend_params.sigma,
-    faces_per_pixel=100,
+    blur_radius=0.0,
+    faces_per_pixel=1,
 )
 
 # Create a silhouette mesh renderer by composing a rasterizer and a shader.
@@ -133,7 +138,7 @@ depth_renderer = MeshRasterizer(
 ### Create a reference image ###
 ################################
 # Select the viewpoint using spherical angles
-distance = 3  # distance from camera to the object
+distance = 5.0206  # distance from camera to the object
 elevation = 50.0  # angle of elevation in degrees
 azimuth = 0.0  # No rotation so the camera is positioned on the +Z axis.
 
@@ -214,7 +219,7 @@ class Model(nn.Module):
             # Original starting point
             # torch.from_numpy(np.array([3.0,  6.9, +2.5], dtype=np.float32)).to(meshes.device))
             # Set to a starting point closer to the reference depth image
-            torch.from_numpy(np.array([0.0114, 2.3306, 4.0206], dtype=np.float32)).to(meshes.device))
+            torch.from_numpy(np.array([0.0114, 2.3306, 3.], dtype=np.float32)).to(meshes.device))
 
 
         obj_rot = torch.FloatTensor(np.eye(3)).unsqueeze(0)
@@ -229,11 +234,12 @@ class Model(nn.Module):
         self.obj_rot.requires_grad = True
         self.obj_trans.requires_grad = True
 
-        self.verts, faces_idx, _ = load_obj("./teapot.obj")
+        self.verts, faces_idx, _ = load_obj(OBJ_MODEL)
         self.faces = faces_idx.verts_idx
+        # self.verts *= 0.1
 
         # Initialize each vertex to be white in color.
-        self.verts_rgb = torch.ones_like(verts)[None]  # (1, V, 3)
+        self.verts_rgb = torch.ones_like(self.verts)[None]  # (1, V, 3)
         # textures = Textures(verts_rgb=verts_rgb.to(device))
         self.textures = TexturesVertex(verts_features=verts_rgb.to(device))
 
@@ -291,6 +297,9 @@ class Model(nn.Module):
         init_vert = self.verts.clone().to(device)
         # verts = self.apply_transform(obj_pose, init_vert)
         verts = self.apply_transform(self.obj_rot, self.obj_trans, init_vert)
+
+        debug = verts.clone().detach().cpu().numpy()
+
         teapot_mesh = Meshes(
             verts=[verts.to(device)],
             faces=[self.faces.to(device)],

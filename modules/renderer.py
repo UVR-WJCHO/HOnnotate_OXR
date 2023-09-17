@@ -5,6 +5,8 @@ sys.path.insert(0,os.path.join(os.getcwd(), '../HOnnotate_refine/optimization'))
 import numpy as np
 import torch
 import torch.nn as nn
+
+
 from torch.nn import functional as F
 from manopth.manolayer import ManoLayer
 from pytorch3d.structures import Meshes, join_meshes_as_scene
@@ -41,8 +43,9 @@ def changeCoordtopytorch3D(extrinsic):
     return extrinsic_py
 
 
-class Renderer():
+class Renderer(nn.Module):
     def __init__(self, device='cuda', bs=1, extrinsic=None, intrinsic=None, image_size=None, light_loaction=((2.0, 2.0, -2.0),)):
+        super().__init__()
         '''
             R : numpy array [3, 3]
             T : numpy array [3]
@@ -157,6 +160,19 @@ class Renderer():
         return {"rgb":rgb, "depth":depth, "seg":seg}
 
 
+    def compute_depth_loss(self, bb):
+        pred_rendered = self.output['depth'][:, bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
+
+        depth_gap = (pred_rendered - self.depth_ref) ** 2
+
+        # depth_gap[self.depth_ref == 0] = 0
+        depth_loss = torch.sum(depth_gap)
+        return depth_loss, depth_gap
+
+
+    def register_depth(self, depth_ref):
+        self.register_buffer('depth_ref', depth_ref)
+
     def render(self, verts, faces, flag_rgb=False):
         '''
         verts : [bs, V, 3]
@@ -174,20 +190,20 @@ class Renderer():
             rgb = None
 
         depth = self.rasterizer_depth(meshes).zbuf[..., 0]
-
-        debug = depth.clone().detach().cpu().numpy()
-
         # depth map process
-        depth[depth == -1] = 0.
-        depth = depth * 10.0    # change to mm scale (same as gt)
+        # depth[depth == -1] = 0.
+        # depth = depth * 10.0    # change to mm scale (same as gt)
+        depth = depth / 100.0   # change to m scale
+        depth[depth < 0] = 10.
 
         seg = torch.empty_like(depth).copy_(depth)
 
         # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate
 
+        self.output = {"rgb":rgb, "depth":depth, "seg":seg}
 
-        return {"rgb":rgb, "depth":depth, "seg":seg}
+        return self.output
 
     def render_meshes(self, verts_list, faces_list, flag_rgb=False):
         '''
