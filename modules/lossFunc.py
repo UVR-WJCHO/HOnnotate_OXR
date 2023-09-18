@@ -105,7 +105,6 @@ class MultiViewLossFunc(nn.Module):
         self.gt_depth = gt_sample['depth']
         self.gt_depth_obj = gt_sample['depth_obj']
 
-
         # if no gt seg, mask is 1 in every pixel
         self.gt_seg = gt_sample['seg']
         self.gt_seg_obj = gt_sample['seg_obj']
@@ -279,13 +278,8 @@ class MultiViewLossFunc(nn.Module):
                     loss['depth'] = loss_depth * 2e2
 
                     if pred_obj is not None:
-                        gt_depth_obj = self.gt_depth_obj.clone()
-                        gt_depth_obj /= 1000.
-                        gt_depth_obj[gt_depth_obj == 0] = 10.0
-
-                        self.cam_renderer[camIdx].register_depth(gt_depth_obj)
+                        self.cam_renderer[camIdx].register_depth(self.gt_depth_obj)
                         loss_depth_obj, depth_obj_gap = self.cam_renderer[camIdx].compute_depth_loss(self.bb)
-
 
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                         # depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth_obj)
@@ -295,7 +289,7 @@ class MultiViewLossFunc(nn.Module):
                         loss['depth_obj'] = loss_depth_obj * 1e-1
 
                         pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy()*25)).astype(np.uint8)
-                        gt_depth_vis = np.squeeze((gt_depth_obj[0].cpu().detach().numpy()*25)).astype(np.uint8)
+                        gt_depth_vis = np.squeeze((self.gt_depth_obj[0].cpu().detach().numpy()*25)).astype(np.uint8)
                         depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())).astype(np.uint8)
                         cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
                         cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)

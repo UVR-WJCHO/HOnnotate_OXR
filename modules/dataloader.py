@@ -300,20 +300,20 @@ class DataLoader:
             seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)).astype(float)
         else:
             seg = np.ones((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
-        seg_obj = seg.copy()
 
+        seg_obj = seg.copy()
         seg[seg != 1] = 0
         seg_obj[seg_obj != 2] = 0
-
-        # depth_near_th, depth_far_th = CFG_DEPTH_RANGE[self.cam]
-        # depth[depth < depth_near_th] = 0
-        # depth[depth > depth_far_th] = 0
 
         depth_obj = depth.copy()
         depth_obj[seg_obj == 0] = 0
         depth[seg == 0] = 0
 
-        depth[seg == 0] = 0
+        # change depth image to m scale and background value as positive value
+        depth /= 1000.
+        depth[depth == 0] = 10.0
+        depth_obj /= 1000.
+        depth_obj[depth_obj == 0] = 10.0
 
         # depth_vis = depth_obj / np.max(depth_obj)
         # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
