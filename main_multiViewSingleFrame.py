@@ -30,7 +30,7 @@ import pandas as pd
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
 
 flags.DEFINE_integer('initNum', 1, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
@@ -171,7 +171,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         optimizer.zero_grad()
         if CFG_WITH_OBJ:
             optimizer_obj.zero_grad()
-        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0,
+        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'penetration': 0.0,
                     'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0, 'pose_obj':0.0}
 
         hand_param = model()

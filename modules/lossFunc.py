@@ -12,6 +12,7 @@ from utils.lossUtils import *
 from utils.modelUtils import *
 import time
 from pytorch3d.renderer import TexturesVertex
+from pytorch3d.ops import SubdivideMeshes
 
 import csv
 import pandas as pd
@@ -371,10 +372,25 @@ class MultiViewLossFunc(nn.Module):
                 # debug = inter_dist.clone().cpu().detach().numpy()
                 contact_mask = inter_dist < CFG_CONTACT_DIST
 
-                losses_single['contact'] = inter_dist[contact_mask].sum() * 1e1
+                loss['contact'] = inter_dist[contact_mask].sum() * 1E-1
             else:
-                losses_single['contact'] = self.default_zero
+                loss['contact'] = self.default_zero
 
+        if 'penetration' in self.loss_dict:
+            if pred_obj is not None:
+                hand_pcd = Pointclouds(points=verts_set[camIdx])
+                obj_mesh = Meshes(verts=verts_obj_set[camIdx].detach(), faces=pred_obj['faces']).detach() # only update hand params
+
+                for _ in range(5):
+                    obj_mesh = SubdivideMeshes()(obj_mesh) 
+
+                verts_obj_norm = obj_mesh.verts_normals_padded()
+                collide_ids_hand, collide_ids_obj = collision_check(verts_obj_set[camIdx], verts_obj_norm, verts_set[camIdx], chamferDist())
+
+                if collide_ids_hand is not None:
+                    loss['penetration'] = (verts_obj_set[camIdx][:, collide_ids_obj] - verts_set[camIdx][:, collide_ids_hand]).square().mean() * 1E3
+                else:
+                    loss['penetration'] = self.default_zero
 
         if 'temporal' in self.loss_dict:
             if self.prev_hand_pose == None:

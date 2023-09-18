@@ -3,9 +3,12 @@ import sys
 sys.path.insert(0,os.path.join(os.getcwd()))
 
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 import cv2
 import numpy as np
 import math
+import chamfer_3D as chamfer
 from utils import params
 from utils.lossUtils import *
 from utils.modelUtils import *
@@ -49,14 +52,14 @@ class Constraints():
         self.maxTensor = torch.tensor(self.maxThetaVals).to(self.device)
 
         """
-        ensor([[ 
-        0.0133, -0.1278, -0.3035, -0.0095,  0.0053,  0.4009, -0.0138, -0.0017, 0.9236, 
-        
-        -0.0197,  0.2448,  0.1409,  0.0100,  0.0157,  0.1495,  0.0093,  0.0011,  0.2551, 
-        -0.0581,  0.4941, -0.2347,  0.0797, -0.0047, -0.5662,  0.0018, -0.0113, -0.4145, 
+        ensor([[
+        0.0133, -0.1278, -0.3035, -0.0095,  0.0053,  0.4009, -0.0138, -0.0017, 0.9236,
+
+        -0.0197,  0.2448,  0.1409,  0.0100,  0.0157,  0.1495,  0.0093,  0.0011,  0.2551,
+        -0.0581,  0.4941, -0.2347,  0.0797, -0.0047, -0.5662,  0.0018, -0.0113, -0.4145,
         -0.0505, -0.1397, -0.1844,  0.0128, -0.0059, -0.6347,  0.0032,  0.0107, -0.6212,
-         -0.5660,  0.1788,  0.2408, -0.0166,-0.3562, -0.0082, -0.0113, -0.7498, -0.5683]], 
-         
+         -0.5660,  0.1788,  0.2408, -0.0166,-0.3562, -0.0082, -0.0113, -0.7498, -0.5683]],
+
          device='cuda:0'
         """
 
@@ -215,3 +218,76 @@ def point_mesh_face_distance(
         points, points_first_idx, tris, tris_first_idx, max_points, min_triangle_area)
 
     return point_to_face
+
+def collision_check(scene_v, scene_vn, human_vertices, distChamfer):
+    # compute the full-body chamfer distance
+    #human_vertices = human_vertices.unsqueeze(0).contiguous()
+    contact_dist, _, contact_scene_idx, _ = distChamfer(human_vertices, scene_v)
+    contact_scene_idx = contact_scene_idx.squeeze().squeeze().cpu().numpy()
+    # generate collision mask via normal check
+    batch_idx = 0 #torch.arange(scene_v.shape[0])#.view(-1, 1)
+    human2scene_norm = scene_v.squeeze()[contact_scene_idx] - human_vertices.squeeze()
+    # human2scene_norm = human2scene_norm/torch.norm(human2scene_norm, dim=1, keepdim=True)
+    human2scene_norm = F.normalize(human2scene_norm, p=2, dim=-1)
+    scene_vn = scene_vn.squeeze()
+    scene_norm = scene_vn[contact_scene_idx]
+    collide_mask = torch.sum(human2scene_norm * scene_norm, dim=-1)
+    collide_mask = collide_mask > 0
+
+    collide_ids_human = torch.nonzero(collide_mask.squeeze()).T
+    # return collide_ids_human and collide_ids_scene
+    if collide_ids_human.numel():
+        collide_ids_human = collide_ids_human.squeeze().cpu().numpy()
+        collide_ids_scene = contact_scene_idx[collide_ids_human]
+    else:
+        collide_ids_human = None
+        collide_ids_scene = None
+
+    return collide_ids_human, collide_ids_scene
+
+# Chamfer's distance module @thibaultgroueix
+# GPU tensors only
+class chamferFunction(Function):
+    @staticmethod
+    def forward(ctx, xyz1, xyz2):
+        batchsize, n, _ = xyz1.size()
+        _, m, _ = xyz2.size()
+
+        dist1 = torch.zeros(batchsize, n)
+        dist2 = torch.zeros(batchsize, m)
+
+        idx1 = torch.zeros(batchsize, n).type(torch.IntTensor)
+        idx2 = torch.zeros(batchsize, m).type(torch.IntTensor)
+
+        dist1 = dist1.cuda()
+        dist2 = dist2.cuda()
+        idx1 = idx1.cuda()
+        idx2 = idx2.cuda()
+
+        chamfer.forward(xyz1, xyz2, dist1, dist2, idx1, idx2)
+        ctx.save_for_backward(xyz1, xyz2, idx1, idx2)
+        return dist1, dist2, idx1, idx2
+
+    @staticmethod
+    def backward(ctx, graddist1, graddist2, gradidx1, gradidx2):
+        xyz1, xyz2, idx1, idx2 = ctx.saved_tensors
+        graddist1 = graddist1.contiguous()
+        graddist2 = graddist2.contiguous()
+
+        gradxyz1 = torch.zeros(xyz1.size())
+        gradxyz2 = torch.zeros(xyz2.size())
+
+        gradxyz1 = gradxyz1.cuda()
+        gradxyz2 = gradxyz2.cuda()
+        chamfer.backward(
+            xyz1, xyz2, gradxyz1, gradxyz2, graddist1, graddist2, idx1, idx2
+        )
+        return gradxyz1, gradxyz2
+
+
+class chamferDist(nn.Module):
+    def __init__(self):
+        super(chamferDist, self).__init__()
+
+    def forward(self, input1, input2):
+        return chamferFunction.apply(input1, input2)
