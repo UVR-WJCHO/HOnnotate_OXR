@@ -453,7 +453,7 @@ class loadDataset():
 
         err = np.sum(abs(verts_debug - marker_debug), axis=1)
         err = np.average(err)
-        assert err < 20, f"wrong marker-vert fitting with err {err}, check vert idx"
+        assert err < 20, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
 
         ### debug
