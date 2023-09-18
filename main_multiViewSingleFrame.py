@@ -29,9 +29,9 @@ from pstats import Stats
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 
-flags.DEFINE_integer('initNum', 44, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 FLAGS(sys.argv)
 
@@ -181,8 +181,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-                            flag_crop=True, flag_headless=FLAGS.headless)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+        #                     flag_crop=True, flag_headless=FLAGS.headless)
         ## apply cam weight
         for camIdx in detected_cams:
             loss_cam = losses[camIdx]
@@ -293,6 +293,7 @@ def main(argv):
             loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
 
         flag_start = True
+        flag_skip = 0
 
         loss_func.reset_prev_pose()
         ## Start optimization per frame
@@ -317,7 +318,14 @@ def main(argv):
                     detected_cams.append(camIdx)
             if len(detected_cams) < 2:
                 print('detected hand is less than 2, skip the frame ', frame)
+                flag_skip += 1
                 continue
+
+            ## reset previous pose data if skipped multiple frames
+            if flag_skip > 3:
+                flag_skip = 0
+                loss_func.reset_prev_pose()
+                flag_start = True
 
             ## set object init pose and marker pose as GT for projected vertex.
             if CFG_WITH_OBJ:
@@ -330,12 +338,12 @@ def main(argv):
                     loss_func.set_object_marker_pose(marker_cam_pose,  obj_dataloader.obj_class)
 
             ### initialize optimizer, scheduler
-            lr_init = CFG_LR_INIT * 0.1
-            lr_init_obj = CFG_LR_INIT_OBJ * 0.1
+            lr_init = CFG_LR_INIT * 0.2
+            lr_init_obj = CFG_LR_INIT_OBJ * 0.2
 
             if flag_start:
-                lr_init *= 10.0
-                lr_init_obj *= 10.0
+                lr_init *= 5.0
+                lr_init_obj *= 5.0
                 flag_start = False
 
             ### update global pose
