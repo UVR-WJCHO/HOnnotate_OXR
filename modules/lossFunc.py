@@ -527,6 +527,8 @@ class MultiViewLossFunc(nn.Module):
             # gt_depth_hand *= 1000.
             for i in range(21):
                 kpts2d = pred_kpts2d[i, :]
+                if gt_seg_hand[int(kpts2d[1]), int(kpts2d[0])] == 0:
+                    continue
                 gt_hand_d = gt_depth_hand[int(kpts2d[1]), int(kpts2d[0])]
                 pred_hand_d = hand_depth[int(kpts2d[1]), int(kpts2d[0])]
                 if gt_hand_d == 0 or pred_hand_d == 0:
