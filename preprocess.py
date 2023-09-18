@@ -835,18 +835,19 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                     bb, img2bb, bb2img, procImgSet, kps = output
                     procKps = db.translateKpts(np.copy(kps), img2bb)
                     db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
-                    db.updateObjdata(idx, save_idx)
 
-                    if flag_segmentation:
-                        db.segmentation(save_idx, procImgSet, procKps, img2bb)
+                    # if flag_segmentation:
+                    #     db.segmentation(save_idx, procImgSet, procKps, img2bb)
                 else:
                     db.postProcessNone(save_idx)
+            # object data only on master cam
+            dbs[0].updateObjdata(idx, save_idx)
+
             progress.update()
             global_tqdm.update()
             save_idx += 1
 
-        for db in dbs:
-            db.saveObjdata()
+        dbs[0].saveObjdata()
 
     return True
 
