@@ -6,7 +6,6 @@ import math
 import json
 from config import *
 
-
 def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
     #seq ='230822_S01_obj_01_grasp_13'
     db = seq.split('_')[0]

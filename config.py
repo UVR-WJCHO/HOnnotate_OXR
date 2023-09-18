@@ -63,6 +63,7 @@ CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],
                    [0, 1,2,3, 5,6,7, 9,10,11, 13,14,15, 17,18,19]]
 
 ## Config
+CFG_ROOT_DIR = os.path.join(os.getcwd())
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 

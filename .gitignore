@@ -140,3 +140,4 @@ backup/HandsForAll/models
 *.pth
 .pth
 for_headless_server/
+log/
