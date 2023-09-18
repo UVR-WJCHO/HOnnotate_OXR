@@ -299,7 +299,7 @@ class DataLoader:
         if os.path.exists(seg_path):
             seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)).astype(float)
         else:
-            seg = np.ones((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
+            seg = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
 
         seg_hand = np.where(seg == 1, 1, 0)
         seg_obj = np.where(seg == 2, 1, 0)
@@ -315,16 +315,15 @@ class DataLoader:
         depth_obj = np.where(seg != 2, 10, depth)
         depth_hand = np.where(seg != 1, 10, depth)
 
-        # depth_vis_0 = depth_hand / np.max(depth_hand)
-        # depth_vis = depth_obj / np.max(depth_obj)
-        # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
-        # cv2.imshow("depth", np.asarray(depth_vis * 255, dtype=np.uint8))
-        #
-        # cv2.imshow("depth_vis_0", np.asarray(depth_vis_0 * 255, dtype=np.uint8))
-        # cv2.waitKey(0)
+        depth_vis_0 = depth_hand / np.max(depth_hand)
+        depth_vis = depth_obj / np.max(depth_obj)
+        cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
+        cv2.imshow("depth_obj", np.asarray(depth_vis * 255, dtype=np.uint8))
 
-        # cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
-        # cv2.waitKey(0)
+        cv2.imshow("depth_hand", np.asarray(depth_vis_0 * 255, dtype=np.uint8))
+
+        cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
+        cv2.waitKey(0)
 
         return rgb, depth_hand, depth_obj, seg_hand, seg_obj, rgb_raw, depth_raw
     

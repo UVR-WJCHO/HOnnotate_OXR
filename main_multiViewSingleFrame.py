@@ -29,7 +29,7 @@ from pstats import Stats
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
@@ -197,7 +197,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
         total_loss.backward(retain_graph=True)
 
-        # optimizer.step()
+        optimizer.step()
         if CFG_WITH_OBJ:
             optimizer_obj.step()
         # lr_scheduler.step()

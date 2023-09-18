@@ -24,25 +24,17 @@ import matplotlib
 import matplotlib.pyplot as plt
 from glob import glob
 
-def predict(rgb, object_id):
-    class opts(object):
-        model = 'deeplabv3plus_mobilenet'
-        output_stride = 16
-        gpu_id = '0'
-        ckpt = "./modules/deepLabV3plus/checkpoints/%02d_best_deeplabv3plus_mobilenet_oxr_os16.pth"%object_id
-
+def predict(rgb, opts):
     os.environ["CUDA_VISIBLE_DEVICES"] = opts.gpu_id
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') 
     model = network.modeling.__dict__[opts.model](21, output_stride=opts.output_stride)
     utils.set_bn_momentum(model.backbone, momentum=0.01)
     model.classifier.classifier[3] = nn.Conv2d(256,3,1)
-    if not os.path.isfile(opts.ckpt):
-        return None, None
-    checkpoint = torch.load(opts.ckpt, map_location=torch.device('cpu'))
-    model.load_state_dict(checkpoint["model_state"])
+
+    model.load_state_dict(opts.checkpoint["model_state"])
     model = nn.DataParallel(model)
     model.to(device)
-    del checkpoint
+
     transform = T.Compose([
         T.ToTensor(),
         T.Normalize(mean=[0.485, 0.456, 0.406],

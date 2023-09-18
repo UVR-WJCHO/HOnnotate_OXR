@@ -162,6 +162,7 @@ class Renderer(nn.Module):
 
     def compute_depth_loss(self, pred_depth):
         depth_gap = (pred_depth - self.depth_ref) ** 2
+        depth_gap[pred_depth == 10.0] = 0
         # depth_gap[self.depth_ref == 10.0] = 0          ###### check
         # depth_gap[self.depth_ref == 0] = 0
 

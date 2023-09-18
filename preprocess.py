@@ -99,10 +99,22 @@ num_global = 0
 
 CFG_TIP_NAME = ['thumb', 'index', 'middle', 'ring', 'pinky']
 
-def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, obj_id):
+
+class deeplab_opts():
+    def __init__(self, object_id):
+        self.model = 'deeplabv3plus_mobilenet'
+        self.output_stride = 16
+        self.gpu_id = '0'
+        self.ckpt = "./modules/deepLabV3plus/checkpoints/%02d_best_deeplabv3plus_mobilenet_oxr_os16.pth" % int(object_id)
+
+        assert os.path.isfile(self.ckpt), "no ckpt files for object %02d" % int(object_id)
+        print("...loading ", self.ckpt)
+        self.checkpoint = torch.load(self.ckpt, map_location=torch.device('cpu'))
+
+def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, opts):
     # print(type(rgb))
     assert isinstance(rgb, np.ndarray), "rgb type is not np.ndarray"
-    mask, vis_mask = deepSegPredict(rgb, int(obj_id))
+    mask, vis_mask = deepSegPredict(rgb, opts)
     maskName = image_name + '.png'
     visName = image_name + '.jpg'
     if mask is not None and vis_mask is not None:
@@ -864,35 +876,35 @@ def main(argv):
         - consider two-hand situation (currently assume single hand detection)
     '''
 
-    tasks = []
-    process_count = 4
-
-    total_count = 0
-    t1 = time.time()
-    for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
-        seqDir = os.path.join(rootDir, seqName)
-        print("---------------start preprocess seq : %s ---------------" % (seqName))
-        for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
-            dbs = []
-            for camID in camIDset:
-                db = loadDataset(FLAGS.db, seqName, trialName)
-                db.init_cam(camID)
-                dbs.append(db)
-                # total_count += len(db)
-                # tasks.append((preprocess_single_cam, (db,)))
-
-            total_count += len(dbs[0])
-            tasks.append((preprocess_multi_cam, (dbs,)))
-
-        pool = TqdmMultiProcessPool(process_count)
-        with tqdm.tqdm(total=total_count) as global_tqdm:
-            global_tqdm.set_description(f"{seqName} - total : ")
-            pool.map(global_tqdm, tasks, error_callback, done_callback)
-
-        print("---------------end preprocess seq : %s ---------------" % (seqName))
-
-    proc_time = round((time.time() - t1) / 60., 2)
-    print("total process time : %s min" % (str(proc_time)))
+    # tasks = []
+    # process_count = 4
+    #
+    # total_count = 0
+    # t1 = time.time()
+    # for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+    #     seqDir = os.path.join(rootDir, seqName)
+    #     print("---------------start preprocess seq : %s ---------------" % (seqName))
+    #     for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+    #         dbs = []
+    #         for camID in camIDset:
+    #             db = loadDataset(FLAGS.db, seqName, trialName)
+    #             db.init_cam(camID)
+    #             dbs.append(db)
+    #             # total_count += len(db)
+    #             # tasks.append((preprocess_single_cam, (db,)))
+    #
+    #         total_count += len(dbs[0])
+    #         tasks.append((preprocess_multi_cam, (dbs,)))
+    #
+    #     pool = TqdmMultiProcessPool(process_count)
+    #     with tqdm.tqdm(total=total_count) as global_tqdm:
+    #         global_tqdm.set_description(f"{seqName} - total : ")
+    #         pool.map(global_tqdm, tasks, error_callback, done_callback)
+    #
+    #     print("---------------end preprocess seq : %s ---------------" % (seqName))
+    #
+    # proc_time = round((time.time() - t1) / 60., 2)
+    # print("total process time : %s min" % (str(proc_time)))
 
 
     print("start segmentation - deeplab_v3")
@@ -901,6 +913,10 @@ def main(argv):
             seqDir = os.path.join(rootDir, seqName)
             print("---------------start preprocess seq : %s ---------------" % (seqName))
             for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+
+                db = loadDataset(FLAGS.db, seqName, trialName)
+                opts = deeplab_opts(db.obj_id)
+
                 dbDir = os.path.join(baseDir, FLAGS.db, seqName, trialName)
                 for camID in camIDset:
                     rgbCropDir = os.path.join(dbDir, 'rgb_crop', camID)
@@ -916,7 +932,7 @@ def main(argv):
                         assert os.path.exists(rgbPath), f'{rgbPath} rgb image does not exist'
                         rgb = cv2.imread(rgbPath)
                         image_name = image[:-4]
-                        deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, db.obj_id)
+                        deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, opts)
 
     print("end segmentation - deeplab_v3")
 
