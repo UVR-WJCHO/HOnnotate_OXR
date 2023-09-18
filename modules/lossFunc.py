@@ -294,14 +294,14 @@ class MultiViewLossFunc(nn.Module):
                     # loss_depth = torch.mean(depth_gap.view(self.bs, -1), -1)
                     loss['depth'] = loss_depth * 1e0
 
-                    # if camIdx == 0:
-                    #     pred_depth_vis = np.squeeze((pred_depth[0].cpu().detach().numpy())* 25).astype(np.uint8)
-                    #     gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())* 25).astype(np.uint8)
-                    #     depth_gap_vis = np.squeeze((depth_gap[0].cpu().detach().numpy())).astype(np.uint8)
-                    #     cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
-                    #     cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)
-                    #     cv2.imshow("depth_gap_vis"+str(camIdx), depth_gap_vis)
-                    #     cv2.waitKey(0)
+                    if camIdx == 0:
+                        pred_depth_vis = np.squeeze((pred_depth[0].cpu().detach().numpy())* 25).astype(np.uint8)
+                        gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())* 25).astype(np.uint8)
+                        depth_gap_vis = np.squeeze((depth_gap[0].cpu().detach().numpy())).astype(np.uint8)
+                        cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
+                        cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)
+                        cv2.imshow("depth_gap_vis"+str(camIdx), depth_gap_vis)
+                        cv2.waitKey(0)
 
                     if pred_obj is not None:
                         pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3],
@@ -479,9 +479,9 @@ class MultiViewLossFunc(nn.Module):
             kpts_recall[camID] = keypoint_recall_score
             kpts_f1[camID] = keypoint_f1_score
 
-            # print("3D keypoint precision score : ", self.keypoint_precision_score)
-            # print("3D keypoint recall score : ", self.keypoint_recall_score)
-            # print("3D keypoint F1 score : ", self.keypoint_f1_score)
+            print("3D keypoint precision score : ", keypoint_precision_score)
+            print("3D keypoint recall score : ", keypoint_recall_score)
+            print("3D keypoint F1 score : ", keypoint_f1_score)
 
             #2. mesh pose F1-Score
             TP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스(background, object, hand)가 참값(실제 RGB- segmentation map)의 클래스와 일치
@@ -509,9 +509,9 @@ class MultiViewLossFunc(nn.Module):
             mesh_recall[camID] = mesh_seg_recall_score
             mesh_f1[camID] = mesh_seg_f1_score
 
-            # print("mesh seg precision score : ", self.mesh_seg_precision_score)
-            # print("mesh seg recall score : ", self.mesh_seg_recall_score)
-            # print("mesh seg F1 score : ", self.mesh_seg_f1_score)
+            print("mesh seg precision score : ", mesh_seg_precision_score)
+            print("mesh seg recall score : ", mesh_seg_recall_score)
+            print("mesh seg F1 score : ", mesh_seg_f1_score)
 
             #3. hand depth accuracy
             TP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
@@ -524,7 +524,7 @@ class MultiViewLossFunc(nn.Module):
             gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
 
             gt_depth_hand[gt_depth_hand==10] = 0
-            # gt_depth_hand *= 1000.
+            gt_depth_hand *= 1000.
             for i in range(21):
                 kpts2d = pred_kpts2d[i, :]
                 if gt_seg_hand[int(kpts2d[1]), int(kpts2d[0])] == 0:
@@ -538,19 +538,24 @@ class MultiViewLossFunc(nn.Module):
                 else:
                     FP += 1
 
-            mesh_depth_precision_score = TP / (TP + FP)
-            mesh_depth_recall_score = TP / (TP + FN)
-
-            mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
-                                        (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
+            if TP == 0:
+                mesh_depth_precision_score = 0
+                mesh_depth_recall_score = 0
+                mesh_depth_f1_score = 0
+            else:
+                mesh_depth_precision_score = TP / (TP + FP)
+                mesh_depth_recall_score = TP / (TP + FN)
+                mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
+                                            (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
             depth_precision[camID] = mesh_depth_precision_score
             depth_recall[camID] = mesh_depth_recall_score
             depth_f1[camID] = mesh_depth_f1_score
             
-            # print("mesh depth precision score : ", self.mesh_depth_precision_score)
-            # print("mesh depth recall score : ", self.mesh_depth_recall_score)
-            # print("mesh depth F1 score : ", self.mesh_depth_f1_score)
-        
+            print("mesh depth precision score : ", mesh_depth_precision_score)
+            print("mesh depth recall score : ", mesh_depth_recall_score)
+            print("mesh depth F1 score : ", mesh_depth_f1_score)
+
+
         kpts_precision_avg = sum(kpts_precision.values())/len(camIdxSet)
         kpts_recall_avg = sum(kpts_recall.values())/len(camIdxSet)
         kpts_f1_avg = sum(kpts_f1.values())/len(camIdxSet)

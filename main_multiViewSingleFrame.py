@@ -32,7 +32,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
 
-flags.DEFINE_integer('initNum', 7, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
@@ -155,7 +155,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     model.change_grads_all(root=True, rot=True, pose=True, shape=True, scale=True)
     # optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
     optimizer = initialize_optimizer(model, None, lr_init, False, None)
-    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=0.1, ratio_pose=0.5)
+    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=0.1, ratio_pose=0.2)
 
     if CFG_WITH_OBJ:
         optimizer_obj = initialize_optimizer_obj(model_obj, lr_init_obj)
@@ -182,8 +182,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-                            flag_crop=True, flag_headless=FLAGS.headless)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+        #                     flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -317,8 +317,7 @@ def main(argv):
         loss_func.reset_prev_pose()
         loss_func.set_for_evaluation()
         ## Start optimization per frame
-        # for frame in range(len(mas_dataloader)):
-        for frame in range(5):
+        for frame in range(len(mas_dataloader)):
             t_start = time.time()
 
             ## check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
@@ -406,8 +405,8 @@ def main(argv):
                 pred_obj_anno = [None, None]
 
             ### visualization results of frame
-            # loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-            #                         save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
+            loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
+                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
 
             loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
 
