@@ -248,7 +248,7 @@ class loadDataset():
         self.obj_pose_name = obj_dir_name + '_grasp_' + str("%02d"%int(self.grasp_id))+ '_' + str("%02d"%int(self.trial_num))
         obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
         # print(obj_pose_data)
-        assert os.path.isfile(obj_pose_data),"no obj pose data"
+        assert os.path.isfile(obj_pose_data),"no obj pose data : %s" % obj_pose_data
 
         obj_data = {}
         with open(obj_pose_data, "r") as f:
@@ -290,7 +290,7 @@ class loadDataset():
             self.obj_mesh_data['verts'] = verts
             self.obj_mesh_data['faces'] = faces.verts_idx
         except:
-            print("no obj mesh data")
+            print("no obj mesh data : %s" % obj_mesh_path)
 
 
     def __len__(self):
@@ -871,14 +871,14 @@ def main(argv):
         - consider two-hand situation (currently assume single hand detection)
     '''
 
-    tasks = []
+    print("---------------start preprocess seq ---------------")
     process_count = 4
 
-    total_count = 0
     t1 = time.time()
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        tasks = []
+        total_count = 0
         seqDir = os.path.join(rootDir, seqName)
-        print("---------------start preprocess seq : %s ---------------" % (seqName))
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
             dbs = []
             for camID in camIDset:
@@ -891,12 +891,12 @@ def main(argv):
             total_count += len(dbs[0])
             tasks.append((preprocess_multi_cam, (dbs,)))
 
-        pool = TqdmMultiProcessPool(process_count)
-        with tqdm.tqdm(total=total_count) as global_tqdm:
-            global_tqdm.set_description(f"{seqName} - total : ")
-            pool.map(global_tqdm, tasks, error_callback, done_callback)
+    pool = TqdmMultiProcessPool(process_count)
+    with tqdm.tqdm(total=total_count) as global_tqdm:
+        # global_tqdm.set_description(f"{seqName} - total : ")
+        pool.map(global_tqdm, tasks, error_callback, done_callback)
 
-        print("---------------end preprocess seq : %s ---------------" % (seqName))
+    print("---------------end preprocess ---------------")
 
     proc_time = round((time.time() - t1) / 60., 2)
     print("total process time : %s min" % (str(proc_time)))

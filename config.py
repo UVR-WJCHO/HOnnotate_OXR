@@ -8,7 +8,7 @@ from enum import IntEnum
 CFG_exist_tip_db = False
 
 CFG_WITH_OBJ = True
-CFG_EARLYSTOPPING = False
+CFG_EARLYSTOPPING = True
 
 CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal','seg','depth', 'depth_obj','seg_obj']#, 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
 
@@ -164,7 +164,7 @@ class OBJType(IntEnum):
     golf_ball = 16
     credit_card = 17
     dice = 18
-    dist_lid = 19
+    disk_lid = 19
     smartphone = 20
     mouse = 21
     tape = 22
