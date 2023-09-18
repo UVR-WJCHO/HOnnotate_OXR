@@ -176,6 +176,9 @@ class ObjModel(nn.Module):
         '''
         pose_6d = torch.cat([pose_matrot[:, :3, 0], pose_matrot[:, :3, 1]], dim=1)
         return pose_6d
+    
+    def set_gt(self, depth_gt):
+        self.register_buffer('depth_gt', depth_gt)
 
     def get_object_mat(self):
         obj_pose = torch.cat((self.obj_rot, self.obj_trans), -1)
@@ -240,5 +243,5 @@ class ObjModel(nn.Module):
         obj_pose = [self.obj_rot, self.obj_trans]
         obj_verts = self.apply_transform(self.obj_rot, self.obj_trans, self.template_verts)
 
-        return {'verts': obj_verts, 'faces': self.template_faces, 'pose': obj_pose}
+        return {'verts': obj_verts, 'faces': self.template_faces, 'pose': obj_pose, 'depth_gt':self.depth_gt}
 

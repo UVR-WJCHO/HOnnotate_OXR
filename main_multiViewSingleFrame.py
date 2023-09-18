@@ -161,7 +161,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     loss_weight = CFG_LOSS_WEIGHT
     # loss_weight['kpts2d'] = 0.5
 
-    detected_cams = [detected_cams[-2]]
+    # detected_cams = [detected_cams[-2]]
 
     for iter in range(iter):
         t_iter = time.time()
@@ -178,7 +178,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         else:
             obj_param = None
             
-        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
+        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
 
         loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
                             flag_crop=True, flag_headless=FLAGS.headless)
@@ -321,7 +321,9 @@ def main(argv):
             ## set object init pose and marker pose as GT for projected vertex.
             if CFG_WITH_OBJ:
                 obj_pose = obj_dataloader[frame][:-1, :]
+                depth_ref = dataloader_set[camIdx][frame]['depth_obj']
                 obj_pose[:3, -1] *= 0.1
+                model_obj.set_gt(depth_ref)
                 model_obj.update_pose(pose=obj_pose)
 
                 if CFG_exist_tip_db:
@@ -343,8 +345,8 @@ def main(argv):
                 target : wrist pose/rot, hand scale
                 except : hand shape, hand pose 
             """
-            # __update_global__(model, loss_func, detected_cams, frame,
-            #                   lr_init, trialName)
+            __update_global__(model, loss_func, detected_cams, frame,
+                              lr_init, trialName)
 
             ### update incrementally
             """
@@ -353,8 +355,8 @@ def main(argv):
                 target : wrist pose/rot, hand scale, hand pose(each part) 
                 except : hand shape
             """
-            # __update_parts__(model, loss_func, detected_cams, frame,
-            #                  lr_init, trialName, iterperpart=40)
+            __update_parts__(model, loss_func, detected_cams, frame,
+                             lr_init, trialName, iterperpart=40)
 
 
             ### update all

@@ -26,7 +26,7 @@ CFG_tipGT_interval = 10
 CFG_LR_INIT = 0.05
 CFG_LR_INIT_OBJ = 0.05
 
-CFG_NUM_ITER = 150
+CFG_NUM_ITER = 10
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
