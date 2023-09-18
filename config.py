@@ -26,7 +26,7 @@ CFG_tipGT_interval = 10
 CFG_LR_INIT = 0.05
 CFG_LR_INIT_OBJ = 0.005
 
-CFG_NUM_ITER = 1
+CFG_NUM_ITER = 2
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
@@ -63,6 +63,7 @@ CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],
                    [0, 1,2,3, 5,6,7, 9,10,11, 13,14,15, 17,18,19]]
 
 ## Config
+CFG_ROOT_DIR = os.path.join(os.getcwd())
 CFG_DATA_DIR = os.path.join(os.getcwd(), 'dataset')
 CFG_CAMID_SET = ['mas', 'sub1', 'sub2', 'sub3']
 

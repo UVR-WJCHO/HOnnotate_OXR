@@ -13,6 +13,9 @@ from utils.modelUtils import *
 import time
 from pytorch3d.renderer import TexturesVertex
 
+import csv
+import pandas as pd
+
 
 class MultiViewLossFunc(nn.Module):
     def __init__(self, device='cuda', bs=1, dataloaders=None, renderers=None, losses=None):
@@ -382,8 +385,211 @@ class MultiViewLossFunc(nn.Module):
                 losses_single['temporal'] = loss_temporal * self.temp_weight
 
         return losses_cam, losses_single
+    
+    def set_for_evaluation(self):
+        #=====Set evaluation metrics dataframe=====#
+        self.dfs = {}
+        self.dfs['kpts_precision'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        self.dfs['kpts_recall'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        self.dfs['kpts_f1'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        self.dfs['mesh_precision'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        self.dfs['mesh_recall'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        self.dfs['mesh_f1'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        self.dfs['depth_precision'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        self.dfs['depth_recall'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        self.dfs['depth_f1'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
 
-    def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False, flag_evaluation=False):
+        self.total_metrics = [0.] * 9
+
+        for df in self.dfs.values():
+            df.index.name = "frame"
+    
+    def evaluation(self, pred, pred_obj, camIdxSet, frame):
+        print("Evaluation")
+        kpts_precision = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        kpts_recall = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        kpts_f1 = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+
+        mesh_precision = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        mesh_recall = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        mesh_f1 = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+
+        depth_precision = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        depth_recall = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        depth_f1 = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+
+        for camIdx in camIdxSet:
+            camID = CFG_CAMID_SET[camIdx]
+            self.set_gt(camIdx, frame)
+            joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
+            verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms[camIdx]), 0)
+            verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
+
+            pred_rendered = self.cam_renderer[camIdx].render_meshes([verts_cam, verts_cam_obj],
+                                                            [pred['faces'], pred_obj['faces']], flag_rgb=True)
+            pred_rendered_hand_only = self.cam_renderer[camIdx].render(verts_cam,pred['faces'], flag_rgb=True)
+            pred_rendered_obj_only = self.cam_renderer[camIdx].render(verts_cam_obj, pred_obj['faces'], flag_rgb=True)
+            
+            depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
+            seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
+
+            hand_depth = np.squeeze(pred_rendered_hand_only['depth'][0].cpu().detach().numpy())
+            obj_depth = np.squeeze(pred_rendered_obj_only['depth'][0].cpu().detach().numpy())
+            hand_depth[hand_depth == 10] = 0
+            hand_depth *= 1000.
+            obj_depth[obj_depth == 10] = 0
+            obj_depth *= 1000.
+
+            obj_seg_masked = np.copy(obj_depth)
+            hand_seg_masked = np.where(abs(depth_mesh - obj_depth) < 1.0, 0, 1)
+            obj_seg_masked = np.where(abs(depth_mesh - hand_depth) < 1.0, 0, 1)
+
+            pred_kpts2d = projectPoints(joints_cam, self.Ks[camIdx])
+            pred_kpts2d = np.squeeze(pred_kpts2d.clone().cpu().detach().numpy())
+            gt_kpts2d = np.squeeze(self.gt_kpts2d.clone().cpu().numpy())
+
+            hand_seg_masked = hand_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+            obj_seg_masked = obj_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+            hand_depth = hand_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+            obj_depth = obj_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+
+            uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
+            gt_kpts2d = (self.img2bb @ uv1.T).T
+            uv1 = np.concatenate((pred_kpts2d, np.ones_like(pred_kpts2d[:, :1])), 1)
+            pred_kpts2d = (self.img2bb @ uv1.T).T
+
+            #1. 3D keypoints F1-Score
+            TP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
+            FP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
+            FN = 0 #참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
+            for idx, gt_kpt in enumerate(gt_kpts2d):
+                pred_kpt = pred_kpts2d[idx]
+                if (pred_kpt == None).any():
+                    FN += 1
+                if np.linalg.norm(gt_kpt - pred_kpt) < 50:
+                    TP += 1
+                elif np.linalg.norm(gt_kpt - pred_kpt) >= 50:
+                    FP += 1
+
+            keypoint_precision_score = TP / (TP + FP)
+            keypoint_recall_score = TP / (TP + FN)
+            keypoint_f1_score = 2 * (keypoint_precision_score * keypoint_recall_score /
+                                            (keypoint_precision_score + keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
+            kpts_precision[camID] = keypoint_precision_score
+            kpts_recall[camID] = keypoint_recall_score
+            kpts_f1[camID] = keypoint_f1_score
+
+            # print("3D keypoint precision score : ", self.keypoint_precision_score)
+            # print("3D keypoint recall score : ", self.keypoint_recall_score)
+            # print("3D keypoint F1 score : ", self.keypoint_f1_score)
+
+            #2. mesh pose F1-Score
+            TP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스(background, object, hand)가 참값(실제 RGB- segmentation map)의 클래스와 일치
+            FP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스가 참값의 클래스와 불일치
+            FN = 0 #참값이 존재하지만 키포인트 좌표의 segmentation class가 존재하지 않는 경우(미태깅) ??
+            gt_seg_hand = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
+            gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy()))
+
+
+            TP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked == gt_seg_hand, 0)) + \
+                    np.sum(np.where(obj_seg_masked > 0, obj_seg_masked == gt_seg_obj, 0))
+
+            FP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked != gt_seg_hand, 0)) +\
+                    np.sum(np.where(obj_seg_masked > 0, obj_seg_masked != gt_seg_obj, 0))
+            # seg_masked_FN = (gt_seg_hand > 0) * (hand_seg_masked == 0) \
+            #                 + (gt_seg_obj > 0) * (obj_seg_masked == 0)
+            FN = 0 #np.sum(seg_masked_FN)
+
+            mesh_seg_precision_score = TP/(TP+FP)
+            mesh_seg_recall_score = TP / (TP + FN)
+            mesh_seg_f1_score = 2 * (mesh_seg_precision_score * mesh_seg_recall_score /
+                                        (mesh_seg_precision_score + mesh_seg_recall_score)) #2*TP/(2*TP+FP+FN)
+            
+            mesh_precision[camID] = mesh_seg_precision_score
+            mesh_recall[camID] = mesh_seg_recall_score
+            mesh_f1[camID] = mesh_seg_f1_score
+
+            # print("mesh seg precision score : ", self.mesh_seg_precision_score)
+            # print("mesh seg recall score : ", self.mesh_seg_recall_score)
+            # print("mesh seg F1 score : ", self.mesh_seg_f1_score)
+
+            #3. hand depth accuracy
+            TP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
+            FP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이상
+            FN = 0 #참값이 존재하지만 키포인트 좌표의 깊이값이 존재하지 않는 경우(미태깅)
+
+            #pred_kpts2d
+            # obj_depth, hand_depth
+            # self.gt_depth, self.gt_depth_obj
+            gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
+
+            gt_depth_hand[gt_depth_hand==10] = 0
+            # gt_depth_hand *= 1000.
+            for i in range(21):
+                kpts2d = pred_kpts2d[i, :]
+                gt_hand_d = gt_depth_hand[int(kpts2d[1]), int(kpts2d[0])]
+                pred_hand_d = hand_depth[int(kpts2d[1]), int(kpts2d[0])]
+                if gt_hand_d == 0 or pred_hand_d == 0:
+                    FN += 1
+                if abs(gt_hand_d - pred_hand_d) < 20:
+                    TP += 1
+                else:
+                    FP += 1
+
+            mesh_depth_precision_score = TP / (TP + FP)
+            mesh_depth_recall_score = TP / (TP + FN)
+
+            mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
+                                        (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
+            depth_precision[camID] = mesh_depth_precision_score
+            depth_recall[camID] = mesh_depth_recall_score
+            depth_f1[camID] = mesh_depth_f1_score
+            
+            # print("mesh depth precision score : ", self.mesh_depth_precision_score)
+            # print("mesh depth recall score : ", self.mesh_depth_recall_score)
+            # print("mesh depth F1 score : ", self.mesh_depth_f1_score)
+        
+        kpts_precision_avg = sum(kpts_precision.values())/len(camIdxSet)
+        kpts_recall_avg = sum(kpts_recall.values())/len(camIdxSet)
+        kpts_f1_avg = sum(kpts_f1.values())/len(camIdxSet)
+        self.total_metrics[0] += kpts_precision_avg
+        self.total_metrics[1] += kpts_recall_avg
+        self.total_metrics[2] += kpts_f1_avg
+        self.dfs['kpts_precision'].loc[frame] = [kpts_precision['mas'], kpts_precision['sub1'], kpts_precision['sub2'], kpts_precision['sub3'], kpts_precision_avg]
+        self.dfs['kpts_recall'].loc[frame] = [kpts_recall['mas'], kpts_recall['sub1'], kpts_recall['sub2'], kpts_recall['sub3'], kpts_recall_avg]
+        self.dfs['kpts_f1'].loc[frame] = [kpts_f1['mas'], kpts_f1['sub1'], kpts_f1['sub2'], kpts_f1['sub3'], kpts_f1_avg]
+        mesh_precision_avg = sum(mesh_precision.values())/len(camIdxSet)
+        mesh_recall_avg = sum(mesh_recall.values())/len(camIdxSet)
+        mesh_f1_avg = sum(mesh_f1.values())/len(camIdxSet)
+        self.total_metrics[3] += mesh_precision_avg
+        self.total_metrics[4] += mesh_recall_avg
+        self.total_metrics[5] += mesh_f1_avg
+        self.dfs['mesh_precision'].loc[frame] = [mesh_precision['mas'], mesh_precision['sub1'], mesh_precision['sub2'], mesh_precision['sub3'], mesh_precision_avg]
+        self.dfs['mesh_recall'].loc[frame] = [mesh_recall['mas'], mesh_recall['sub1'], mesh_recall['sub2'], mesh_recall['sub3'], mesh_recall_avg]
+        self.dfs['mesh_f1'].loc[frame] = [mesh_f1['mas'], mesh_f1['sub1'], mesh_f1['sub2'], mesh_f1['sub3'], mesh_f1_avg]
+        depth_precision_avg = sum(depth_precision.values())/len(camIdxSet)
+        depth_recall_avg = sum(depth_recall.values())/len(camIdxSet)
+        depth_f1_avg = sum(depth_f1.values())/len(camIdxSet)
+        self.total_metrics[6] += depth_precision_avg
+        self.total_metrics[7] += depth_recall_avg
+        self.total_metrics[8] += depth_f1_avg
+        self.dfs['depth_precision'].loc[frame] = [depth_precision['mas'], depth_precision['sub1'], depth_precision['sub2'], depth_precision['sub3'], depth_precision_avg]
+        self.dfs['depth_recall'].loc[frame] = [depth_recall['mas'], depth_recall['sub1'], depth_recall['sub2'], depth_recall['sub3'], depth_recall_avg]
+        self.dfs['depth_f1'].loc[frame] = [depth_f1['mas'], depth_f1['sub1'], depth_f1['sub2'], depth_f1['sub3'], depth_f1_avg]
+
+    def save_evaluation(self, save_path, save_num):
+        csv_files = ['kpts_precision', 'kpts_recall', 'kpts_f1', 'mesh_precision', 'mesh_recall', 'mesh_f1', 'depth_precision', 'depth_recall', 'depth_f1']
+        for idx, file in enumerate(csv_files):
+            with open(os.path.join(save_path, file + '.csv'), "w", encoding='utf-8') as f:
+                ws = csv.writer(f)
+                ws.writerow(['total_avg', self.total_metrics[idx] / save_num])
+                ws.writerow(['frame', 'mas', 'sub1', 'sub2', 'sub3', 'avg'])
+
+            df = self.dfs[file]
+            df.to_csv(os.path.join(save_path, file + '.csv'), mode='a', index=True, header=False)
+
+
+    def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
 
 
         for camIdx in camIdxSet:
@@ -415,21 +621,21 @@ class MultiViewLossFunc(nn.Module):
 
             seg_mesh = np.array(np.ceil(seg_mesh / np.max(seg_mesh)), dtype=np.uint8)
 
-            if flag_obj and flag_evaluation:
-                pred_rendered_hand_only = self.cam_renderer[camIdx].render(verts_cam,pred['faces'], flag_rgb=True)
-                hand_depth = np.squeeze(pred_rendered_hand_only['depth'][0].cpu().detach().numpy())
+            # if flag_obj and flag_evaluation:
+            #     pred_rendered_hand_only = self.cam_renderer[camIdx].render(verts_cam,pred['faces'], flag_rgb=True)
+            #     hand_depth = np.squeeze(pred_rendered_hand_only['depth'][0].cpu().detach().numpy())
 
-                hand_depth[hand_depth == 10] = 0
-                hand_depth *= 1000.
+            #     hand_depth[hand_depth == 10] = 0
+            #     hand_depth *= 1000.
 
-                pred_rendered_obj_only = self.cam_renderer[camIdx].render(verts_cam_obj, pred_obj['faces'], flag_rgb=True)
-                obj_depth = np.squeeze(pred_rendered_obj_only['depth'][0].cpu().detach().numpy())
+            #     pred_rendered_obj_only = self.cam_renderer[camIdx].render(verts_cam_obj, pred_obj['faces'], flag_rgb=True)
+            #     obj_depth = np.squeeze(pred_rendered_obj_only['depth'][0].cpu().detach().numpy())
 
-                obj_depth[obj_depth == 10] = 0
-                obj_depth *= 1000.
-                obj_seg_masked = np.copy(obj_depth)
-                hand_seg_masked = np.where(abs(depth_mesh - obj_depth) < 1.0, 0, 1)
-                obj_seg_masked = np.where(abs(depth_mesh - hand_depth) < 1.0, 0, 1)
+            #     obj_depth[obj_depth == 10] = 0
+            #     obj_depth *= 1000.
+            #     obj_seg_masked = np.copy(obj_depth)
+            #     hand_seg_masked = np.where(abs(depth_mesh - obj_depth) < 1.0, 0, 1)
+            #     obj_seg_masked = np.where(abs(depth_mesh - hand_depth) < 1.0, 0, 1)
             # seg_masked = hand_seg_masked + obj_seg_masked
 
             # cv2.imshow("depth_mesh", np.asarray(depth_mesh / 1000 * 255, dtype=np.uint8))
@@ -468,13 +674,13 @@ class MultiViewLossFunc(nn.Module):
                 depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
-                if flag_obj and flag_evaluation:
-                    hand_seg_masked = hand_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                    obj_seg_masked = obj_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                    # seg_masked = seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                # if flag_obj and flag_evaluation:
+                #     hand_seg_masked = hand_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                #     obj_seg_masked = obj_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                #     # seg_masked = seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
-                    hand_depth = hand_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                    obj_depth = obj_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                #     hand_depth = hand_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                #     obj_depth = obj_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
                 uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
                 gt_kpts2d = (self.img2bb @ uv1.T).T
@@ -543,7 +749,7 @@ class MultiViewLossFunc(nn.Module):
                 else:
                     cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
                     cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
-                    cv2.imwrite(os.path.join("./for_headless_server", blend_depth_name + '.png'), depth_gap)
+                    cv2.imwrite(os.path.join("./for_headless_server", blend_depth_gap_name + '.png'), depth_gap)
             else:
                 save_path_cam = os.path.join(save_path, camID)
                 os.makedirs(save_path_cam, exist_ok=True)
@@ -560,85 +766,3 @@ class MultiViewLossFunc(nn.Module):
                     obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
                     obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
                     obj.export(os.path.join(save_path_cam, f'mesh_obj_{camID}_{frame}.obj'))
-
-            if flag_obj and flag_evaluation:
-                #1. 3D keypoints F1-Score
-                TP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
-                FP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
-                FN = 0 #참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
-                for idx, gt_kpt in enumerate(gt_kpts2d):
-                    pred_kpt = pred_kpts2d[idx]
-                    if (pred_kpt == None).any():
-                        FN += 1
-                    if np.linalg.norm(gt_kpt - pred_kpt) < 50:
-                        TP += 1
-                    elif np.linalg.norm(gt_kpt - pred_kpt) >= 50:
-                        FP += 1
-
-                self.keypoint_precision_score = TP / (TP + FP)
-                self.keypoint_recall_score = TP / (TP + FN)
-                self.keypoint_f1_score = 2 * (self.keypoint_precision_score * self.keypoint_recall_score /
-                                              (self.keypoint_precision_score + self.keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
-
-                # print("3D keypoint precision score : ", self.keypoint_precision_score)
-                # print("3D keypoint recall score : ", self.keypoint_recall_score)
-                # print("3D keypoint F1 score : ", self.keypoint_f1_score)
-
-                #2. mesh pose F1-Score
-                TP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스(background, object, hand)가 참값(실제 RGB- segmentation map)의 클래스와 일치
-                FP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스가 참값의 클래스와 불일치
-                FN = 0 #참값이 존재하지만 키포인트 좌표의 segmentation class가 존재하지 않는 경우(미태깅) ??
-                gt_seg_hand = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
-                gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy()))
-
-
-                TP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked == gt_seg_hand, 0)) + \
-                     np.sum(np.where(obj_seg_masked > 0, obj_seg_masked == gt_seg_obj, 0))
-
-                FP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked != gt_seg_hand, 0)) +\
-                     np.sum(np.where(obj_seg_masked > 0, obj_seg_masked != gt_seg_obj, 0))
-                # seg_masked_FN = (gt_seg_hand > 0) * (hand_seg_masked == 0) \
-                #                 + (gt_seg_obj > 0) * (obj_seg_masked == 0)
-                FN = 0 #np.sum(seg_masked_FN)
-
-                self.mesh_seg_precision_score = TP/(TP+FP)
-                self.mesh_seg_recall_score = TP / (TP + FN)
-                self.mesh_seg_f1_score = 2 * (self.mesh_seg_precision_score * self.mesh_seg_recall_score /
-                                          (self.mesh_seg_precision_score + self.mesh_seg_recall_score)) #2*TP/(2*TP+FP+FN)
-
-                # print("mesh seg precision score : ", self.mesh_seg_precision_score)
-                # print("mesh seg recall score : ", self.mesh_seg_recall_score)
-                # print("mesh seg F1 score : ", self.mesh_seg_f1_score)
-
-                #3. hand depth accuracy
-                TP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
-                FP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이상
-                FN = 0 #참값이 존재하지만 키포인트 좌표의 깊이값이 존재하지 않는 경우(미태깅)
-
-                #pred_kpts2d
-                # obj_depth, hand_depth
-                # self.gt_depth, self.gt_depth_obj
-                gt_depth_hand = np.squeeze(np.copy((self.gt_depth.cpu().numpy())))
-
-                gt_depth_hand[gt_depth_hand==10] = 0
-                gt_depth_hand *= 1000.
-                for i in range(21):
-                    kpts2d = pred_kpts2d[i, :]
-                    gt_hand_d = gt_depth_hand[int(kpts2d[1]), int(kpts2d[0])]
-                    pred_hand_d = hand_depth[int(kpts2d[1]), int(kpts2d[0])]
-                    if gt_hand_d == 0 or pred_hand_d == 0:
-                        FN += 1
-                    if abs(gt_hand_d - pred_hand_d) < 20:
-                        TP += 1
-                    else:
-                        FP += 1
-
-                self.mesh_depth_precision_score = TP / (TP + FP)
-                self.mesh_depth_recall_score = TP / (TP + FN)
-
-                self.mesh_depth_f1_score = 2 * (self.mesh_depth_precision_score * self.mesh_depth_recall_score /
-                                          (self.mesh_depth_precision_score + self.mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
-
-                # print("mesh depth precision score : ", self.mesh_depth_precision_score)
-                # print("mesh depth recall score : ", self.mesh_depth_recall_score)
-                # print("mesh depth F1 score : ", self.mesh_depth_f1_score)

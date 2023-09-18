@@ -24,15 +24,16 @@ from utils.dataUtils import *
 import multiprocessing
 from cProfile import Profile
 from pstats import Stats
+import pandas as pd
 
 
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
-flags.DEFINE_bool('headless', False, 'headless mode for visualization')
+flags.DEFINE_bool('headless', True, 'headless mode for visualization')
 FLAGS(sys.argv)
 
 # torch.autograd.set_detect_anomaly(True)
@@ -267,6 +268,9 @@ def main(argv):
 
     for trialIdx, trialName in enumerate(sorted(os.listdir(target_dir))):
         save_path = os.path.join(target_dir_result, trialName, "visualization")
+        log_path = os.path.join(CFG_ROOT_DIR, 'log' ,FLAGS.db, FLAGS.seq, trialName)
+        if not os.path.isdir(log_path):
+            os.makedirs(log_path)
 
         ## Load data of each camera, save pkl file for second run.
         print("loading data... %s %s " % (FLAGS.seq, trialName))
@@ -312,8 +316,10 @@ def main(argv):
         flag_skip = 0
 
         loss_func.reset_prev_pose()
+        loss_func.set_for_evaluation()
         ## Start optimization per frame
-        for frame in range(len(mas_dataloader)):
+        # for frame in range(len(mas_dataloader)):
+        for frame in range(5):
             t_start = time.time()
 
             ## check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
@@ -401,14 +407,19 @@ def main(argv):
                 pred_obj_anno = [None, None]
 
             ### visualization results of frame
-            loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
+            # loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
+            #                         save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
+
+            loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
 
             ### save annotation per frame as json format
             save_annotation(target_dir_result, trialName, frame,  FLAGS.seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)
-
+            
             print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
             save_num += 1
+
+        loss_func.save_evaluation(log_path, save_num)
+
 
     print("total processed time : ", round((time.time() - t0) / 60., 2))
     print("total processed frames : ", save_num)
