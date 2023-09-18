@@ -48,7 +48,7 @@ def set_lr_forObj(model, init_lr):
             lr_trans.append(value)
 
     model_params = [{'params': lr_rot, 'lr': init_lr},
-                    {'params': lr_trans, 'lr': init_lr * 5e0}]
+                    {'params': lr_trans, 'lr': init_lr}]
     return model_params
 
 

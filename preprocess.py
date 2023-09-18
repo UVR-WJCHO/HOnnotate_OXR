@@ -274,7 +274,8 @@ class loadDataset():
         # self.obj_mesh_data = self.read_obj(obj_mesh_path)
         self.obj_mesh_data = {}
         try:
-            self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
+            verts, faces, _ = load_obj(obj_mesh_path)
+            self.obj_mesh_data['verts'] = verts
             self.obj_mesh_data['faces'] = faces.verts_idx
         except:
             print("no obj mesh data")
@@ -416,15 +417,15 @@ class loadDataset():
 
         vertIDpermarker = CFG_vertspermarker[str(obj_class)]
         obj_verts = obj_mesh['verts']
-        verts_pose = obj_verts[vertIDpermarker, :]
-
+        verts_init = np.array(obj_verts[vertIDpermarker, :]) * 10.0
         # scale factor 10, is .obj file has cm scale?
-        verts_pose = apply_transform(obj_init_pose, verts_pose) * 10.0
+
+        # verts_pose = apply_transform(obj_init_pose, verts_init) * 100.0
 
         #verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
         #marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
 
-        R, t = tf.solve_rigid_tf_np(verts_pose, marker_pose)
+        R, t = tf.solve_rigid_tf_np(verts_init, marker_pose)
 
         #R = R[0]
         #t = t[0]
@@ -434,8 +435,8 @@ class loadDataset():
         pose_calc[1, 3] = t[1]
         pose_calc[2, 3] = t[2]
 
-        verts_debug = np.squeeze(verts_pose)
-        verts_debug = apply_transform(pose_calc, verts_debug)
+        # verts_debug = np.squeeze(verts_pose)
+        verts_debug = apply_transform(pose_calc, verts_init)# * 100.0
         marker_debug = np.squeeze(marker_pose)
 
         err = np.sum(abs(verts_debug - marker_debug), axis=1)

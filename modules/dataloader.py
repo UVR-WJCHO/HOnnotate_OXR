@@ -377,7 +377,8 @@ class ObjectLoader:
         obj_mesh_path = os.path.join(self.obj_template_dir, self.obj_mesh_name)
 
         self.obj_mesh_data = {}
-        self.obj_mesh_data['verts'], faces, _ = load_obj(obj_mesh_path)
+        verts, faces, _ = load_obj(obj_mesh_path)
+        self.obj_mesh_data['verts'] = verts
         self.obj_mesh_data['faces'] = faces.verts_idx
 
         # load from results of preprocess.py
