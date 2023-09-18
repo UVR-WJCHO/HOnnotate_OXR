@@ -29,7 +29,7 @@ from pstats import Stats
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
@@ -144,25 +144,26 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     # set initial loss, early stopping threshold
     best_loss = torch.inf
     prev_kps_loss = 0
+    prev_obj_loss = torch.inf
     prev_depthseg_loss = 0
-    ealry_stopping_patience = 0
-    ealry_stopping_patience_v2 = 0
+    early_stopping_patience = 0
+    early_stopping_patience_v2 = 0
+    early_stopping_patience_obj = 0
 
     # model.change_grads(root=True, rot=True, pose=True, shape=True, scale=False)
 
     model.change_grads_all(root=True, rot=True, pose=True, shape=True, scale=True)
     # optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
     optimizer = initialize_optimizer(model, None, lr_init, False, None)
-    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=1.0, ratio_pose=0.3)
+    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=0.1, ratio_pose=0.5)
 
     if CFG_WITH_OBJ:
         optimizer_obj = initialize_optimizer_obj(model_obj, lr_init_obj)
+        flag_update_obj = True
 
     loss_weight = CFG_LOSS_WEIGHT
-    # loss_weight['kpts2d'] = 0.5
-
-    # detected_cams = [detected_cams[-2]]
-    # detected_cams = [detected_cams[-2]]
+    loss_weight['kpts2d'] = 0.1
+    model.input_scale.data *= torch.FloatTensor([0.95]).to('cuda')
 
     for iter in range(iter):
         t_iter = time.time()
@@ -181,8 +182,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
 
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-                            flag_crop=True, flag_headless=FLAGS.headless)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+        #                     flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -198,7 +199,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         total_loss.backward(retain_graph=True)
 
         optimizer.step()
-        if CFG_WITH_OBJ:
+        if CFG_WITH_OBJ and flag_update_obj:
             optimizer_obj.step()
         # lr_scheduler.step()
 
@@ -214,29 +215,43 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         kps_loss[iter] = cur_kpt_loss
         # cur_depthseg_loss = (loss_all['depth'].item() + loss_all['seg'].item()) / len(detected_cams)
 
-        ## criteria for contact loss
-        if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
-            use_contact_loss = True
+        if CFG_WITH_OBJ:
+            cur_obj_loss = loss_all['depth_obj'].item() / len(detected_cams)
 
+            if prev_obj_loss < cur_obj_loss:
+                early_stopping_patience_obj += 1
+            if prev_obj_loss > cur_obj_loss:
+                early_stopping_patience_obj = 0
+
+            if early_stopping_patience_obj > CFG_PATIENCE_obj:
+                flag_update_obj = False
+                ## criteria for contact loss
+                use_contact_loss = True
+
+        ## criteria for contact loss
+        # if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
+        #     use_contact_loss = True
 
         ## sparse criterion on converge for v1 db release, need to be tight
         if CFG_EARLYSTOPPING:
             if abs(prev_kps_loss - cur_kpt_loss) < 2.0:# or abs(prev_depthseg_loss - cur_depthseg_loss) < 10.0:
-                ealry_stopping_patience_v2 += 1
+                early_stopping_patience_v2 += 1
 
             if cur_kpt_loss < best_loss:
                 best_loss = cur_kpt_loss
             if cur_kpt_loss < CFG_LOSS_THRESHOLD:
-                ealry_stopping_patience += 1
+                early_stopping_patience += 1
 
-            if cur_kpt_loss < CFG_LOSS_THRESHOLD and ealry_stopping_patience > CFG_PATIENCE:
+            if cur_kpt_loss < CFG_LOSS_THRESHOLD and early_stopping_patience > CFG_PATIENCE:
                 logging.info('Early stopping(less than THRESHOLD) at iter %d' % iter)
                 break
-            if ealry_stopping_patience_v2 > CFG_PATIENCE_v2:
+            if early_stopping_patience_v2 > CFG_PATIENCE_v2:
                 logging.info('Early stopping(converged) at iter %d' % iter)
                 break
 
             prev_kps_loss = cur_kpt_loss
+            if CFG_WITH_OBJ:
+                prev_obj_loss = cur_obj_loss
             # prev_depthseg_loss = cur_depthseg_loss
 
 
@@ -386,8 +401,8 @@ def main(argv):
                 pred_obj_anno = [None, None]
 
             ### visualization results of frame
-            # loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-            #                         save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
+            loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
+                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
 
             ### save annotation per frame as json format
             save_annotation(target_dir_result, trialName, frame,  FLAGS.seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)

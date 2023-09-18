@@ -528,25 +528,26 @@ class loadDataset():
 
         self.debug = rgb.copy()
 
-        if CFG_exist_tip_db:
-            # currently tip data processed on sampled data.
-            # will be update to unsampled data
-            # tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
-            tip_data_name = str(self.camID) + '_' + str(save_idx) + '.json'
-            tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
-            if os.path.exists(tip_data_path):
-                with open(tip_data_path, "r") as data:
-                    tip_data = json.load(data)['shapes']
+        ########## currently tip data processed on sampled data.
+        ########## will be update to unsampled data
+        # tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
+        tip_data_name = str(self.camID) + '_' + str(save_idx) + '.json'
+        tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
+        if os.path.exists(tip_data_path):
+            with open(tip_data_path, "r") as data:
+                tip_data = json.load(data)['shapes']
 
-                tip_kpts = {}
-                for tip in tip_data:
-                    tip_name = tip['label']
-                    tip_2d = tip['points'][0]
-                    tip_kpts[tip_name] = np.round(tip_2d, 2)
+            tip_kpts = {}
+            for tip in tip_data:
+                tip_name = tip['label']
+                tip_2d = tip['points'][0]
+                tip_kpts[tip_name] = np.round(tip_2d, 2)
 
-                self.tip_data = tip_kpts
-            else:
-                self.tip_data = None
+            self.tip_data = tip_kpts
+        else:
+            self.tip_data = None
+            if idx == 0:
+                print("----------- no tip data, check {YYMMDD}_tip ----------------")
 
         return (rgb, depth)
 
@@ -730,12 +731,9 @@ class loadDataset():
 
 
     def postProcessNone(self, idx):
-        if CFG_exist_tip_db:
-            meta_info = {'bb': None, 'img2bb': None,
-                         'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt':None}
-        else:
-            meta_info = {'bb': None, 'img2bb': None,
-                         'bb2img': None, 'kpts': None, 'kpts_crop': None}
+        meta_info = {'bb': None, 'img2bb': None,
+                     'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt':None}
+
 
         metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
         jsonPath = os.path.join(self.metaDir, metaName)
@@ -757,13 +755,9 @@ class loadDataset():
         cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
 
-        if CFG_exist_tip_db:
-            meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
-                         'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts),
-                         '2D_tip_gt': self.tip_data}
-        else:
-            meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
-                     'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts)}
+        meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
+                     'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts),
+                     '2D_tip_gt': self.tip_data}
 
         metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
         jsonPath = os.path.join(self.metaDir, metaName)
@@ -876,35 +870,35 @@ def main(argv):
         - consider two-hand situation (currently assume single hand detection)
     '''
 
-    # tasks = []
-    # process_count = 4
-    #
-    # total_count = 0
-    # t1 = time.time()
-    # for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
-    #     seqDir = os.path.join(rootDir, seqName)
-    #     print("---------------start preprocess seq : %s ---------------" % (seqName))
-    #     for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
-    #         dbs = []
-    #         for camID in camIDset:
-    #             db = loadDataset(FLAGS.db, seqName, trialName)
-    #             db.init_cam(camID)
-    #             dbs.append(db)
-    #             # total_count += len(db)
-    #             # tasks.append((preprocess_single_cam, (db,)))
-    #
-    #         total_count += len(dbs[0])
-    #         tasks.append((preprocess_multi_cam, (dbs,)))
-    #
-    #     pool = TqdmMultiProcessPool(process_count)
-    #     with tqdm.tqdm(total=total_count) as global_tqdm:
-    #         global_tqdm.set_description(f"{seqName} - total : ")
-    #         pool.map(global_tqdm, tasks, error_callback, done_callback)
-    #
-    #     print("---------------end preprocess seq : %s ---------------" % (seqName))
-    #
-    # proc_time = round((time.time() - t1) / 60., 2)
-    # print("total process time : %s min" % (str(proc_time)))
+    tasks = []
+    process_count = 4
+
+    total_count = 0
+    t1 = time.time()
+    for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        seqDir = os.path.join(rootDir, seqName)
+        print("---------------start preprocess seq : %s ---------------" % (seqName))
+        for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+            dbs = []
+            for camID in camIDset:
+                db = loadDataset(FLAGS.db, seqName, trialName)
+                db.init_cam(camID)
+                dbs.append(db)
+                # total_count += len(db)
+                # tasks.append((preprocess_single_cam, (db,)))
+
+            total_count += len(dbs[0])
+            tasks.append((preprocess_multi_cam, (dbs,)))
+
+        pool = TqdmMultiProcessPool(process_count)
+        with tqdm.tqdm(total=total_count) as global_tqdm:
+            global_tqdm.set_description(f"{seqName} - total : ")
+            pool.map(global_tqdm, tasks, error_callback, done_callback)
+
+        print("---------------end preprocess seq : %s ---------------" % (seqName))
+
+    proc_time = round((time.time() - t1) / 60., 2)
+    print("total process time : %s min" % (str(proc_time)))
 
 
     print("start segmentation - deeplab_v3")

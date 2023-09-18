@@ -315,16 +315,16 @@ class DataLoader:
         depth_obj = np.where(seg != 2, 10, depth)
         depth_hand = np.where(seg != 1, 10, depth)
 
-        depth_vis_0 = depth_hand / np.max(depth_hand)
-        depth_vis = depth_obj / np.max(depth_obj)
-        cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
-        cv2.imshow("depth_obj", np.asarray(depth_vis * 255, dtype=np.uint8))
+        # depth_vis_0 = depth_hand / np.max(depth_hand)
+        # depth_vis = depth_obj / np.max(depth_obj)
+        # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
+        # cv2.imshow("depth_obj", np.asarray(depth_vis * 255, dtype=np.uint8))
+        # cv2.imshow("depth_hand", np.asarray(depth_vis_0 * 255, dtype=np.uint8))
+        # cv2.imshow("seg", np.asarray(seg *122, dtype=np.uint8))
+        # cv2.waitKey(0)
 
-        cv2.imshow("depth_hand", np.asarray(depth_vis_0 * 255, dtype=np.uint8))
-
-        cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
-        cv2.waitKey(0)
-
+        # seg_hand[seg_hand==0] = 10
+        # seg_obj[seg_obj == 0] = 10
         return rgb, depth_hand, depth_obj, seg_hand, seg_obj, rgb_raw, depth_raw
     
     def get_meta(self, idx):

@@ -169,6 +169,23 @@ class Renderer(nn.Module):
         depth_loss = torch.sum(depth_gap)
         return depth_loss, depth_gap
 
+    def compute_seg_loss(self, pred_seg):
+        seg_a = self.seg_ref - pred_seg
+        seg_a[seg_a < 0] = 0.0
+        seg_b = pred_seg - self.seg_ref
+        seg_b[seg_b < 0] = 0.0
+
+        seg_gap = seg_a + seg_b
+        # seg_gap[self.seg_ref == pred_seg] = 0
+        # seg_gap[self.seg_ref == 10] = 0
+        # seg_gap[pred_seg == 10] = 0
+
+        seg_loss = torch.sum(seg_gap)
+        return seg_loss, seg_gap
+
+
+    def register_seg(self, seg_ref):
+        self.register_buffer('seg_ref', seg_ref)
 
     def register_depth(self, depth_ref):
         self.register_buffer('depth_ref', depth_ref)
