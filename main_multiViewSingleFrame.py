@@ -181,8 +181,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
 
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-        #                     flag_crop=True, flag_headless=FLAGS.headless)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+                            flag_crop=True, flag_headless=FLAGS.headless)
+
         ## apply cam weight
         for camIdx in detected_cams:
             loss_cam = losses[camIdx]
@@ -385,8 +386,8 @@ def main(argv):
                 pred_obj_anno = [None, None]
 
             ### visualization results of frame
-            loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
+            # loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
+            #                         save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
 
             ### save annotation per frame as json format
             save_annotation(target_dir_result, trialName, frame,  FLAGS.seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)

@@ -160,13 +160,11 @@ class Renderer(nn.Module):
         return {"rgb":rgb, "depth":depth, "seg":seg}
 
 
-    def compute_depth_loss(self, bb):
-        pred_rendered = self.output['depth'][:, bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
-
-        depth_gap = (pred_rendered - self.depth_ref) ** 2
+    def compute_depth_loss(self, pred_depth):
+        depth_gap = (pred_depth - self.depth_ref) ** 2
         # depth_gap[self.depth_ref == 10.0] = 0          ###### check
-
         # depth_gap[self.depth_ref == 0] = 0
+
         depth_loss = torch.sum(depth_gap)
         return depth_loss, depth_gap
 
@@ -192,12 +190,13 @@ class Renderer(nn.Module):
 
         depth = self.rasterizer_depth(meshes).zbuf[..., 0]
         # depth map process
-        # depth[depth == -1] = 0.
+        depth[depth == -1] = 0.
+        seg = torch.empty_like(depth).copy_(depth)
+
         # depth = depth * 10.0    # change to mm scale (same as gt)
         depth = depth / 100.0   # change to m scale
-        depth[depth < 0] = 10.
+        depth[depth == 0] = 10.
 
-        seg = torch.empty_like(depth).copy_(depth)
 
         # loss_depth = torch.sum(((depth_rendered - self.depth_ref / self.scale) ** 2).view(self.batch_size, -1),
         #                        -1) * 0.00012498664727900177  # depth scale used in HOnnotate

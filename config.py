@@ -7,10 +7,10 @@ from enum import IntEnum
 # set True if 2D tip annotation data exists(from euclidsoft)
 CFG_exist_tip_db = False
 
-CFG_WITH_OBJ = True
+CFG_WITH_OBJ = False
 CFG_EARLYSTOPPING = False
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal','seg','depth', 'depth_obj']#,'seg_obj',   'kpts_tip', ]#,,,] # 'depth_rel', , 'pose_obj' 'contact',
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal','seg','depth']#, 'depth_obj']#,'seg_obj',   'kpts_tip', ]#,,,] # 'depth_rel', , 'pose_obj' 'contact',
 
 if not CFG_exist_tip_db:
     assert 'pose_obj' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
@@ -26,7 +26,7 @@ CFG_tipGT_interval = 10
 CFG_LR_INIT = 0.05
 CFG_LR_INIT_OBJ = 0.005
 
-CFG_NUM_ITER = 1
+CFG_NUM_ITER = 150
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
