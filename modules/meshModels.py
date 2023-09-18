@@ -57,6 +57,8 @@ class HandModel(nn.Module):
         # scale = torch.tensor([[8.0]])
         self.input_scale = nn.Parameter(scale.repeat(self.batch_size, 1).to(device))
 
+        self.contact = torch.zeros(778).to(device)
+
 
     def compute_pose_all(self, pose_1, pose_2, pose_3):
         pose_all = torch.cat((pose_1[:, :3], pose_2[:, :3], pose_3[:, :3],
@@ -120,7 +122,8 @@ class HandModel(nn.Module):
         hand_faces = self.mano_layer.th_faces.repeat(self.batch_size, 1, 1)
 
         return {'verts':hand_verts, 'faces':hand_faces, 'joints':hand_joints, 'xyz_root':xyz_root,
-                'scale':self.input_scale, 'rot':self.input_rot, 'pose':self.pose_, 'shape':self.shape_}
+                'scale':self.input_scale, 'rot':self.input_rot, 'pose':self.pose_, 'shape':self.shape_, 
+                'contact': self.contact}
 
 
 class ObjModel(nn.Module):

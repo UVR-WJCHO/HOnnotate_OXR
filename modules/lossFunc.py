@@ -15,6 +15,8 @@ from pytorch3d.renderer import TexturesVertex
 from pytorch3d.ops import SubdivideMeshes
 
 import csv
+import trimesh
+import open3d as o3d
 import pandas as pd
 
 
@@ -373,8 +375,12 @@ class MultiViewLossFunc(nn.Module):
                 contact_mask = inter_dist < CFG_CONTACT_DIST
 
                 loss['contact'] = inter_dist[contact_mask].sum() * 1E-1
+                pred['contact'] = torch.ones(778).cuda() * -1.
+                pred['contact'][contact_mask] = inter_dist[contact_mask]
+
             else:
                 loss['contact'] = self.default_zero
+                pred['contact'] = torch.ones(778).cuda() * -1.
 
         if 'penetration' in self.loss_dict:
             if pred_obj is not None:
@@ -400,7 +406,10 @@ class MultiViewLossFunc(nn.Module):
                                    torch.sum((pred['shape'] - self.prev_hand_shape) ** 2)
                 losses_single['temporal'] = loss_temporal * self.temp_weight
 
-        return losses_cam, losses_single
+        if pred_obj is None:
+            return losses_cam, losses_single
+        else:
+            return losses_cam, losses_single, pred['contact']
     
     def set_for_evaluation(self):
         #=====Set evaluation metrics dataframe=====#
@@ -787,10 +796,25 @@ class MultiViewLossFunc(nn.Module):
                 cv2.imwrite(os.path.join(save_path_cam, blend_depth_gap_name + '.png'), depth_gap)
 
                 # save meshes
-                import trimesh
                 hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
                 hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
                 hand.export(os.path.join(save_path_cam, f'mesh_hand_{camID}_{frame}.obj'))
+
+                # vis contact map
+                contact_map = pred['contact'] 
+                contact_idx = torch.where(contact_map > 0)
+                max = contact_map[contact_idx].max()
+                contact_map[contact_idx] = contact_map[contact_idx] / max
+                contact_map[contact_idx] = 1 - contact_map[contact_idx] 
+                contact_map[contact_map == -1.] = 0.
+
+                pcd = o3d.geometry.PointCloud()
+                pcd.points = o3d.utility.Vector3dVector(hand_verts.detach().cpu().numpy())
+                colors = contact_map.unsqueeze(1).detach().cpu().numpy()
+                colors = np.concatenate([colors, colors, 0.5-colors*0.5], axis=1)
+                pcd.colors = o3d.utility.Vector3dVector(colors)
+                o3d.io.write_point_cloud(os.path.join(save_path_cam, f"contact_{camID}_{frame}.ply"), pcd)
+
                 if flag_obj:
                     obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
                     obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())

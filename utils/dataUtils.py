@@ -1,5 +1,6 @@
 import os
 import sys
+import torch
 
 import numpy as np
 import math
@@ -45,6 +46,15 @@ def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
         anno['Mesh'][0]['mano_pose'] = pred['pose'].tolist()
         anno['Mesh'][0]['mano_betas'] = pred['shape'].tolist()
 
+        # post-process contact map
+        contact_map = pred['contact']
+        contact_idx = torch.where(contact_map > 0)
+        max = contact_map[contact_idx].max()
+        contact_map[contact_idx] = contact_map[contact_idx] / max
+        contact_map[contact_idx] = 1 - contact_map[contact_idx]
+        contact_map[contact_map == -1.] = 0.
+
+        anno['Mesh'][0]['contact'] = contact_map.tolist()
 
         ### save full annotation
         with open(anno_path, 'w', encoding='utf-8') as file:
