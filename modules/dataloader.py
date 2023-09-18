@@ -193,8 +193,7 @@ class DataLoader:
             sample['kpts3d'] = meta['kpts']
             sample['kpts2d'] = meta['kpts'][:, :2]
 
-            if CFG_exist_tip_db:
-                assert '2D_tip_gt' in meta, 'set CFG_exist_tip_db=True, and run preprocess.py again'
+            if '2D_tip_gt' in meta:
                 sample['tip2d'] = meta['2D_tip_gt']
 
             #get imgs
@@ -301,9 +300,8 @@ class DataLoader:
         else:
             seg = np.ones((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
 
-        seg_obj = seg.copy()
-        seg[seg != 1] = 0
-        seg_obj[seg_obj != 2] = 0
+        seg_hand = np.where(seg == 1, 1, 0)
+        seg_obj = np.where(seg == 2, 1, 0)
 
         depth_obj = depth.copy()
         depth_obj[seg_obj == 0] = 0
@@ -311,9 +309,10 @@ class DataLoader:
 
         # change depth image to m scale and background value as positive value
         depth /= 1000.
-        depth[depth == 0] = 10.0
         depth_obj /= 1000.
-        depth_obj[depth_obj == 0] = 10.0
+
+        depth_obj = np.where(seg != 2, 10, depth)
+        depth_hand = np.where(seg != 1, 10, depth)
 
         # depth_vis = depth_obj / np.max(depth_obj)
         # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
@@ -323,7 +322,7 @@ class DataLoader:
         # cv2.imshow("seg", np.asarray(seg *255, dtype=np.uint8))
         # cv2.waitKey(0)
 
-        return rgb, depth, depth_obj, seg, seg_obj, rgb_raw, depth_raw
+        return rgb, depth_hand, depth_obj, seg_hand, seg_obj, rgb_raw, depth_raw
     
     def get_meta(self, idx):
         meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)

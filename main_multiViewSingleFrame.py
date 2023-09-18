@@ -29,7 +29,7 @@ from pstats import Stats
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
 
 flags.DEFINE_integer('initNum', 44, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
@@ -138,7 +138,6 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
             logging.info(''.join(logs))
 
 def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=100):
-
     kps_loss = {}
     use_contact_loss = True
 
@@ -163,6 +162,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     # loss_weight['kpts2d'] = 0.5
 
     # detected_cams = [detected_cams[-2]]
+    # detected_cams = [detected_cams[-2]]
 
     for iter in range(iter):
         t_iter = time.time()
@@ -179,11 +179,10 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         else:
             obj_param = None
             
-        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss)
+        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
 
         loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
                             flag_crop=True, flag_headless=FLAGS.headless)
-
         ## apply cam weight
         for camIdx in detected_cams:
             loss_cam = losses[camIdx]
@@ -345,8 +344,8 @@ def main(argv):
                 target : wrist pose/rot, hand scale
                 except : hand shape, hand pose 
             """
-            # __update_global__(model, loss_func, detected_cams, frame,
-            #                   lr_init, trialName)
+            __update_global__(model, loss_func, detected_cams, frame,
+                              lr_init, trialName)
 
             ### update incrementally
             """
@@ -355,8 +354,8 @@ def main(argv):
                 target : wrist pose/rot, hand scale, hand pose(each part) 
                 except : hand shape
             """
-            # __update_parts__(model, loss_func, detected_cams, frame,
-            #                  lr_init, trialName, iterperpart=40)
+            __update_parts__(model, loss_func, detected_cams, frame,
+                             lr_init, trialName, iterperpart=40)
 
 
             ### update all
@@ -379,7 +378,7 @@ def main(argv):
 
             ### visualization results of frame
             loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
+                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
 
             ### save annotation per frame as json format
             save_annotation(target_dir_result, trialName, frame,  FLAGS.seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)

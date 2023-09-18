@@ -22,16 +22,12 @@ class MultiViewLossFunc(nn.Module):
         self.mse_loss = nn.MSELoss()
         self.l1_loss = nn.L1Loss()
         self.smooth_l1_loss = nn.SmoothL1Loss()
-
         self.pose_reg_tensor, self.pose_mean_tensor = self.get_pose_constraint_tensor()
-
         self.dataloaders = dataloaders
         self.cam_renderer = renderers
-
         self.loss_dict = losses
         self.obj_scale = torch.FloatTensor([1.0, 1.0, 1.0]).to(self.device)
         self.h = torch.tensor([[0, 0, 0, 1]]).to(device)
-
         self.Ks = []
         self.Ms = []
         for camIdx in range(len(CFG_CAMID_SET)):
@@ -122,7 +118,7 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ks = self.Ks[main_cam_idx]
         self.main_Ms = self.Ms[main_cam_idx]
 
-    def forward(self, pred, pred_obj, camIdxSet, frame, loss_dict, contact=False, parts=-1):
+    def forward(self, pred, pred_obj, camIdxSet, frame, loss_dict, contact=False, parts=-1, flag_headless=False):
 
         self.loss_dict = loss_dict
 
@@ -252,13 +248,20 @@ class MultiViewLossFunc(nn.Module):
 
                         loss['seg_obj'] = loss_seg_obj * 0.5e-1
 
-                        pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-                        seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-                        gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-                        # cv2.imshow("pred_seg_obj"+str(camIdx), pred_seg_obj)
-                        # cv2.imshow("gt_seg_obj"+str(camIdx), gt_seg_obj)
-                        cv2.imshow("seg_obj_gap"+str(camIdx), seg_obj_gap)
-                        cv2.waitKey(1)
+                        if camIdx == 0:
+                            pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                            seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                            gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+
+                            if not flag_headless:
+                                cv2.imshow("pred_seg_obj", pred_seg_obj)
+                                cv2.imshow("gt_seg_obj", gt_seg_obj)
+                                cv2.imshow("seg_obj_gap", seg_obj_gap)
+                                cv2.waitKey(1)
+                            else:
+                                cv2.imwrite(os.path.join("./for_headless_server", 'pred_seg_obj.png'), pred_seg_obj)
+                                cv2.imwrite(os.path.join("./for_headless_server", 'gt_seg_obj.png'), gt_seg_obj)
+                                cv2.imwrite(os.path.join("./for_headless_server", 'seg_obj_gap.png'), seg_obj_gap)
 
                 if 'depth' in self.loss_dict:
                     pred_depth = pred_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
@@ -287,14 +290,26 @@ class MultiViewLossFunc(nn.Module):
                         # loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
 
                         loss['depth_obj'] = loss_depth_obj * 1e-1
-
-                        pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy()*25)).astype(np.uint8)
-                        gt_depth_vis = np.squeeze((self.gt_depth_obj[0].cpu().detach().numpy()*25)).astype(np.uint8)
-                        depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())).astype(np.uint8)
-                        cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
-                        cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)
-                        cv2.imshow("depth_gap_vis"+str(camIdx), depth_gap_vis)
-                        cv2.waitKey(1)
+                        # pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy()*25)).astype(np.uint8)
+                        # gt_depth_vis = np.squeeze((self.gt_depth_obj[0].cpu().detach().numpy()*25)).astype(np.uint8)
+                        # depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())).astype(np.uint8)
+                        # cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
+                        # cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)
+                        # cv2.imshow("depth_gap_vis"+str(camIdx), depth_gap_vis)
+                        # cv2.waitKey(1)
+                        # if camIdx == 0:
+                        #     pred_depth_vis = np.squeeze((pred_depth_obj[0].cpu().detach().numpy())/10.0).astype(np.uint8)
+                        #     gt_depth_vis = np.squeeze((self.gt_depth[0].cpu().detach().numpy())/10.0).astype(np.uint8)
+                        #     depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())).astype(np.uint8)
+                        #     if not flag_headless:
+                        #         cv2.imshow("pred_depth", pred_depth_vis)
+                        #         cv2.imshow("gt_depth_vis", gt_depth_vis)
+                        #         cv2.imshow("depth_gap_vis", depth_gap_vis)
+                        #         cv2.waitKey(1)
+                        #     else:
+                        #         cv2.imwrite(os.path.join("./for_headless_server", 'obj_pred_depth.png'), pred_depth_vis)
+                        #         cv2.imwrite(os.path.join("./for_headless_server", 'obj_gt_depth.png'), gt_depth_vis)
+                        #         cv2.imwrite(os.path.join("./for_headless_server", 'obj_depth_gap.png'), depth_gap_vis)
 
             losses_cam[camIdx] = loss
 
@@ -343,7 +358,7 @@ class MultiViewLossFunc(nn.Module):
 
         return losses_cam, losses_single
 
-    def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
+    def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False, flag_evaluation=False):
         for camIdx in camIdxSet:
             camID = CFG_CAMID_SET[camIdx]
             # set gt to load original input
@@ -371,6 +386,19 @@ class MultiViewLossFunc(nn.Module):
             depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
             seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
 
+            pred_obj_rendered = self.cam_renderer[camIdx].render_meshes([verts_cam_obj],
+                                                                [pred_obj['faces']], flag_rgb=True)
+            obj_depth = np.squeeze(pred_obj_rendered['depth'][0].cpu().detach().numpy())
+
+            pred_obj_hand = self.cam_renderer[camIdx].render_meshes([verts_cam],
+                                                                [pred['faces']], flag_rgb=True)
+            hand_depth = np.squeeze(pred_obj_hand['depth'][0].cpu().detach().numpy())
+            obj_seg_masked = np.copy(obj_depth)
+            obj_seg_masked = np.where(depth_mesh == hand_depth, 0, 1)
+            hand_seg_masked = np.where(depth_mesh == obj_depth, 0, 2)
+            seg_masked = obj_seg_masked + hand_seg_masked
+            #==============================================================================================
+
             gt_kpts2d = np.squeeze(self.gt_kpts2d.cpu().numpy())
             pred_kpts2d = np.squeeze(pred_kpts2d.cpu().detach().numpy())
 
@@ -397,6 +425,7 @@ class MultiViewLossFunc(nn.Module):
                 rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
                 depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                seg_masked = seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
                 uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
                 gt_kpts2d = (self.img2bb @ uv1.T).T
@@ -405,7 +434,6 @@ class MultiViewLossFunc(nn.Module):
             else:
                 # show original size of input (1080, 1920)
                 rgb_input, depth_input, seg_input, seg_obj = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
-
 
             rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
             rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
@@ -438,12 +466,16 @@ class MultiViewLossFunc(nn.Module):
             blend_depth_name = "blend_depth_" + camID + "_" + str(frame)
             blend_seg_name = "blend_seg_" + camID + "_" + str(frame)
 
-            # cv2.imshow(blend_gt_name, img_blend_gt)
-            # cv2.imshow(blend_pred_name, img_blend_pred)
-            # # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-            # # cv2.imshow(blend_depth_name, depth_gap)
-            # # cv2.imshow(blend_seg_name, seg_gap)
-            # cv2.waitKey(0)
+            if not flag_headless:
+                cv2.imshow(blend_gt_name, img_blend_gt)
+                cv2.imshow(blend_pred_name, img_blend_pred)
+                # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+                # cv2.imshow(blend_depth_name, depth_gap)
+                # cv2.imshow(blend_seg_name, seg_gap)
+                cv2.waitKey(0)
+            else:
+                cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
+                cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
 
             if save_path is None:
                 if not flag_headless:
@@ -454,7 +486,6 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.imshow(blend_seg_name, seg_gap)
                     cv2.waitKey(0)
                 else:
-                    print("show resutls")
                     cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
                     cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
                     cv2.imwrite(os.path.join("./for_headless_server", blend_depth_name + '.png'), depth_gap)
@@ -474,3 +505,51 @@ class MultiViewLossFunc(nn.Module):
                     obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
                     obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
                     obj.export(os.path.join(save_path_cam, f'mesh_obj_{camID}_{frame}.obj'))
+
+            if flag_evaluation:
+                #1. 3D keypoints F1-Score
+                TP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
+                FP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
+                FN = 0 #참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
+                for idx, gt_kpt in enumerate(gt_kpts2d):
+                    pred_kpt = pred_kpts2d[idx]
+                    if (pred_kpt == None).any():
+                        FN += 1
+                    if np.linalg.norm(gt_kpt - pred_kpt) < 50:
+                        TP += 1
+                    elif np.linalg.norm(gt_kpt - pred_kpt) >= 50:
+                        FP += 1
+                
+                self.keypoint_f1_score = 2*TP/(2*TP+FP+FN)
+                print(self.keypoint_f1_score)
+
+                #2. mesh pose F1-Score
+                TP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스(background, object, hand)가 참값(실제 RGB- segmentation map)의 클래스와 일치
+                FP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스가 참값의 클래스와 불일치
+                FN = 0 #참값이 존재하지만 키포인트 좌표의 segmentation class가 존재하지 않는 경우(미태깅) ??
+                gt_seg = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
+                # print(seg_masked.shape)
+                TP = np.sum(np.where(gt_seg > 0, seg_masked == gt_seg, 0))
+                FP = np.sum(np.where(gt_seg > 0, seg_masked != gt_seg, 0))
+                seg_masked_FN = (gt_seg > 0) * (seg_masked == 0)
+                FN = np.sum(seg_masked_FN)
+                
+                self.mesh_f1_score = 2*TP/(2*TP+FP+FN)
+                print(self.mesh_f1_score)
+
+                #3. hand depth accuracy
+                TP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
+                FP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이상
+                FN = 0 #참값이 존재하지만 키포인트 좌표의 깊이값이 존재하지 않는 경우(미태깅)
+                hand_mask = np.where(gt_seg == 1, 1, 0)
+                depth_input_masked = np.where(hand_mask == 1, depth_input, 0)
+                depth_gap = np.squeeze((depth_input_masked - depth_mesh))
+                depth_gap = np.where(depth_mesh == 0, -1, depth_gap)
+                depth_FN = np.where(depth_input_masked > 0, -1, depth_mesh)
+                
+                TP = np.sum(depth_gap < 20) - np.sum(depth_gap == -1)
+                FP = np.sum(depth_gap >= 20)
+                FN = np.sum(depth_FN >= 0)
+
+                self.depth_accuracy = 2*TP/(2*TP+FP+FN)
+                print(self.depth_accuracy)
