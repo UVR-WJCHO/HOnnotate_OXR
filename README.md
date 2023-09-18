@@ -13,6 +13,11 @@ TBD
     - mediapipe, chumpy, cython, matplotlib, numpy, opencv-python, pillow, scikit-image, scipy, tqdm, tqdm-multiprocess
 ```
 
+- Move to `utils/ChamferDistancePytorch/chamfer3D` and install the dependency
+```
+    mv utils/ChamferDistancePytorch/chamfer3D
+    python setup.py install
+```
 
 
 ## Setup
