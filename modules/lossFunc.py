@@ -542,12 +542,13 @@ class MultiViewLossFunc(nn.Module):
                         FP += 1
 
                 self.keypoint_precision_score = TP / (TP + FP)
-                print("3D keypoint precision score : ", self.keypoint_precision_score)
                 self.keypoint_recall_score = TP / (TP + FN)
-                print("3D keypoint recall score : ", self.keypoint_recall_score)
                 self.keypoint_f1_score = 2 * (self.keypoint_precision_score * self.keypoint_recall_score /
                                               (self.keypoint_precision_score + self.keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
-                print("3D keypoint F1 score : ", self.keypoint_f1_score)
+
+                # print("3D keypoint precision score : ", self.keypoint_precision_score)
+                # print("3D keypoint recall score : ", self.keypoint_recall_score)
+                # print("3D keypoint F1 score : ", self.keypoint_f1_score)
 
                 #2. mesh pose F1-Score
                 TP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스(background, object, hand)가 참값(실제 RGB- segmentation map)의 클래스와 일치
@@ -567,13 +568,13 @@ class MultiViewLossFunc(nn.Module):
                 FN = 0 #np.sum(seg_masked_FN)
 
                 self.mesh_seg_precision_score = TP/(TP+FP)
-                print("mesh seg precision score : ", self.mesh_seg_precision_score)
                 self.mesh_seg_recall_score = TP / (TP + FN)
-                print("mesh seg recall score : ", self.mesh_seg_recall_score)
-
                 self.mesh_seg_f1_score = 2 * (self.mesh_seg_precision_score * self.mesh_seg_recall_score /
                                           (self.mesh_seg_precision_score + self.mesh_seg_recall_score)) #2*TP/(2*TP+FP+FN)
-                print("mesh seg F1 score : ", self.mesh_seg_f1_score)
+
+                # print("mesh seg precision score : ", self.mesh_seg_precision_score)
+                # print("mesh seg recall score : ", self.mesh_seg_recall_score)
+                # print("mesh seg F1 score : ", self.mesh_seg_f1_score)
 
                 #3. hand depth accuracy
                 TP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
@@ -599,10 +600,11 @@ class MultiViewLossFunc(nn.Module):
                         FP += 1
 
                 self.mesh_depth_precision_score = TP / (TP + FP)
-                print("mesh depth precision score : ", self.mesh_depth_precision_score)
                 self.mesh_depth_recall_score = TP / (TP + FN)
-                print("mesh depth recall score : ", self.mesh_depth_recall_score)
 
                 self.mesh_depth_f1_score = 2 * (self.mesh_depth_precision_score * self.mesh_depth_recall_score /
                                           (self.mesh_depth_precision_score + self.mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
-                print("mesh depth F1 score : ", self.mesh_depth_f1_score)
+
+                # print("mesh depth precision score : ", self.mesh_depth_precision_score)
+                # print("mesh depth recall score : ", self.mesh_depth_recall_score)
+                # print("mesh depth F1 score : ", self.mesh_depth_f1_score)
