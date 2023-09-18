@@ -874,10 +874,10 @@ def main(argv):
     print("---------------start preprocess seq ---------------")
     process_count = 4
 
+    tasks = []
+    total_count = 0
     t1 = time.time()
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
-        tasks = []
-        total_count = 0
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
             dbs = []
