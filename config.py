@@ -7,13 +7,13 @@ from enum import IntEnum
 # set True if 2D tip annotation data exists(from euclidsoft)
 CFG_exist_tip_db = False
 
-CFG_WITH_OBJ = False
+CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = False
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal','seg','depth']#, 'depth_obj','seg_obj', 'kpts_tip', 'pose_obj']#,,,] # 'depth_rel',  'contact',
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal','seg','depth', 'depth_obj','seg_obj']#, 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
 
 if not CFG_exist_tip_db:
-    assert 'pose_obj' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
+    assert 'kpts_tip' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
 
 CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0,
                    'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0, 'depth_obj': 1.0, 'seg_obj': 1.0, 'pose_obj':1.0}
@@ -24,7 +24,7 @@ CFG_temporal_loss_weight = 0.5e5
 CFG_tipGT_interval = 10
 
 CFG_LR_INIT = 0.05
-CFG_LR_INIT_OBJ = 0.005
+CFG_LR_INIT_OBJ = 0.01
 
 CFG_NUM_ITER = 100
 
@@ -83,7 +83,7 @@ CFG_CROP_IMG_HEIGHT = 480
 CFG_LOSS_THRESHOLD = 3500
 CFG_PATIENCE = 30
 CFG_PATIENCE_v2 = 50
-CFG_PATIENCE_obj = 5
+CFG_PATIENCE_obj = 3
 
 CFG_CONTACT_START_THRESHOLD = 5000 # use contact loss when kpts_loss < 5000
 CFG_CONTACT_DIST = 12

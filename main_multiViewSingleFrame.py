@@ -30,9 +30,9 @@ import pandas as pd
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 
-flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 1, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
@@ -250,8 +250,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                 break
 
             prev_kps_loss = cur_kpt_loss
-            if CFG_WITH_OBJ:
-                prev_obj_loss = cur_obj_loss
+
+        if CFG_WITH_OBJ:
+            prev_obj_loss = cur_obj_loss
             # prev_depthseg_loss = cur_depthseg_loss
 
 
@@ -353,9 +354,8 @@ def main(argv):
                 # obj_pose[:3, -1] *= 0.1
                 model_obj.update_pose(pose=obj_pose)
 
-                if CFG_exist_tip_db:
-                    marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
-                    loss_func.set_object_marker_pose(marker_cam_pose,  obj_dataloader.obj_class)
+                marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
+                loss_func.set_object_marker_pose(marker_cam_pose,  obj_dataloader.obj_class)
 
             ### initialize optimizer, scheduler
             lr_init = CFG_LR_INIT * 0.2
@@ -406,7 +406,7 @@ def main(argv):
 
             ### visualization results of frame
             loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless, flag_evaluation=True)
+                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
 
             loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
 
