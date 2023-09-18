@@ -525,15 +525,21 @@ class MultiViewLossFunc(nn.Module):
 
             gt_depth_hand[gt_depth_hand==10] = 0
             gt_depth_hand *= 1000.
+
+            # cv2.imshow("gt_depth_hand", np.array(gt_depth_hand / 1000 * 255, dtype=np.uint8))
+            # cv2.imshow("hand_depth", np.array(hand_depth / 1000 * 255, dtype=np.uint8))
+            # cv2.waitKey(0)
+
             for i in range(21):
                 kpts2d = pred_kpts2d[i, :]
                 if gt_seg_hand[int(kpts2d[1]), int(kpts2d[0])] == 0:
                     continue
                 gt_hand_d = gt_depth_hand[int(kpts2d[1]), int(kpts2d[0])]
                 pred_hand_d = hand_depth[int(kpts2d[1]), int(kpts2d[0])]
-                if gt_hand_d == 0 or pred_hand_d == 0:
+                diff = abs(gt_hand_d - pred_hand_d)
+                if gt_hand_d == 0 or pred_hand_d == 0 or diff > 100:
                     FN += 1
-                if abs(gt_hand_d - pred_hand_d) < 20:
+                if diff < 20:
                     TP += 1
                 else:
                     FP += 1
