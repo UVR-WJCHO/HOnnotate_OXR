@@ -808,13 +808,14 @@ class MultiViewLossFunc(nn.Module):
                 contact_map[contact_idx] = 1 - contact_map[contact_idx] 
                 contact_map[contact_map == -1.] = 0.
 
+                '''
                 pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(hand_verts.detach().cpu().numpy())
                 colors = contact_map.unsqueeze(1).detach().cpu().numpy()
                 colors = np.concatenate([colors, colors, 0.5-colors*0.5], axis=1)
                 pcd.colors = o3d.utility.Vector3dVector(colors)
                 o3d.io.write_point_cloud(os.path.join(save_path_cam, f"contact_{camID}_{frame}.ply"), pcd)
-
+                '''
                 if flag_obj:
                     obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
                     obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
