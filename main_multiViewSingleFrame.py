@@ -166,7 +166,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         flag_update_obj = True
 
     loss_weight = CFG_LOSS_WEIGHT
-    loss_weight['kpts2d'] = 0.6
+    loss_weight['kpts2d'] = 0.75
     model.input_scale.data *= torch.FloatTensor([0.95]).to('cuda')
 
     for iter in range(iter):
