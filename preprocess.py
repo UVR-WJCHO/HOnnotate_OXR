@@ -968,8 +968,8 @@ def main(argv):
 
     print("end segmentation - deeplab_v3")
 
-    total_num = 0
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        total_num = 0
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
             for camID in camIDset:
