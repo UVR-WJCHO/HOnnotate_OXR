@@ -637,7 +637,7 @@ class MultiViewLossFunc(nn.Module):
 
     def filtering_top_quality_index(self, num=60):
         metric = self.dfs['depth_f1']
-        top_index = []
+        top_index = metric["avg"].nlargest(60).index
 
         return top_index
 
