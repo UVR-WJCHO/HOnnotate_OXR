@@ -388,7 +388,7 @@ class MultiViewLossFunc(nn.Module):
 
         if 'penetration' in self.loss_dict:
             if penetration and pred_obj is not None:
-                hand_pcd = Pointclouds(points=verts_set[camIdx])
+                # hand_pcd = Pointclouds(points=verts_set[camIdx])
 
                 obj_mesh = Meshes(verts=verts_obj_set[camIdx].detach(), faces=pred_obj['faces']).detach() # only update hand params
 
@@ -399,7 +399,7 @@ class MultiViewLossFunc(nn.Module):
                 collide_ids_hand, collide_ids_obj = collision_check(verts_obj_set[camIdx], verts_obj_norm, verts_set[camIdx], chamferDist())
 
                 if collide_ids_hand is not None:
-                    loss['penetration'] = (verts_obj_set[camIdx][:, collide_ids_obj] - verts_set[camIdx][:, collide_ids_hand]).square().mean() * 1e4
+                    loss['penetration'] = (verts_obj_set[camIdx][:, collide_ids_obj] - verts_set[camIdx][:, collide_ids_hand]).square().mean() * 1e2
                 else:
                     loss['penetration'] = self.default_zero
 

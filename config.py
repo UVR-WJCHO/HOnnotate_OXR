@@ -4,17 +4,18 @@ from enum import IntEnum
 
 ## Debug Flags ##
 
-# set True if 2D tip annotation data exists(from euclidsoft)
-CFG_exist_tip_db = False
 
 CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = False
 
+
+# set True if 2D tip annotation data exists(from euclidsoft)
+CFG_exist_tip_db = False
 # default : False. only for sample
-CFG_VIS_CONTACT = True
+CFG_VIS_CONTACT = False
 CFG_SAVE_MESH = False
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact']#, , 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration']#, 'contact']#, , 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
 
 if not CFG_exist_tip_db:
     assert 'kpts_tip' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
@@ -35,6 +36,7 @@ CFG_NUM_ITER = 75
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
+
 # CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
 #                          'sub1':[1.5,0.5,0.5,0.5,0.5],
 #                          'sub2':[1.0, 1.0,1.0,1.0,1.0],
@@ -46,7 +48,7 @@ CFG_NON_VISIBLE_WEIGHT = 0.5
 
 ######## 230829-230908
 # if included, .obj has mm scale
-CFG_OBJECT_SCALE = {"11_small_marker":1.0, "13_flat_screwdriver":6.5}
+CFG_OBJECT_SCALE = {"11_small_marker":1.0, "13_flat_screwdriver":6.5, "16_golf_ball":1.0}
 
 CFG_vertspermarker = {
     "01_cracker_box" : [1865,1859,4434,1070],

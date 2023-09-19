@@ -542,8 +542,8 @@ class loadDataset():
 
         ########## currently tip data processed on sampled data.
         ########## will be update to unsampled data
-        # tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
-        tip_data_name = str(self.camID) + '_' + str(save_idx) + '.json'
+        tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
+        # tip_data_name = str(self.camID) + '_' + str(save_idx) + '.json'
         tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
         if os.path.exists(tip_data_path):
             with open(tip_data_path, "r") as data:
@@ -927,8 +927,7 @@ def main(argv):
             total_count += len(dbs[0])
             tasks.append((preprocess_multi_cam, (dbs,)))
 
-    if flag_check_vert_marker_pair:
-        tasks = tasks[11:]  # adjust for debug
+    # tasks = tasks[11:]  # adjust for debug
 
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:
