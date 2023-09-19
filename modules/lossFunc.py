@@ -58,7 +58,6 @@ class MultiViewLossFunc(nn.Module):
         self.gt_obj_marker = None
         self.vertIDpermarker = None
 
-        self.depth_f1_avg = {}
 
     def reset_prev_pose(self):
         self.prev_hand_pose = None
@@ -621,7 +620,7 @@ class MultiViewLossFunc(nn.Module):
         self.dfs['depth_precision'].loc[frame] = [depth_precision['mas'], depth_precision['sub1'], depth_precision['sub2'], depth_precision['sub3'], depth_precision_avg]
         self.dfs['depth_recall'].loc[frame] = [depth_recall['mas'], depth_recall['sub1'], depth_recall['sub2'], depth_recall['sub3'], depth_recall_avg]
         self.dfs['depth_f1'].loc[frame] = [depth_f1['mas'], depth_f1['sub1'], depth_f1['sub2'], depth_f1['sub3'], depth_f1_avg]
-        self.depth_f1_avg[frame] = depth_f1_avg
+
 
     def save_evaluation(self, save_path, save_num):
         csv_files = ['kpts_precision', 'kpts_recall', 'kpts_f1', 'mesh_precision', 'mesh_recall', 'mesh_f1', 'depth_precision', 'depth_recall', 'depth_f1']
@@ -637,7 +636,7 @@ class MultiViewLossFunc(nn.Module):
 
     def filtering_top_quality_index(self, num=60):
         metric = self.dfs['depth_f1']
-        top_index = metric["avg"].nlargest(60).index
+        top_index = metric["avg"].nlargest(num).index
 
         return top_index
 

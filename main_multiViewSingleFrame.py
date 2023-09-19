@@ -189,8 +189,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                                                    penetration=use_penetration_loss, flag_headless=FLAGS.headless)
 
         model.contact = contact
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-        #                     flag_crop=True, flag_headless=FLAGS.headless)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+                            flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -328,6 +328,7 @@ def main(argv):
             loss_func.set_for_evaluation()
             ## Start optimization per frame
             for frame in range(len(mas_dataloader)):
+                break
                 t_start = time.time()
 
                 ## check visualizeMP results in {YYMMDD} folder, use for debugging
@@ -425,11 +426,10 @@ def main(argv):
                 print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
                 save_num += 1
 
-            loss_func.save_evaluation(log_path, save_num)
+            # loss_func.save_evaluation(log_path, save_num)
 
-            # TODO
             # extract top 'num' indexes from depth f1 score and save as json
-            top_index = loss_func.filtering_top_quality_index(num=60)
+            top_index = loss_func.filtering_top_quality_index(num=60).tolist()
             p = os.path.join(target_dir_result, trialName)
             with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
                 json.dump(top_index, f)
