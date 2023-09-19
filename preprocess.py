@@ -927,8 +927,7 @@ def main(argv):
             total_count += len(dbs[0])
             tasks.append((preprocess_multi_cam, (dbs,)))
 
-    if flag_check_vert_marker_pair:
-        tasks = tasks[11:]  # adjust for debug
+    # tasks = tasks[11:]  # adjust for debug
 
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:
