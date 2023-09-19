@@ -30,12 +30,13 @@ import pandas as pd
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
+flags.DEFINE_integer('start_seq', 0, 'start idx of sequence(ordered)')
+flags.DEFINE_integer('end_seq', 4, 'end idx of sequence(ordered)')
+
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
-
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
-flags.DEFINE_string('seq_list', '230905_S02_obj_03_grasp_3', 'target sequence name')
-
-flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+# flags.DEFINE_string('seq_list', '230905_S02_obj_03_grasp_3', 'target sequence name')
+# flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
@@ -189,8 +190,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                                                    penetration=use_penetration_loss, flag_headless=FLAGS.headless)
 
         model.contact = contact
-        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-                            flag_crop=True, flag_headless=FLAGS.headless)
+        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+        #                     flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -234,8 +235,10 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             if early_stopping_patience_obj > CFG_PATIENCE_obj:
                 flag_update_obj = False
                 ## criteria for contact loss
-                use_contact_loss = True
-                use_penetration_loss = True
+                if 'contact' in CFG_LOSS_DICT:
+                    use_contact_loss = True
+                if 'penetration' in CFG_LOSS_DICT:
+                    use_penetration_loss = True
 
 
         ## sparse criterion on converge for v1 db release, need to be tight
@@ -269,7 +272,10 @@ def main(argv):
     logging.get_absl_handler().setFormatter(None)
     save_num = 0
 
-    seq_list = FLAGS.seq_list.split(',')
+    # seq_list = FLAGS.seq_list.split(',')
+    seq_list = sorted(os.listdir(os.path.join(CFG_DATA_DIR, FLAGS.db)))
+
+    seq_list = seq_list[FLAGS.start_seq:FLAGS.end_seq]
 
     for target_seq in seq_list:
         target_dir = os.path.join(CFG_DATA_DIR, FLAGS.db, target_seq)
@@ -328,12 +334,11 @@ def main(argv):
             loss_func.set_for_evaluation()
             ## Start optimization per frame
             for frame in range(len(mas_dataloader)):
-                break
                 t_start = time.time()
 
                 ## check visualizeMP results in {YYMMDD} folder, use for debugging
-                if trialIdx == 0 and frame < FLAGS.initNum:
-                    continue
+                # if trialIdx == 0 and frame < FLAGS.initNum:
+                #     continue
 
                 ## if prev frame has tip GT, increase current frame's temporal loss
                 if frame > 0 and frame % CFG_tipGT_interval == 0:

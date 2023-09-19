@@ -58,6 +58,7 @@ class MultiViewLossFunc(nn.Module):
         self.gt_obj_marker = None
         self.vertIDpermarker = None
 
+        self.obj_mesh_dense = None
 
     def reset_prev_pose(self):
         self.prev_hand_pose = None
@@ -366,41 +367,41 @@ class MultiViewLossFunc(nn.Module):
             #     pred_obj_pose_diff = torch.norm(pred_obj['pose'][:, :-3], dim=0)
             #     losses_single['reg'] += torch.sum(pred_obj_pose_diff)
 
-        if 'contact' in self.loss_dict:
-            if contact and pred_obj is not None:
-                hand_pcd = Pointclouds(points=verts_set[camIdx])
-                obj_mesh = Meshes(verts=verts_obj_set[camIdx].detach(),
-                                  faces=pred_obj['faces'])  # optimize only hand meshes
+        if contact or penetration:
+            hand_pcd = Pointclouds(points=verts_set[camIdx])
+            obj_mesh = Meshes(verts=verts_obj_set[camIdx].detach(),
+                              faces=pred_obj['faces'])  # optimize only hand meshes
 
-                inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
+            if 'contact' in self.loss_dict:
+                if contact and pred_obj is not None:
+                    inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
 
-                # debug = inter_dist.clone().cpu().detach().numpy()
-                contact_mask = inter_dist < CFG_CONTACT_DIST
+                    # debug = inter_dist.clone().cpu().detach().numpy()
+                    contact_mask = inter_dist < CFG_CONTACT_DIST
 
-                loss['contact'] = inter_dist[contact_mask].sum() * 1E-1
-                pred['contact'] = torch.ones(778).cuda() * -1.
-                pred['contact'][contact_mask] = inter_dist[contact_mask]
+                    loss['contact'] = inter_dist[contact_mask].sum() * 1E-1
+                    pred['contact'] = torch.ones(778).cuda() * -1.
+                    pred['contact'][contact_mask] = inter_dist[contact_mask]
 
-            else:
-                loss['contact'] = self.default_zero
-                pred['contact'] = torch.ones(778).cuda() * -1.
-
-        if 'penetration' in self.loss_dict:
-            if penetration and pred_obj is not None:
-                # hand_pcd = Pointclouds(points=verts_set[camIdx])
-
-                obj_mesh = Meshes(verts=verts_obj_set[camIdx].detach(), faces=pred_obj['faces']).detach() # only update hand params
-
-                for _ in range(5):
-                    obj_mesh = SubdivideMeshes()(obj_mesh) 
-
-                verts_obj_norm = obj_mesh.verts_normals_padded()
-                collide_ids_hand, collide_ids_obj = collision_check(verts_obj_set[camIdx], verts_obj_norm, verts_set[camIdx], chamferDist())
-
-                if collide_ids_hand is not None:
-                    loss['penetration'] = (verts_obj_set[camIdx][:, collide_ids_obj] - verts_set[camIdx][:, collide_ids_hand]).square().mean() * 1e2
                 else:
-                    loss['penetration'] = self.default_zero
+                    loss['contact'] = self.default_zero
+                    pred['contact'] = torch.ones(778).cuda() * -1.
+
+            if 'penetration' in self.loss_dict:
+                if penetration and pred_obj is not None:
+                    if self.obj_mesh_dense is None:
+                        for _ in range(5):
+                            obj_mesh = SubdivideMeshes()(obj_mesh)
+                            self.obj_mesh_dense = obj_mesh
+                    else:
+                        obj_mesh = self.obj_mesh_dense
+                    verts_obj_norm = obj_mesh.verts_normals_padded()
+                    collide_ids_hand, collide_ids_obj = collision_check(verts_obj_set[camIdx], verts_obj_norm, verts_set[camIdx], chamferDist())
+
+                    if collide_ids_hand is not None:
+                        loss['penetration'] = (verts_obj_set[camIdx][:, collide_ids_obj] - verts_set[camIdx][:, collide_ids_hand]).square().mean() * 1e2
+                    else:
+                        loss['penetration'] = self.default_zero
 
 
         if 'temporal' in self.loss_dict:
