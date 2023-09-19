@@ -431,6 +431,8 @@ def main(argv):
             # extract top 'num' indexes from depth f1 score and save as json
             top_index = loss_func.filtering_top_quality_index(num=60)
             p = os.path.join(target_dir_result, trialName)
+            with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
+                json.dump(top_index, f)
 
 
 
