@@ -8,9 +8,12 @@ from enum import IntEnum
 CFG_exist_tip_db = False
 
 CFG_WITH_OBJ = True
-CFG_EARLYSTOPPING = True
+CFG_EARLYSTOPPING = False
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'contact', 'penetration']#, 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
+# default : False. only for sample
+CFG_FLAG_VIS_CONTACT = True
+
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact']#, , 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
 
 if not CFG_exist_tip_db:
     assert 'kpts_tip' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
@@ -31,10 +34,13 @@ CFG_NUM_ITER = 100
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
-CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
-                         'sub1':[1.5,0.5,0.5,0.5,0.5],
-                         'sub2':[1.0, 1.0,1.0,1.0,1.0],
-                         'sub3':[0.5,1.5,1.5,1.0,1.0]}
+# CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
+#                          'sub1':[1.5,0.5,0.5,0.5,0.5],
+#                          'sub2':[1.0, 1.0,1.0,1.0,1.0],
+#                          'sub3':[0.5,1.5,1.5,1.0,1.0]}
+## apply on dataloader pkl creation
+CFG_NON_VISIBLE_WEIGHT = 0.5
+
 
 
 # 230829-230908
@@ -99,6 +105,7 @@ CFG_PATIENCE_obj = 3
 
 CFG_CONTACT_START_THRESHOLD = 5000 # use contact loss when kpts_loss < 5000
 CFG_CONTACT_DIST = 8
+CFG_CONTACT_DIST_VIS = 20
 
 CFG_PALM_IDX = [0, 5, 9, 13]
 CFG_TIP_IDX = {'thumb':4, 'index':8, 'middle':12, 'ring':16, 'pinky':20}

@@ -20,7 +20,6 @@ import modules.common.transforms as tf
 from pytorch3d.io import load_obj
 from pytorch3d.structures import Meshes
 
-
 '''
 데이터셋 구조를 다음과 같이 세팅.(임시)
 - base_path
@@ -147,7 +146,11 @@ class DataLoader:
                 sample_torch['depth'] = torch.unsqueeze(torch.FloatTensor(sample['depth']), 0).to(self.device)
                 sample_torch['depth_obj'] = torch.unsqueeze(torch.FloatTensor(sample['depth_obj']), 0).to(self.device)
                 sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
-                sample_torch['seg_obj'] =torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
+                sample_torch['seg_obj'] = torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
+
+                vis = sample['visibility']
+                vis[vis < 1] = CFG_NON_VISIBLE_WEIGHT
+                sample_torch['visibility'] = torch.unsqueeze(torch.FloatTensor(vis), 1).to(self.device)
 
                 if CFG_exist_tip_db:
                     if sample['tip2d'] != None:
@@ -193,6 +196,7 @@ class DataLoader:
             sample['kpts3d'] = meta['kpts']
             sample['kpts2d'] = meta['kpts'][:, :2]
 
+            sample['visibility'] = meta['visibility']
             if '2D_tip_gt' in meta:
                 sample['tip2d'] = meta['2D_tip_gt']
 
@@ -210,37 +214,6 @@ class DataLoader:
             sample['rgb'], sample['depth'], sample['depth_obj'], sample['seg'], sample['seg_obj'], \
                 rgb_raw, depth_raw = self.get_img(index)
 
-
-            ## compute visibility?
-            # if index > 9:
-            #     kpts2d = np.copy(meta['kpts'][:, :2])
-            #     kpts_depth_rel = np.abs(np.copy(meta['kpts'][:, -1] - meta['kpts'][0, -1]))
-            #     kpts_scale = kpts_depth_rel[5] - kpts_depth_rel[0]
-            #
-            #     wrist_depth = extract_depth(depth_raw, kpts2d, 0)
-            #     gt_scale = extract_depth(depth_raw, kpts2d, 5)
-            #
-            #     scale = np.abs(gt_scale - wrist_depth) / kpts_scale
-            #
-            #     kpts_depth_rel = kpts_depth_rel * scale
-            #     depth_rel = []
-            #     for i in range(21):
-            #         depth_point = extract_depth(depth_raw, kpts2d, i)
-            #         d_rel = np.abs(depth_point - wrist_depth)
-            #         depth_rel.append(d_rel)
-            #
-            #     depth_gap = np.abs(depth_rel - kpts_depth_rel)
-            #     flag_vis = depth_gap < 50.
-            #     debug = rgb_raw
-            #     for i in range(21):
-            #         r = 2
-            #         if flag_vis[i]:
-            #             r=8
-            #
-            #         value = kpts2d[i, :]
-            #         cv2.circle(debug, (int(value[0]), int(value[1])), radius=r, thickness=-1, color=(0, 0, 255))
-            #     cv2.imshow("vis", debug)
-            #     cv2.waitKey(0)
 
             return sample
 

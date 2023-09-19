@@ -732,8 +732,7 @@ class loadDataset():
 
     def postProcessNone(self, idx):
         meta_info = {'bb': None, 'img2bb': None,
-                     'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt':None}
-
+                     'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt':None, 'visibility': None}
 
         metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
         jsonPath = os.path.join(self.metaDir, metaName)
@@ -741,7 +740,7 @@ class loadDataset():
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
 
-    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts):
+    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
 
         rgbName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         depthName = str(self.camID) + '_' + format(idx, '04') + '.png'
@@ -750,19 +749,43 @@ class loadDataset():
         # cv2.imwrite(os.path.join(self.rgbCropDir_result, rgbName), procImgSet[0])
         # cv2.imwrite(os.path.join(self.rgbCropDir_result, depthName), procImgSet[1])
 
-        vis = paint_kpts(None, procImgSet[0], processed_kpts)
+        vis = paint_kpts(None, procImgSet[0], processed_kpts, visibility)
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
 
 
         meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
                      'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts),
-                     '2D_tip_gt': self.tip_data}
+                     '2D_tip_gt': self.tip_data, 'visibility': visibility}
 
         metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
         jsonPath = os.path.join(self.metaDir, metaName)
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
+
+    def computeVisibility(self, kpts):
+        vis = np.ones(21)
+        for i in range(21):
+            kpt_x = kpts[i, 0]
+            kpt_y = kpts[i, 1]
+            kpt_z = kpts[i, 2]
+
+            patch = [kpt_x-20, kpt_x+20, kpt_y-20, kpt_y+20]
+
+            x_inrange = (kpts[:, 0] > patch[0]) & (kpts[:, 0] < patch[1])
+            y_inrange = (kpts[:, 1] > patch[2]) & (kpts[:, 1] < patch[3])
+            point_inrange = x_inrange & y_inrange
+            idxlist_near = [idx for idx, x in enumerate(point_inrange) if x]
+            idxlist_near.remove(i)
+            if len(idxlist_near) != 0:
+                for idx_near in idxlist_near:
+                    if kpts[idx_near, 2] < kpt_z:
+                        vis[i] = 0
+            else:
+                vis[i] = 1
+
+        return vis
+
 
 
 """
@@ -808,7 +831,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.93, min_tracking_confidence=0.9)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.90, min_tracking_confidence=0.94)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
@@ -834,7 +857,8 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 if output is not None:
                     bb, img2bb, bb2img, procImgSet, kps = output
                     procKps = db.translateKpts(np.copy(kps), img2bb)
-                    db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
+                    visibility = db.computeVisibility(procKps)
+                    db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
 
                     # if flag_segmentation:
                     #     db.segmentation(save_idx, procImgSet, procKps, img2bb)
@@ -906,7 +930,6 @@ def main(argv):
     if flag_deep_segmentation:
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
             seqDir = os.path.join(rootDir, seqName)
-            print("---------------start preprocess seq : %s ---------------" % (seqName))
             for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
 
                 db = loadDataset(FLAGS.db, seqName, trialName)

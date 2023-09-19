@@ -44,7 +44,7 @@ class MultiViewLossFunc(nn.Module):
 
         self.default_zero = torch.tensor([0.0], requires_grad=True).to(self.device)
 
-        self.vis = self.set_visibility_weight(CFG_CAM_PER_FINGER_VIS)
+        # self.vis = self.set_visibility_weight(CFG_CAM_PER_FINGER_VIS)
 
         self.const = Constraints()
         self.rot_min = torch.tensor(np.asarray(params.rot_min_list)).to(self.device)
@@ -111,6 +111,8 @@ class MultiViewLossFunc(nn.Module):
         self.gt_seg = gt_sample['seg']
         self.gt_seg_obj = gt_sample['seg_obj']
 
+        self.gt_visibility = gt_sample['visibility']
+
         if gt_sample['tip2d'] is not None:
             self.gt_tip2d = gt_sample['tip2d']
             self.valid_tip_idx = gt_sample['validtip']
@@ -124,7 +126,7 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ks = self.Ks[main_cam_idx]
         self.main_Ms = self.Ms[main_cam_idx]
 
-    def forward(self, pred, pred_obj, camIdxSet, frame, loss_dict, contact=False, parts=-1, flag_headless=False):
+    def forward(self, pred, pred_obj, camIdxSet, frame, loss_dict, contact=False, penetration=False, parts=-1, flag_headless=False):
 
         self.loss_dict = loss_dict
 
@@ -185,12 +187,12 @@ class MultiViewLossFunc(nn.Module):
             if 'kpts2d' in self.loss_dict:
                 # all
                 if parts == -1 or parts == 2:
-                    loss_kpts2d = ((pred_kpts2d - self.gt_kpts2d) ** 2) * self.vis[camIdx]
+                    loss_kpts2d = ((pred_kpts2d - self.gt_kpts2d) ** 2) * self.gt_visibility
                 # parts
                 else:
                     valid_idx = CFG_valid_index[parts]
                     loss_kpts2d = ((pred_kpts2d[:, valid_idx, :] - self.gt_kpts2d[:, valid_idx, :]) ** 2) \
-                                  * self.vis[camIdx][valid_idx]
+                                  * self.gt_visibility[valid_idx]
 
                 loss_kpts2d = torch.sum(loss_kpts2d.reshape(self.bs, -1), -1)
                 loss['kpts2d'] = loss_kpts2d * 2e0
@@ -383,8 +385,9 @@ class MultiViewLossFunc(nn.Module):
                 pred['contact'] = torch.ones(778).cuda() * -1.
 
         if 'penetration' in self.loss_dict:
-            if pred_obj is not None:
+            if penetration and pred_obj is not None:
                 hand_pcd = Pointclouds(points=verts_set[camIdx])
+
                 obj_mesh = Meshes(verts=verts_obj_set[camIdx].detach(), faces=pred_obj['faces']).detach() # only update hand params
 
                 for _ in range(5):
@@ -394,9 +397,10 @@ class MultiViewLossFunc(nn.Module):
                 collide_ids_hand, collide_ids_obj = collision_check(verts_obj_set[camIdx], verts_obj_norm, verts_set[camIdx], chamferDist())
 
                 if collide_ids_hand is not None:
-                    loss['penetration'] = (verts_obj_set[camIdx][:, collide_ids_obj] - verts_set[camIdx][:, collide_ids_hand]).square().mean() * 1E3
+                    loss['penetration'] = (verts_obj_set[camIdx][:, collide_ids_obj] - verts_set[camIdx][:, collide_ids_hand]).square().mean() * 1e4
                 else:
                     loss['penetration'] = self.default_zero
+
 
         if 'temporal' in self.loss_dict:
             if self.prev_hand_pose == None:
@@ -504,10 +508,6 @@ class MultiViewLossFunc(nn.Module):
             kpts_recall[camID] = keypoint_recall_score
             kpts_f1[camID] = keypoint_f1_score
 
-            print("3D keypoint precision score : ", keypoint_precision_score)
-            print("3D keypoint recall score : ", keypoint_recall_score)
-            print("3D keypoint F1 score : ", keypoint_f1_score)
-
             #2. mesh pose F1-Score
             TP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스(background, object, hand)가 참값(실제 RGB- segmentation map)의 클래스와 일치
             FP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스가 참값의 클래스와 불일치
@@ -533,10 +533,6 @@ class MultiViewLossFunc(nn.Module):
             mesh_precision[camID] = mesh_seg_precision_score
             mesh_recall[camID] = mesh_seg_recall_score
             mesh_f1[camID] = mesh_seg_f1_score
-
-            print("mesh seg precision score : ", mesh_seg_precision_score)
-            print("mesh seg recall score : ", mesh_seg_recall_score)
-            print("mesh seg F1 score : ", mesh_seg_f1_score)
 
             #3. hand depth accuracy
             TP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
@@ -581,10 +577,18 @@ class MultiViewLossFunc(nn.Module):
             depth_precision[camID] = mesh_depth_precision_score
             depth_recall[camID] = mesh_depth_recall_score
             depth_f1[camID] = mesh_depth_f1_score
-            
-            print("mesh depth precision score : ", mesh_depth_precision_score)
-            print("mesh depth recall score : ", mesh_depth_recall_score)
-            print("mesh depth F1 score : ", mesh_depth_f1_score)
+
+            # print("3D keypoint precision score : ", keypoint_precision_score)
+            # print("3D keypoint recall score : ", keypoint_recall_score)
+            # print("3D keypoint F1 score : ", keypoint_f1_score)
+
+            # print("mesh seg precision score : ", mesh_seg_precision_score)
+            # print("mesh seg recall score : ", mesh_seg_recall_score)
+            # print("mesh seg F1 score : ", mesh_seg_f1_score)
+            #
+            # print("mesh depth precision score : ", mesh_depth_precision_score)
+            # print("mesh depth recall score : ", mesh_depth_recall_score)
+            # print("mesh depth F1 score : ", mesh_depth_f1_score)
 
 
         kpts_precision_avg = sum(kpts_precision.values())/len(camIdxSet)
@@ -800,23 +804,44 @@ class MultiViewLossFunc(nn.Module):
                 hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
                 hand.export(os.path.join(save_path_cam, f'mesh_hand_{camID}_{frame}.obj'))
 
-                # vis contact map
-                contact_map = pred['contact'] 
-                contact_idx = torch.where(contact_map > 0)
-                max = contact_map[contact_idx].max()
-                contact_map[contact_idx] = contact_map[contact_idx] / max
-                contact_map[contact_idx] = 1 - contact_map[contact_idx] 
-                contact_map[contact_map == -1.] = 0.
-
-                '''
-                pcd = o3d.geometry.PointCloud()
-                pcd.points = o3d.utility.Vector3dVector(hand_verts.detach().cpu().numpy())
-                colors = contact_map.unsqueeze(1).detach().cpu().numpy()
-                colors = np.concatenate([colors, colors, 0.5-colors*0.5], axis=1)
-                pcd.colors = o3d.utility.Vector3dVector(colors)
-                o3d.io.write_point_cloud(os.path.join(save_path_cam, f"contact_{camID}_{frame}.ply"), pcd)
-                '''
                 if flag_obj:
                     obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
                     obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
                     obj.export(os.path.join(save_path_cam, f'mesh_obj_{camID}_{frame}.obj'))
+
+                # create contact map
+                hand_pcd = Pointclouds(points=verts_cam)
+                obj_mesh = Meshes(verts=verts_cam_obj.detach(),
+                                  faces=pred_obj['faces'])  # optimize only hand meshes
+                inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
+                # debug = inter_dist.clone().cpu().detach().numpy()
+                contact_mask = inter_dist < CFG_CONTACT_DIST_VIS
+                contact_map = torch.ones(778).cuda() * -1.
+                contact_map[contact_mask] = inter_dist[contact_mask]
+
+                pred['contact'] = contact_map.clone().detach()
+
+                # vis contact map
+                if CFG_FLAG_VIS_CONTACT:
+                    contact_idx = torch.where(contact_map > 0)
+                    max = contact_map[contact_idx].max()
+                    contact_map[contact_idx] = contact_map[contact_idx] / max
+                    contact_map[contact_idx] = 1 - contact_map[contact_idx]
+                    contact_map[contact_map == -1.] = 0.
+
+                    save_path_contactmap = os.path.join(save_path, 'contactmap')
+                    os.makedirs(save_path_contactmap, exist_ok=True)
+                    pcd = o3d.geometry.PointCloud()
+                    pcd.points = o3d.utility.Vector3dVector(hand_verts.detach().cpu().numpy())
+                    colors = contact_map.unsqueeze(1).detach().cpu().numpy()
+                    colors = np.concatenate([colors, colors, 0.5-colors*0.5], axis=1)
+                    pcd.colors = o3d.utility.Vector3dVector(colors)
+                    o3d.io.write_point_cloud(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.ply"), pcd)
+
+                    vis = o3d.visualization.Visualizer()
+                    vis.create_window()
+                    vis.get_render_option().point_color_option = o3d.visualization.PointColorOption.Color
+                    vis.get_render_option().point_size = 10.0
+                    vis.add_geometry(pcd)
+                    vis.capture_screen_image(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.jpg"), do_render=True)
+                    vis.destroy_window()

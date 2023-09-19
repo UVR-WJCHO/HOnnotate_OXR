@@ -30,9 +30,9 @@ import pandas as pd
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S01_obj_30_grasp_01', 'target sequence name')
+flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 
-flags.DEFINE_integer('initNum', 1, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
@@ -139,7 +139,8 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
 
 def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=100):
     kps_loss = {}
-    use_contact_loss = True
+    use_contact_loss = False
+    use_penetration_loss = False
 
     # set initial loss, early stopping threshold
     best_loss = torch.inf
@@ -162,7 +163,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         flag_update_obj = True
 
     loss_weight = CFG_LOSS_WEIGHT
-    loss_weight['kpts2d'] = 0.4
+    loss_weight['kpts2d'] = 0.6
     model.input_scale.data *= torch.FloatTensor([0.95]).to('cuda')
 
     for iter in range(iter):
@@ -180,7 +181,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         else:
             obj_param = None
             
-        losses, losses_single, contact = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss, flag_headless=FLAGS.headless)
+        losses, losses_single, contact = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams,
+                                                   frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss,
+                                                   penetration=use_penetration_loss, flag_headless=FLAGS.headless)
 
         model.contact = contact
         # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
@@ -205,7 +208,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         # lr_scheduler.step()
 
 
-        iter_t = time.time() - t_iter
+        # iter_t = time.time() - t_iter
+        # print("iter_t : ", iter_t)
         logs = ["[{} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
         logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
                  key in CFG_LOSS_DICT]
@@ -228,10 +232,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                 flag_update_obj = False
                 ## criteria for contact loss
                 use_contact_loss = True
+                use_penetration_loss = True
 
-        ## criteria for contact loss
-        # if cur_kpt_loss < CFG_CONTACT_START_THRESHOLD:
-        #     use_contact_loss = True
 
         ## sparse criterion on converge for v1 db release, need to be tight
         if CFG_EARLYSTOPPING:

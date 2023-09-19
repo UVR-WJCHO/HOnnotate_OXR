@@ -109,7 +109,7 @@ def get_pose_constraint_tensor():
     pose_reg_tensor = torch.tensor(params.pose_reg_list).cuda()
     return pose_reg_tensor, pose_mean_tensor
 
-def paint_kpts(img_path, img, kpts, circle_size = 1):
+def paint_kpts(img_path, img, kpts, visibility=None, circle_size = 1):
     colors = params.colors
     # To be continued
     limbSeq = params.limbSeq_hand
@@ -122,11 +122,20 @@ def paint_kpts(img_path, img, kpts, circle_size = 1):
     for k, kpt in enumerate(kpts):
         row = int(kpt[0])
         col = int(kpt[1])
-        if k in [0, 4, 8, 12, 16, 20]:
-            r = circle_size
+        if visibility is not None:
+            if visibility[k]:
+                rgb = (255, 0, 0)
+                r = 1
+            else:
+                rgb = (0, 0, 255)
+                r = 5
         else:
-            r = 1
-        cv2.circle(im, (col, row), radius=r, thickness=-1, color=(0, 0, 255))
+            rgb = (0, 0, 255)
+            if k in [0, 4, 8, 12, 16, 20]:
+                r = circle_size
+            else:
+                r = 1
+        cv2.circle(im, (col, row), radius=r, thickness=-1, color=rgb)
 
 
     # draw lines
