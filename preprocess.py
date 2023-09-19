@@ -542,8 +542,8 @@ class loadDataset():
 
         ########## currently tip data processed on sampled data.
         ########## will be update to unsampled data
-        # tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
-        tip_data_name = str(self.camID) + '_' + str(save_idx) + '.json'
+        tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
+        # tip_data_name = str(self.camID) + '_' + str(save_idx) + '.json'
         tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
         if os.path.exists(tip_data_path):
             with open(tip_data_path, "r") as data:
