@@ -58,6 +58,8 @@ class MultiViewLossFunc(nn.Module):
         self.gt_obj_marker = None
         self.vertIDpermarker = None
 
+        self.depth_f1_avg = {}
+
     def reset_prev_pose(self):
         self.prev_hand_pose = None
         self.prev_hand_shape = None
@@ -545,10 +547,11 @@ class MultiViewLossFunc(nn.Module):
             gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
 
             gt_depth_hand[gt_depth_hand==10] = 0
-            gt_depth_hand *= 1000.
+            gt_depth_hand *= 100.
+            hand_depth /= 10.
 
-            # cv2.imshow("gt_depth_hand", np.array(gt_depth_hand / 1000 * 255, dtype=np.uint8))
-            # cv2.imshow("hand_depth", np.array(hand_depth / 1000 * 255, dtype=np.uint8))
+            # cv2.imshow("gt_depth_hand", np.array(gt_depth_hand / 100 * 255, dtype=np.uint8))
+            # cv2.imshow("hand_depth", np.array(hand_depth / 100 * 255, dtype=np.uint8))
             # cv2.waitKey(0)
 
             for i in range(21):
@@ -618,6 +621,7 @@ class MultiViewLossFunc(nn.Module):
         self.dfs['depth_precision'].loc[frame] = [depth_precision['mas'], depth_precision['sub1'], depth_precision['sub2'], depth_precision['sub3'], depth_precision_avg]
         self.dfs['depth_recall'].loc[frame] = [depth_recall['mas'], depth_recall['sub1'], depth_recall['sub2'], depth_recall['sub3'], depth_recall_avg]
         self.dfs['depth_f1'].loc[frame] = [depth_f1['mas'], depth_f1['sub1'], depth_f1['sub2'], depth_f1['sub3'], depth_f1_avg]
+        self.depth_f1_avg[frame] = depth_f1_avg
 
     def save_evaluation(self, save_path, save_num):
         csv_files = ['kpts_precision', 'kpts_recall', 'kpts_f1', 'mesh_precision', 'mesh_recall', 'mesh_f1', 'depth_precision', 'depth_recall', 'depth_f1']
@@ -630,6 +634,12 @@ class MultiViewLossFunc(nn.Module):
             df = self.dfs[file]
             df.to_csv(os.path.join(save_path, file + '.csv'), mode='a', index=True, header=False)
 
+
+    def filtering_top_quality_index(self, num=60):
+        metric = self.dfs['depth_f1']
+        top_index = []
+
+        return top_index
 
     def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
 
@@ -797,17 +807,18 @@ class MultiViewLossFunc(nn.Module):
                 os.makedirs(save_path_cam, exist_ok=True)
                 cv2.imwrite(os.path.join(save_path_cam, blend_pred_name + '.png'), img_blend_pred)
                 # cv2.imwrite(os.path.join(save_path_cam, blend_pred_seg_name + '.png'), img_blend_pred_seg)
-                cv2.imwrite(os.path.join(save_path_cam, blend_depth_gap_name + '.png'), depth_gap)
+                # cv2.imwrite(os.path.join(save_path_cam, blend_depth_gap_name + '.png'), depth_gap)
 
                 # save meshes
-                hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
-                hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
-                hand.export(os.path.join(save_path_cam, f'mesh_hand_{camID}_{frame}.obj'))
+                if CFG_SAVE_MESH:
+                    hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
+                    hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
+                    hand.export(os.path.join(save_path_cam, f'mesh_hand_{camID}_{frame}.obj'))
 
-                if flag_obj:
-                    obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
-                    obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
-                    obj.export(os.path.join(save_path_cam, f'mesh_obj_{camID}_{frame}.obj'))
+                    if flag_obj:
+                        obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
+                        obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
+                        obj.export(os.path.join(save_path_cam, f'mesh_obj_{camID}_{frame}.obj'))
 
                 # create contact map
                 hand_pcd = Pointclouds(points=verts_cam)
@@ -822,16 +833,18 @@ class MultiViewLossFunc(nn.Module):
                 pred['contact'] = contact_map.clone().detach()
 
                 # vis contact map
-                if CFG_FLAG_VIS_CONTACT:
+                if CFG_VIS_CONTACT:
                     contact_idx = torch.where(contact_map > 0)
-                    max = contact_map[contact_idx].max()
-                    contact_map[contact_idx] = contact_map[contact_idx] / max
-                    contact_map[contact_idx] = 1 - contact_map[contact_idx]
+                    if not contact_idx[0].nelement() == 0:
+                        max = contact_map[contact_idx].max()
+                        contact_map[contact_idx] = contact_map[contact_idx] / max
+                        contact_map[contact_idx] = 1 - contact_map[contact_idx]
                     contact_map[contact_map == -1.] = 0.
 
                     save_path_contactmap = os.path.join(save_path, 'contactmap')
                     os.makedirs(save_path_contactmap, exist_ok=True)
                     pcd = o3d.geometry.PointCloud()
+                    hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
                     pcd.points = o3d.utility.Vector3dVector(hand_verts.detach().cpu().numpy())
                     colors = contact_map.unsqueeze(1).detach().cpu().numpy()
                     colors = np.concatenate([colors, colors, 0.5-colors*0.5], axis=1)
@@ -841,7 +854,7 @@ class MultiViewLossFunc(nn.Module):
                     vis = o3d.visualization.Visualizer()
                     vis.create_window()
                     vis.get_render_option().point_color_option = o3d.visualization.PointColorOption.Color
-                    vis.get_render_option().point_size = 10.0
+                    vis.get_render_option().point_size = 15.0
                     vis.add_geometry(pcd)
                     vis.capture_screen_image(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.jpg"), do_render=True)
                     vis.destroy_window()

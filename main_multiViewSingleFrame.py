@@ -30,7 +30,10 @@ import pandas as pd
 ## FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
+# flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
+
+## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
+flags.DEFINE_string('seq_list', '230905_S02_obj_03_grasp_3', 'target sequence name')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
@@ -266,160 +269,169 @@ def main(argv):
     logging.get_absl_handler().setFormatter(None)
     save_num = 0
 
-    target_dir = os.path.join(CFG_DATA_DIR, FLAGS.db, FLAGS.seq)
-    target_dir_result = os.path.join(CFG_DATA_DIR, FLAGS.db + '_result', FLAGS.seq)
+    seq_list = FLAGS.seq_list.split(',')
 
-    for trialIdx, trialName in enumerate(sorted(os.listdir(target_dir))):
-        save_path = os.path.join(target_dir_result, trialName, "visualization")
-        log_path = os.path.join(CFG_ROOT_DIR, 'log' ,FLAGS.db, FLAGS.seq, trialName)
-        if not os.path.isdir(log_path):
-            os.makedirs(log_path)
+    for target_seq in seq_list:
+        target_dir = os.path.join(CFG_DATA_DIR, FLAGS.db, target_seq)
+        target_dir_result = os.path.join(CFG_DATA_DIR, FLAGS.db + '_result', target_seq)
 
-        ## Load data of each camera, save pkl file for second run.
-        print("loading data... %s %s " % (FLAGS.seq, trialName))
-        mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'mas', CFG_DEVICE)
-        sub1_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub1', CFG_DEVICE)
-        sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub2', CFG_DEVICE)
-        sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, 'sub3', CFG_DEVICE)
+        for trialIdx, trialName in enumerate(sorted(os.listdir(target_dir))):
+            save_path = os.path.join(target_dir_result, trialName, "visualization")
+            log_path = os.path.join(CFG_ROOT_DIR, 'log' ,FLAGS.db, target_seq, trialName)
+            if not os.path.isdir(log_path):
+                os.makedirs(log_path)
 
-        ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
-        mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
-        default_M = np.eye(4)[:3]
-        mas_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, mas_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
-        sub1_K, _, sub1_D = sub1_dataloader.cam_parameter
-        sub1_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub1_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
-        sub2_K, _, sub2_D = sub2_dataloader.cam_parameter
-        sub2_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub2_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
-        sub3_K, _, sub3_D = sub3_dataloader.cam_parameter
-        sub3_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub3_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+            ## Load data of each camera, save pkl file for second run.
+            print("loading data... %s %s " % (target_seq, trialName))
+            mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, 'mas', CFG_DEVICE)
+            sub1_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, 'sub1', CFG_DEVICE)
+            sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, 'sub2', CFG_DEVICE)
+            sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, 'sub3', CFG_DEVICE)
 
-        dataloader_set = [mas_dataloader, sub1_dataloader, sub2_dataloader, sub3_dataloader]
-        renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
+            ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
+            mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
+            default_M = np.eye(4)[:3]
+            mas_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, mas_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+            sub1_K, _, sub1_D = sub1_dataloader.cam_parameter
+            sub1_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub1_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+            sub2_K, _, sub2_D = sub2_dataloader.cam_parameter
+            sub2_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub2_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
+            sub3_K, _, sub3_D = sub3_dataloader.cam_parameter
+            sub3_renderer = Renderer(CFG_DEVICE, CFG_BATCH_SIZE, default_M, sub3_K, (CFG_IMG_HEIGHT, CFG_IMG_WIDTH))
 
-        # if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
-        #     raise ValueError("The number of data is not same between cameras")
+            dataloader_set = [mas_dataloader, sub1_dataloader, sub2_dataloader, sub3_dataloader]
+            renderer_set = [mas_renderer, sub1_renderer, sub2_renderer, sub3_renderer]
 
-        ## Initialize loss function
-        loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT).to(CFG_DEVICE)
-        loss_func.set_main_cam(main_cam_idx=0)
+            # if (len(mas_dataloader) != len(sub1_dataloader)) or (len(mas_dataloader) != len(sub2_dataloader)) or (len(mas_dataloader) != len(sub3_dataloader)):
+            #     raise ValueError("The number of data is not same between cameras")
 
-        ## Initialize hand model
-        model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE, side=CFG_MANO_SIDE).to(CFG_DEVICE)
-        model_obj = None
+            ## Initialize loss function
+            loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT).to(CFG_DEVICE)
+            loss_func.set_main_cam(main_cam_idx=0)
 
-        ## Initialize object dataloader & model
-        if CFG_WITH_OBJ:
-            obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.seq, trialName, mas_dataloader.cam_parameter)
+            ## Initialize hand model
+            model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE, side=CFG_MANO_SIDE).to(CFG_DEVICE)
+            model_obj = None
 
-            obj_template_mesh = obj_dataloader.obj_mesh_data
-            model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh).to(CFG_DEVICE)
-            loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
-
-        flag_start = True
-        flag_skip = 0
-
-        loss_func.reset_prev_pose()
-        loss_func.set_for_evaluation()
-        ## Start optimization per frame
-        for frame in range(len(mas_dataloader)):
-            t_start = time.time()
-
-            ## check visualizeMP results in {YYMMDD} folder, define first frame on --initNum
-            if trialIdx == 0 and frame < FLAGS.initNum:
-                continue
-
-            ## if prev frame has tip GT, increase current frame's temporal loss
-            if frame > 0 and frame % CFG_tipGT_interval == 0:
-                print("increase temp weight")
-                loss_func.temp_weight = CFG_temporal_loss_weight * 10.0
-            else:
-                loss_func.temp_weight = CFG_temporal_loss_weight
-
-            ## skip the frame if detected hand is less than 3
-            detected_cams = []
-            for camIdx, camID in enumerate(CFG_CAMID_SET):
-                if dataloader_set[camIdx][frame] is not None:
-                    detected_cams.append(camIdx)
-            if len(detected_cams) < 2:
-                print('detected hand is less than 2, skip the frame ', frame)
-                flag_skip += 1
-                continue
-
-            ## reset previous pose data if skipped multiple frames
-            if flag_skip > 3:
-                flag_skip = 0
-                loss_func.reset_prev_pose()
-                flag_start = True
-
-            ## set object init pose and marker pose as GT for projected vertex.
+            ## Initialize object dataloader & model
             if CFG_WITH_OBJ:
-                obj_pose = obj_dataloader[frame][:-1, :]
-                # obj_pose[:3, -1] *= 0.1
-                model_obj.update_pose(pose=obj_pose)
+                obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter)
 
-                marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
-                loss_func.set_object_marker_pose(marker_cam_pose,  obj_dataloader.obj_class)
+                obj_template_mesh = obj_dataloader.obj_mesh_data
+                model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh).to(CFG_DEVICE)
+                loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
 
-            ### initialize optimizer, scheduler
-            lr_init = CFG_LR_INIT * 0.2
-            lr_init_obj = CFG_LR_INIT_OBJ * 0.2
+            flag_start = True
+            flag_skip = 0
 
-            if flag_start:
-                lr_init *= 5.0
-                lr_init_obj *= 5.0
-                flag_start = False
+            loss_func.reset_prev_pose()
+            loss_func.set_for_evaluation()
+            ## Start optimization per frame
+            for frame in range(len(mas_dataloader)):
+                t_start = time.time()
 
-            ### update global pose
-            """
-                loss : 'kpts_palm' ~ multi-view 2D kpts loss for palm joints (0, 2, 3, 4)
-                target : wrist pose/rot, hand scale
-                except : hand shape, hand pose 
-            """
-            __update_global__(model, loss_func, detected_cams, frame,
-                              lr_init, trialName)
+                ## check visualizeMP results in {YYMMDD} folder, use for debugging
+                if trialIdx == 0 and frame < FLAGS.initNum:
+                    continue
 
-            ### update incrementally
-            """
-                loss : 'kpts2d', 'reg', 'depth_rel'
-                    ~ multi-view 2D kpts loss for each set of hand parts(wrist to tip)                       
-                target : wrist pose/rot, hand scale, hand pose(each part) 
-                except : hand shape
-            """
-            __update_parts__(model, loss_func, detected_cams, frame,
-                             lr_init, trialName, iterperpart=40)
+                ## if prev frame has tip GT, increase current frame's temporal loss
+                if frame > 0 and frame % CFG_tipGT_interval == 0:
+                    print("increase temp weight")
+                    loss_func.temp_weight = CFG_temporal_loss_weight * 10.0
+                else:
+                    loss_func.temp_weight = CFG_temporal_loss_weight
+
+                ## skip the frame if detected hand is less than 3
+                detected_cams = []
+                for camIdx, camID in enumerate(CFG_CAMID_SET):
+                    if dataloader_set[camIdx][frame] is not None:
+                        detected_cams.append(camIdx)
+                if len(detected_cams) < 2:
+                    print('detected hand is less than 2, skip the frame ', frame)
+                    flag_skip += 1
+                    continue
+
+                ## reset previous pose data if skipped multiple frames
+                if flag_skip > 3:
+                    flag_skip = 0
+                    loss_func.reset_prev_pose()
+                    flag_start = True
+
+                ## set object init pose and marker pose as GT for projected vertex.
+                if CFG_WITH_OBJ:
+                    obj_pose = obj_dataloader[frame][:-1, :]
+                    # obj_pose[:3, -1] *= 0.1
+                    model_obj.update_pose(pose=obj_pose)
+
+                    marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
+                    loss_func.set_object_marker_pose(marker_cam_pose,  obj_dataloader.obj_class)
+
+                ### initialize optimizer, scheduler
+                lr_init = CFG_LR_INIT * 0.2
+                lr_init_obj = CFG_LR_INIT_OBJ * 0.2
+
+                if flag_start:
+                    lr_init *= 5.0
+                    lr_init_obj *= 5.0
+                    flag_start = False
+
+                ### update global pose
+                """
+                    loss : 'kpts_palm' ~ multi-view 2D kpts loss for palm joints (0, 2, 3, 4)
+                    target : wrist pose/rot, hand scale
+                    except : hand shape, hand pose 
+                """
+                __update_global__(model, loss_func, detected_cams, frame,
+                                  lr_init, trialName)
+
+                ### update incrementally
+                """
+                    loss : 'kpts2d', 'reg', 'depth_rel'
+                        ~ multi-view 2D kpts loss for each set of hand parts(wrist to tip)                       
+                    target : wrist pose/rot, hand scale, hand pose(each part) 
+                    except : hand shape
+                """
+                __update_parts__(model, loss_func, detected_cams, frame,
+                                 lr_init, trialName, iterperpart=40)
 
 
-            ### update all
-            __update_all__(model, model_obj, loss_func, detected_cams, frame,
-                           lr_init, lr_init_obj, trialName, iter=CFG_NUM_ITER)
+                ### update all
+                __update_all__(model, model_obj, loss_func, detected_cams, frame,
+                               lr_init, lr_init_obj, trialName, iter=CFG_NUM_ITER)
 
-            # update prev pose if temporal loss activated
-            pred_hand = model()
-            if 'temporal' in CFG_LOSS_DICT:
-                loss_func.prev_hand_pose = pred_hand['pose'].clone().detach()
-                loss_func.prev_hand_shape = pred_hand['shape'].clone().detach()
+                # update prev pose if temporal loss activated
+                pred_hand = model()
+                if 'temporal' in CFG_LOSS_DICT:
+                    loss_func.prev_hand_pose = pred_hand['pose'].clone().detach()
+                    loss_func.prev_hand_shape = pred_hand['shape'].clone().detach()
 
-            ### final result of frame
-            if CFG_WITH_OBJ:
-                pred_obj = model_obj()
-                pred_obj_anno = [model_obj.get_object_mat().tolist(), obj_dataloader.obj_mesh_name]
-            else:
-                pred_obj = None
-                pred_obj_anno = [None, None]
+                ### final result of frame
+                if CFG_WITH_OBJ:
+                    pred_obj = model_obj()
+                    pred_obj_anno = [model_obj.get_object_mat().tolist(), obj_dataloader.obj_mesh_name]
+                else:
+                    pred_obj = None
+                    pred_obj_anno = [None, None]
 
-            ### visualization results of frame
-            loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                    save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
+                ### visualization results of frame
+                loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
+                                        save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
 
-            loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
+                loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
 
-            ### save annotation per frame as json format
-            save_annotation(target_dir_result, trialName, frame,  FLAGS.seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)
-            
-            print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
-            save_num += 1
+                ### save annotation per frame as json format
+                save_annotation(target_dir_result, trialName, frame,  target_seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)
 
-        loss_func.save_evaluation(log_path, save_num)
+                print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
+                save_num += 1
+
+            loss_func.save_evaluation(log_path, save_num)
+
+            # TODO
+            # extract top 'num' indexes from depth f1 score and save as json
+            top_index = loss_func.filtering_top_quality_index(num=60)
+            p = os.path.join(target_dir_result, trialName)
+
 
 
     print("total processed time : ", round((time.time() - t0) / 60., 2))

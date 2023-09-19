@@ -49,9 +49,10 @@ def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
         # post-process contact map
         contact_map = pred['contact']
         contact_idx = torch.where(contact_map > 0)
-        max = contact_map[contact_idx].max()
-        contact_map[contact_idx] = contact_map[contact_idx] / max
-        contact_map[contact_idx] = 1 - contact_map[contact_idx]
+        if not contact_idx[0].nelement() == 0:
+            max = contact_map[contact_idx].max()
+            contact_map[contact_idx] = contact_map[contact_idx] / max
+            contact_map[contact_idx] = 1 - contact_map[contact_idx]
         contact_map[contact_map == -1.] = 0.
 
         anno['Mesh'][0]['contact'] = contact_map.tolist()
