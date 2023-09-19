@@ -349,6 +349,9 @@ class ObjectLoader:
 
         self.obj_mesh_data = {}
         verts, faces, _ = load_obj(obj_mesh_path)
+        if self.obj_class in CFG_OBJECT_SCALE:
+            verts /= 10.0
+
         self.obj_mesh_data['verts'] = verts
         self.obj_mesh_data['faces'] = faces.verts_idx
 

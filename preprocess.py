@@ -100,6 +100,9 @@ num_global = 0
 CFG_TIP_NAME = ['thumb', 'index', 'middle', 'ring', 'pinky']
 
 
+flag_check_vert_marker_pair = False
+
+
 class deeplab_opts():
     def __init__(self, object_id):
         self.model = 'deeplabv3plus_mobilenet'
@@ -430,6 +433,11 @@ class loadDataset():
         vertIDpermarker = CFG_vertspermarker[str(obj_class)]
         obj_verts = obj_mesh['verts']
         verts_init = np.array(obj_verts[vertIDpermarker, :]) * 10.0
+
+        if obj_class in CFG_OBJECT_SCALE.keys():
+            verts_init /= 10.0
+            verts_init *= CFG_OBJECT_SCALE[obj_class]
+
         # scale factor 10, is .obj file has cm scale?
 
         # verts_pose = apply_transform(obj_init_pose, verts_init) * 100.0
@@ -451,29 +459,33 @@ class loadDataset():
         verts_debug = apply_transform(pose_calc, verts_init)# * 100.0
         marker_debug = np.squeeze(marker_pose)
 
+        ### debug
+        if flag_check_vert_marker_pair:
+            projection = self.extrinsics[self.camID].reshape(3, 4)
+            marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
+                                                 projection[:, 3:], self.intrinsics[self.camID],
+                                                 self.distCoeffs[self.camID])
+            marker_reproj = np.squeeze(marker_reproj)
+            projection = self.extrinsics[self.camID].reshape(3, 4)
+            vert_reproj, _ = cv2.projectPoints(verts_debug, projection[:, :3],
+                                               projection[:, 3:], self.intrinsics[self.camID],
+                                               self.distCoeffs[self.camID])
+            vert_reproj = np.squeeze(vert_reproj)
+            image = self.debug
+            for k in range(self.marker_num):
+                point = marker_reproj[k, :]
+                point_ = vert_reproj[k, :]
+                image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
+                image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
+            cv2.imshow(f"debug marker to cam {self.camID}", image)
+            cv2.waitKey(0)
+
         err = np.sum(abs(verts_debug - marker_debug), axis=1)
         err = np.average(err)
         assert err < 20, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
 
-        ### debug
-        # projection = self.extrinsics[self.camID].reshape(3, 4)
-        # marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
-        #                                    projection[:, 3:], self.intrinsics[self.camID], self.distCoeffs[self.camID])
-        # marker_reproj = np.squeeze(marker_reproj)
-        # projection = self.extrinsics[self.camID].reshape(3, 4)
-        # vert_reproj, _ = cv2.projectPoints(verts_debug, projection[:, :3],
-        #                                      projection[:, 3:], self.intrinsics[self.camID],
-        #                                      self.distCoeffs[self.camID])
-        # vert_reproj = np.squeeze(vert_reproj)
-        # image = self.debug
-        # for k in range(self.marker_num):
-        #     point = marker_reproj[k, :]
-        #     point_ = vert_reproj[k, :]
-        #     image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
-        #     image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
-        #     cv2.imshow(f"debug marker to cam {self.camID}", image)
-        #     cv2.waitKey(0)
+
 
         return pose_calc
 
@@ -914,6 +926,9 @@ def main(argv):
 
             total_count += len(dbs[0])
             tasks.append((preprocess_multi_cam, (dbs,)))
+
+    if flag_check_vert_marker_pair:
+        tasks = tasks[11:]  # adjust for debug
 
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:
