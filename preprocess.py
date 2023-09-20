@@ -52,7 +52,7 @@ from natsort import natsorted
 
 
 
-flag_check_vert_marker_pair = True
+flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -483,6 +483,12 @@ class loadDataset():
         if obj_class in CFG_OBJECT_SCALE_SPECIFIC.keys():
             verts_init = verts_init * CFG_OBJECT_SCALE_SPECIFIC[obj_class]
 
+        if verts_init.shape[0] == 3:
+            newpoints_verts_init = np.expand_dims((verts_init[1] + verts_init[2] - verts_init[0]), axis=0)
+            newpoints_marker_pose = np.expand_dims((marker_pose[1] + marker_pose[2] - marker_pose[0]), axis=0)
+            verts_init = np.concatenate((verts_init, newpoints_verts_init), axis=0)
+            marker_pose = np.concatenate((marker_pose, newpoints_marker_pose), axis=0)
+
         R, t = tf.solve_rigid_tf_np(verts_init, marker_pose)
 
         #R = R[0]
@@ -510,7 +516,7 @@ class loadDataset():
                                                self.distCoeffs[self.camID])
             vert_reproj = np.squeeze(vert_reproj)
             image = self.debug
-            for k in range(self.marker_num):
+            for k in range(marker_debug.shape[0]):
                 point = marker_reproj[k, :]
                 point_ = vert_reproj[k, :]
                 image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
@@ -584,14 +590,12 @@ class loadDataset():
         tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
         if os.path.exists(tip_data_path):
             with open(tip_data_path, "r") as data:
-                tip_data = json.load(data)['annotations'][0]
+                tip_data = json.load(data)['shapes']
 
             tip_kpts = {}
             for tip in tip_data:
                 tip_name = tip['label']
-                if tip_name == '손끝-엄지':
-                    print("l")
-                tip_2d = [tip['x'], tip['y']]
+                tip_2d = tip['points'][0]
                 tip_kpts[tip_name] = np.round(tip_2d, 2)
 
             self.tip_data = tip_kpts

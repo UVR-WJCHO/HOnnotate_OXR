@@ -26,6 +26,7 @@ from cProfile import Profile
 from pstats import Stats
 import pandas as pd
 
+flag_debug_vis = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
@@ -34,10 +35,11 @@ flags.DEFINE_string('cam_db', '230905_cam', 'target db name')   ## name ,default
 flags.DEFINE_integer('start_seq', 0, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end_seq', 1, 'end idx of sequence(ordered)')
 
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
 # flags.DEFINE_string('seq_list', '230905_S02_obj_03_grasp_3', 'target sequence name')
-flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
@@ -191,8 +193,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                                                    penetration=use_penetration_loss, flag_headless=FLAGS.headless)
 
         model.contact = contact
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-        #                     flag_crop=True, flag_headless=FLAGS.headless)
+        if flag_debug_vis:
+            loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+                                flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -334,8 +337,8 @@ def main(argv):
                 t_start = time.time()
 
                 ## check visualizeMP results in {YYMMDD} folder, use for debugging
-                # if trialIdx == 0 and frame < FLAGS.initNum:
-                #     continue
+                if trialIdx == 0 and frame < FLAGS.initNum:
+                    continue
 
                 ## if prev frame has tip GT, increase current frame's temporal loss
                 if frame > 0 and frame % CFG_tipGT_interval == 0:
