@@ -56,8 +56,8 @@ flag_check_vert_marker_pair = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230907', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230907_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
 
@@ -242,7 +242,9 @@ class loadDataset():
         obj_origin_name = '3mm.txt'
         if FLAGS.db+'_cam' != FLAGS.cam_db:
             obj_origin_name = '3mm_2.txt'
-        print("... loading obj pose data from %s "% obj_origin_name)
+        if int(self.trial_num) == 0:
+            print("... loading obj pose data for %s from %s "% (self.seq, obj_origin_name))
+
         obj_origin_data = os.path.join(self.obj_db_Dir, obj_origin_name)
         assert os.path.isfile(obj_origin_data), "no 3mm pose data"
         with open(obj_origin_data, "r", encoding='euc-kr') as f:
@@ -582,12 +584,14 @@ class loadDataset():
         tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
         if os.path.exists(tip_data_path):
             with open(tip_data_path, "r") as data:
-                tip_data = json.load(data)['shapes']
+                tip_data = json.load(data)['annotations'][0]
 
             tip_kpts = {}
             for tip in tip_data:
                 tip_name = tip['label']
-                tip_2d = tip['points'][0]
+                if tip_name == '손끝-엄지':
+                    print("l")
+                tip_2d = [tip['x'], tip['y']]
                 tip_kpts[tip_name] = np.round(tip_2d, 2)
 
             self.tip_data = tip_kpts
