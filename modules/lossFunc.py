@@ -221,7 +221,7 @@ class MultiViewLossFunc(nn.Module):
 
                 loss_pose_obj = (pred_obj_verts_marker - gt_obj_verts_marker) ** 2
                 loss_pose_obj = torch.sum(loss_pose_obj.reshape(self.bs, -1), -1)
-                loss['pose_obj'] = loss_pose_obj * 1e-1
+                loss['pose_obj'] = loss_pose_obj * 2e-1
 
             if render:
                 pred_rendered = pred_render_set[camIdx]

@@ -74,10 +74,10 @@ CFG_vertspermarker = {
     "19_disk_lid" : [1988,3367,3366],
     "20_smartphone" : [1352,828,1127],
     "21_mouse" : [46,582,1536],
-    "22_tape" : [1665,1299,1693],
+    "22_tape" : [1544,1220,1671],   # 2: 1292
     "23_master_chef_can" : [4586,4597,4695],
     "24_Scrub_cleanser_bottle" : [2795,2948,2966],
-    "25_large_marker" : [1152,1176,3018],
+    "25_large_marker" : [1152,1396,3007],
     "26_stapler" : [662,12276,11712],
     "27_note" : [334,0,7449],
     "28_scissors" : [3932,3948,3407],
@@ -111,7 +111,7 @@ CFG_CROP_IMG_HEIGHT = 480
 CFG_LOSS_THRESHOLD = 3500
 CFG_PATIENCE = 30
 CFG_PATIENCE_v2 = 50
-CFG_PATIENCE_obj = 5
+CFG_PATIENCE_obj = 4
 
 CFG_CONTACT_START_THRESHOLD = 5000 # use contact loss when kpts_loss < 5000
 CFG_CONTACT_DIST = 8

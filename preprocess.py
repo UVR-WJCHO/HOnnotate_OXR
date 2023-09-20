@@ -56,9 +56,9 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230907', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230907_cam_2', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230908', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230908_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('seq',None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
@@ -521,8 +521,8 @@ class loadDataset():
                 point_ = vert_reproj[k, :]
                 image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
                 image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
-            cv2.imshow(f"debug marker to cam {self.camID}", image)
-            cv2.waitKey(0)
+                cv2.imshow(f"debug marker to cam {self.camID}", image)
+                cv2.waitKey(0)
 
         err = np.sum(abs(verts_debug - marker_debug), axis=1)
         err = np.average(err)
