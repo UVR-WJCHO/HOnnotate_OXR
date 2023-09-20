@@ -52,7 +52,7 @@ from natsort import natsorted
 
 
 
-flag_check_vert_marker_pair = False
+flag_check_vert_marker_pair = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -74,7 +74,7 @@ Background matting을 위해 pretrained model 다운
 !gdown https://drive.google.com/uc?id=1-t9SO--H4WmP7wUl1tVNNeDkq47hjbv4 -O model.pth -q
 """
 
-camResultDir = os.path.join(baseDir, FLAGS.db+'_cam')
+camResultDir = os.path.join(baseDir, FLAGS.cam_db)
 
 image_cols, image_rows = 1080, 1920
 
@@ -239,7 +239,11 @@ class loadDataset():
         self.obj_cam_ext = np.concatenate((self.obj_cam_ext, self.h), axis=0)
 
         # load 3mm marker pose
-        obj_origin_data = os.path.join(self.obj_db_Dir, '3mm.txt')
+        obj_origin_name = '3mm.txt'
+        if FLAGS.db+'_cam' != FLAGS.cam_db:
+            obj_origin_name = '3mm_2.txt'
+        print("... loading obj pose data from %s "% obj_origin_name)
+        obj_origin_data = os.path.join(self.obj_db_Dir, obj_origin_name)
         assert os.path.isfile(obj_origin_data), "no 3mm pose data"
         with open(obj_origin_data, "r", encoding='euc-kr') as f:
             for i in range(5):
@@ -929,6 +933,8 @@ def done_callback(result):
 
 ################# depth scale value need to be update #################
 def main(argv):
+
+    t0 = time.time()
     ### Setup ###
     rootDir = os.path.join(baseDir, FLAGS.db)
 
@@ -961,12 +967,14 @@ def main(argv):
             total_count += len(dbs[0])
             tasks.append((preprocess_multi_cam, (dbs,)))
 
+    # tasks = tasks[:12]
+
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:
         # global_tqdm.set_description(f"{seqName} - total : ")
         pool.map(global_tqdm, tasks, error_callback, done_callback)
-
     print("---------------end preprocess ---------------")
+
 
     proc_time = round((time.time() - t1) / 60., 2)
     print("total process time : %s min" % (str(proc_time)))
@@ -1002,11 +1010,8 @@ def main(argv):
 
     print("end segmentation - deeplab_v3")
 
-
+    target_mp_num = 60
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
-        if FLAGS.seq is not None and seqName != FLAGS.seq:
-            continue
-
         total_num = 0
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
@@ -1021,12 +1026,18 @@ def main(argv):
                 num_mp = len(os.listdir(mp_dir))
                 mp_num_list.append(num_mp)
             mp_num_list.sort()
-            if mp_num_list[-2] < 60:
-                print("seq %s has not enough mediapipe results, try --seq {seq_name} --mp_value 0.9 (or 0.85)"%seqName)
+
+            if num_anno < 60:
+                target_mp_num = 50
+            else:
+                target_mp_num = 60
+
+            if mp_num_list[-2] < target_mp_num:
+                print("[LOG] seq %s has not enough mediapipe results, try --seq {seq_name} --mp_value 0.9 (or 0.85)"%seqName)
 
         print("[LOG] total json # in seq %s : %s --- update excel" % (seqName, total_num))
 
-
+    print("[LOG] total processed time : ", round((time.time() - t0) / 60., 2))
 
 
 if __name__ == '__main__':

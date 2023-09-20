@@ -72,7 +72,7 @@ def extract_depth(depth_raw, kpts2d, i):
     return depth_point
 
 class DataLoader:
-    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, cam:str, device='cuda'):
+    def __init__(self, base_path:str, data_date:str, cam_path:str, data_type:str, data_trial:str, cam:str, device='cuda'):
 
         # base_path : os.path.join(os.getcwd(), 'dataset')
         # data_date : 230822
@@ -100,7 +100,7 @@ class DataLoader:
 
         self.depth_vis_path = os.path.join(self.base_path, 'depth_vis')
 
-        self.cam_path = os.path.join(base_path, data_date+"_cam")
+        self.cam_path = os.path.join(base_path, cam_path)
 
         # #Get data from files
         self.cam_parameter = self.load_cam_parameters()

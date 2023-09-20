@@ -21,7 +21,7 @@ CFG_exist_tip_db = False
 CFG_VIS_CONTACT = False
 CFG_SAVE_MESH = False
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact']#, , 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact', 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
 
 if not CFG_exist_tip_db:
     assert 'kpts_tip' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
@@ -35,7 +35,7 @@ CFG_temporal_loss_weight = 0.5e5
 CFG_tipGT_interval = 10
 
 
-CFG_NUM_ITER = 75
+CFG_NUM_ITER = 50
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
 
@@ -80,7 +80,7 @@ CFG_vertspermarker = {
     "25_large_marker" : [1152,1176,3018],
     "26_stapler" : [662,12276,11712],
     "27_note" : [334,0,7449],
-    "28_scissors" : [1112,6900,1609],
+    "28_scissors" : [3932,3948,3407],
     "29_foldable_phone" : [2002,2005,1728],
     "30_cardboard_box" : [418,1314,413,1297]
 }
@@ -111,7 +111,7 @@ CFG_CROP_IMG_HEIGHT = 480
 CFG_LOSS_THRESHOLD = 3500
 CFG_PATIENCE = 30
 CFG_PATIENCE_v2 = 50
-CFG_PATIENCE_obj = 3
+CFG_PATIENCE_obj = 5
 
 CFG_CONTACT_START_THRESHOLD = 5000 # use contact loss when kpts_loss < 5000
 CFG_CONTACT_DIST = 8
