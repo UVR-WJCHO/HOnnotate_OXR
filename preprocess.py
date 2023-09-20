@@ -58,7 +58,7 @@ flag_check_vert_marker_pair = False
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230907', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230907_cam_2', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_string('seq', '230907_S01_obj_10_grasp_5', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
