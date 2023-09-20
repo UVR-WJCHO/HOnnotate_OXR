@@ -647,7 +647,6 @@ class MultiViewLossFunc(nn.Module):
 
     def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
 
-
         for camIdx in camIdxSet:
             camID = CFG_CAMID_SET[camIdx]
             # set gt to load original input

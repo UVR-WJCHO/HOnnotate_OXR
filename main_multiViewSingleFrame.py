@@ -26,12 +26,14 @@ from cProfile import Profile
 from pstats import Stats
 import pandas as pd
 
-flag_debug_vis = False
+flag_debug_vis_glob = False
+flag_debug_vis_part = False
+flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230905_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230907', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230907_cam_2', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start_seq', 0, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end_seq', 1, 'end idx of sequence(ordered)')
 
@@ -44,12 +46,12 @@ flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
 
-def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName, iter=50):
+def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName, iter=80):
 
     loss_dict_global = ['kpts_palm', 'reg']
 
     model.change_grads_all(root=True, rot=True, pose=False, shape=False, scale=True)
-    optimizer = initialize_optimizer(model, None, lr_init, False, None)
+    optimizer = initialize_optimizer(model, None, lr_init * 7.5, False, None)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
     loss_weight = {'kpts_palm': 1.0, 'reg': 1.0}
@@ -66,8 +68,8 @@ def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName
                            loss_dict=loss_dict_global)
 
         ### visualization for debug
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
-        #                 camIdxSet=[0], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        if flag_debug_vis_glob:
+            loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True)
 
         for camIdx in detected_cams:
             loss_cam = losses[camIdx]
@@ -118,7 +120,8 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
             obj_param = None
 
             losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
-            # loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True)
+            if flag_debug_vis_part:
+                loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True)
 
             for camIdx in detected_cams:
                 loss_cam = losses[camIdx]
@@ -193,7 +196,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                                                    penetration=use_penetration_loss, flag_headless=FLAGS.headless)
 
         model.contact = contact
-        if flag_debug_vis:
+        if flag_debug_vis_all:
             loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
                                 flag_crop=True, flag_headless=FLAGS.headless)
 
