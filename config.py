@@ -78,8 +78,8 @@ CFG_vertspermarker = {
     "23_master_chef_can" : [4586,4597,4695],
     "24_Scrub_cleanser_bottle" : [2795,2948,2966],
     "25_large_marker" : [1152,1396,3007],
-    "26_stapler" : [662,12276,11712],
-    "27_note" : [334,0,7449],
+    "26_stapler" : [567,807,499],
+    "27_note" : [334,3,733],
     "28_scissors" : [3932,3948,3407],
     "29_foldable_phone" : [2002,2005,1728],
     "30_cardboard_box" : [418,1314,413,1297]

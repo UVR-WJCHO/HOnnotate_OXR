@@ -99,6 +99,7 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
     grad_order = [[True, False, False], [True, True, False], [True, True, True]]
     loss_dict_parts = ['kpts2d', 'reg']#, 'depth_rel']
 
+    model.input_scale.data *= torch.FloatTensor([0.95]).to('cuda')
     for step in range(3):
         model.change_grads_parts(root=True, rot=True,
                                  pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2],
