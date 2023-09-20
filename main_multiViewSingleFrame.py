@@ -26,27 +26,32 @@ from cProfile import Profile
 from pstats import Stats
 import pandas as pd
 
+flag_debug_vis_glob = False
+flag_debug_vis_part = False
+flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230908', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230908_cam', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start_seq', 0, 'start idx of sequence(ordered)')
-flags.DEFINE_integer('end_seq', 4, 'end idx of sequence(ordered)')
+flags.DEFINE_integer('end_seq', 1, 'end idx of sequence(ordered)')
+
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
 # flags.DEFINE_string('seq_list', '230905_S02_obj_03_grasp_3', 'target sequence name')
-# flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
 
-def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName, iter=50):
+def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName, iter=80):
 
     loss_dict_global = ['kpts_palm', 'reg']
 
     model.change_grads_all(root=True, rot=True, pose=False, shape=False, scale=True)
-    optimizer = initialize_optimizer(model, None, lr_init, False, None)
+    optimizer = initialize_optimizer(model, None, lr_init * 7.5, False, None)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
     loss_weight = {'kpts_palm': 1.0, 'reg': 1.0}
@@ -60,11 +65,11 @@ def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName
         obj_param = None
 
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
-                           loss_dict=loss_dict_global)
+                           loss_dict=loss_dict_global, flag_headless=FLAGS.headless)
 
         ### visualization for debug
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame,
-        #                 camIdxSet=[0], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+        if flag_debug_vis_glob:
+            loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True, flag_headless=FLAGS.headless)
 
         for camIdx in detected_cams:
             loss_cam = losses[camIdx]
@@ -94,6 +99,7 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
     grad_order = [[True, False, False], [True, True, False], [True, True, True]]
     loss_dict_parts = ['kpts2d', 'reg']#, 'depth_rel']
 
+    model.input_scale.data *= torch.FloatTensor([0.95]).to('cuda')
     for step in range(3):
         model.change_grads_parts(root=True, rot=True,
                                  pose_1=grad_order[step][0], pose_2=grad_order[step][1], pose_3=grad_order[step][2],
@@ -114,8 +120,9 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
             hand_param = model()
             obj_param = None
 
-            losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
-            # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+            losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step, flag_headless=FLAGS.headless)
+            if flag_debug_vis_part:
+                loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True, flag_headless=FLAGS.headless)
 
             for camIdx in detected_cams:
                 loss_cam = losses[camIdx]
@@ -167,7 +174,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         flag_update_obj = True
 
     loss_weight = CFG_LOSS_WEIGHT
-    loss_weight['kpts2d'] = 0.75
+    loss_weight['kpts2d'] = 0.8
     model.input_scale.data *= torch.FloatTensor([0.95]).to('cuda')
 
     for iter in range(iter):
@@ -190,8 +197,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                                                    penetration=use_penetration_loss, flag_headless=FLAGS.headless)
 
         model.contact = contact
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-        #                     flag_crop=True, flag_headless=FLAGS.headless)
+        if flag_debug_vis_all:
+            loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+                                flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -265,16 +273,12 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             # prev_depthseg_loss = cur_depthseg_loss
 
 
-
-
 def main(argv):
     t0 = time.time()
     logging.get_absl_handler().setFormatter(None)
     save_num = 0
 
-    # seq_list = FLAGS.seq_list.split(',')
     seq_list = sorted(os.listdir(os.path.join(CFG_DATA_DIR, FLAGS.db)))
-
     seq_list = seq_list[FLAGS.start_seq:FLAGS.end_seq]
 
     for target_seq in seq_list:
@@ -289,10 +293,10 @@ def main(argv):
 
             ## Load data of each camera, save pkl file for second run.
             print("loading data... %s %s " % (target_seq, trialName))
-            mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, 'mas', CFG_DEVICE)
-            sub1_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, 'sub1', CFG_DEVICE)
-            sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, 'sub2', CFG_DEVICE)
-            sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, 'sub3', CFG_DEVICE)
+            mas_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.cam_db, target_seq, trialName, 'mas', CFG_DEVICE)
+            sub1_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.cam_db, target_seq, trialName, 'sub1', CFG_DEVICE)
+            sub2_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.cam_db, target_seq, trialName, 'sub2', CFG_DEVICE)
+            sub3_dataloader = DataLoader(CFG_DATA_DIR, FLAGS.db, FLAGS.cam_db, target_seq, trialName, 'sub3', CFG_DEVICE)
 
             ## Initialize renderer, every renderer's extrinsic is set to master camera extrinsic
             mas_K, mas_M, mas_D = mas_dataloader.cam_parameter
@@ -337,8 +341,8 @@ def main(argv):
                 t_start = time.time()
 
                 ## check visualizeMP results in {YYMMDD} folder, use for debugging
-                # if trialIdx == 0 and frame < FLAGS.initNum:
-                #     continue
+                if trialIdx == 0 and frame < FLAGS.initNum:
+                    continue
 
                 ## if prev frame has tip GT, increase current frame's temporal loss
                 if frame > 0 and frame % CFG_tipGT_interval == 0:
@@ -349,7 +353,14 @@ def main(argv):
 
                 ## skip the frame if detected hand is less than 3
                 detected_cams = []
-                for camIdx, camID in enumerate(CFG_CAMID_SET):
+                valid_cam_list = CFG_VALID_CAM
+
+                # if trialName == '230905_S01_obj_16_grasp_14' and trialIdx == 0:
+                #     valid_cam_list = ['mas', 'sub2', 'sub3']
+                # if trialName == '230905_S01_obj_16_grasp_27' and trialIdx == 0:
+                #     valid_cam_list = ['mas', 'sub2', 'sub3']
+
+                for camIdx, camID in enumerate(valid_cam_list):
                     if dataloader_set[camIdx][frame] is not None:
                         detected_cams.append(camIdx)
                 if len(detected_cams) < 2:
@@ -438,8 +449,6 @@ def main(argv):
             p = os.path.join(target_dir_result, trialName)
             with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
                 json.dump(top_index, f)
-
-
 
     print("total processed time : ", round((time.time() - t0) / 60., 2))
     print("total processed frames : ", save_num)

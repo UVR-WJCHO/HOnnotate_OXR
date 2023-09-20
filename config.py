@@ -2,12 +2,18 @@ import os
 from enum import IntEnum
 
 
-## Debug Flags ##
+## Manual Flags ##
+
+CFG_VALID_CAM = ['mas', 'sub1', 'sub2', 'sub3']
+CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
+
+CFG_LR_INIT = 0.05
+CFG_LR_INIT_OBJ = 0.008
+
 
 
 CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = False
-
 
 # set True if 2D tip annotation data exists(from euclidsoft)
 CFG_exist_tip_db = False
@@ -15,7 +21,7 @@ CFG_exist_tip_db = False
 CFG_VIS_CONTACT = False
 CFG_SAVE_MESH = False
 
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact']#, , 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact', 'pose_obj']#, 'kpts_tip']#,,,] # 'depth_rel',  'contact',
 
 if not CFG_exist_tip_db:
     assert 'kpts_tip' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
@@ -28,13 +34,10 @@ CFG_temporal_loss_weight = 0.5e5
 # given original images, tipGT generated for every 30 frames. We sample it to 1/3
 CFG_tipGT_interval = 10
 
-CFG_LR_INIT = 0.05
-CFG_LR_INIT_OBJ = 0.01
 
-CFG_NUM_ITER = 75
+CFG_NUM_ITER = 50
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}
-CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
 
 # CFG_CAM_PER_FINGER_VIS = {'mas':[1.0, 1.0,1.0,1.0,1.0],
@@ -42,24 +45,23 @@ CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 #                          'sub2':[1.0, 1.0,1.0,1.0,1.0],
 #                          'sub3':[0.5,1.5,1.5,1.0,1.0]}
 ## apply on dataloader pkl creation
-CFG_NON_VISIBLE_WEIGHT = 0.5
-
-
+CFG_NON_VISIBLE_WEIGHT = 0.8
 
 ######## 230829-230908
 # if included, .obj has mm scale
-CFG_OBJECT_SCALE = {"11_small_marker":1.0, "13_flat_screwdriver":6.5, "16_golf_ball":1.0}
+CFG_OBJECT_SCALE = ["11_small_marker", "13_flat_screwdriver"]
+CFG_OBJECT_SCALE_SPECIFIC = {"16_golf_ball":0.45}
 
 CFG_vertspermarker = {
     "01_cracker_box" : [1865,1859,4434,1070],
-    "02_potted_meat_can" : [1157,1127,410],
+    "02_potted_meat_can" : [1157,1127,1102],
     "03_banana" : [158,204,1018],
     "04_apple" : [81,273,283],
     "05_wine_glass" : [264 ,434,354], #[1195,1950,1990],    494
     "06_bowl" : [1010,536,548],
     "07_mug" : [862,1355,1322,],# [1363,1571,1346,],
     "08_plate" : [3400,3480,1040],
-    "09_spoon" : [541, 535, 548], #[604,620,610],
+    "09_spoon" : [548, 535, 541], #[604,620,610],
     "10_knife" : [1780,1901,1771],
     "11_small_marker" : [1636, 2030, 2003],#[1636,2131,2003],
     "12_spatula" : [33,103,115],
@@ -72,20 +74,18 @@ CFG_vertspermarker = {
     "19_disk_lid" : [1988,3367,3366],
     "20_smartphone" : [1352,828,1127],
     "21_mouse" : [46,582,1536],
-    "22_tape" : [1665,1299,1693],
+    "22_tape" : [1544,1220,1671],   # 2: 1292
     "23_master_chef_can" : [4586,4597,4695],
     "24_Scrub_cleanser_bottle" : [2795,2948,2966],
-    "25_large_maker" : [1152,1176,3018],
-    "26_stapler" : [662,12276,11712],
-    "27_note" : [334,0,7449],
-    "28_scissors" : [1112,6900,1609],
+    "25_large_marker" : [1152,1396,3007],
+    "26_stapler" : [567,807,499],
+    "27_note" : [334,3,733],
+    "28_scissors" : [3932,3948,3407],
     "29_foldable_phone" : [2002,2005,1728],
     "30_cardboard_box" : [418,1314,413,1297]
 }
 
 ####################
-
-
 
 CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],
                    [0, 1,2,3, 5,6,7, 9,10,11, 13,14,15, 17,18,19]]
@@ -111,7 +111,7 @@ CFG_CROP_IMG_HEIGHT = 480
 CFG_LOSS_THRESHOLD = 3500
 CFG_PATIENCE = 30
 CFG_PATIENCE_v2 = 50
-CFG_PATIENCE_obj = 3
+CFG_PATIENCE_obj = 4
 
 CFG_CONTACT_START_THRESHOLD = 5000 # use contact loss when kpts_loss < 5000
 CFG_CONTACT_DIST = 8

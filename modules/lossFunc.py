@@ -221,7 +221,7 @@ class MultiViewLossFunc(nn.Module):
 
                 loss_pose_obj = (pred_obj_verts_marker - gt_obj_verts_marker) ** 2
                 loss_pose_obj = torch.sum(loss_pose_obj.reshape(self.bs, -1), -1)
-                loss['pose_obj'] = loss_pose_obj * 1e2
+                loss['pose_obj'] = loss_pose_obj * 2e-1
 
             if render:
                 pred_rendered = pred_render_set[camIdx]
@@ -637,12 +637,15 @@ class MultiViewLossFunc(nn.Module):
 
     def filtering_top_quality_index(self, num=60):
         metric = self.dfs['depth_f1']
+        metric_len = len(metric["avg"])
+        if num > metric_len:
+            num = metric_len
+
         top_index = metric["avg"].nlargest(num).index
 
         return top_index
 
     def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
-
 
         for camIdx in camIdxSet:
             camID = CFG_CAMID_SET[camIdx]
@@ -795,8 +798,8 @@ class MultiViewLossFunc(nn.Module):
                     cv2.imshow(blend_gt_name, img_blend_gt)
                     cv2.imshow(blend_pred_name, img_blend_pred)
                     # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-                    cv2.imshow(blend_depth_gap_name, depth_gap)
-                    cv2.imshow(blend_seg_gap_name, seg_gap)
+                    # cv2.imshow(blend_depth_gap_name, depth_gap)
+                    # cv2.imshow(blend_seg_gap_name, seg_gap)
                     cv2.waitKey(0)
                 else:
                     cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
