@@ -1043,7 +1043,7 @@ def main(argv):
             if mp_num_list[-2] < target_mp_num:
                 print("[LOG] seq %s has not enough mediapipe results, try --seq {seq_name} --mp_value 0.9 (or 0.85)"%seqName)
 
-        print("[LOG] total json # in seq %s : %s --- update excel" % (seqName, total_num))
+        # print("[LOG] total json # in seq %s : %s --- update excel" % (seqName, total_num))
 
     print("[LOG] total processed time : ", round((time.time() - t0) / 60., 2))
 
