@@ -589,7 +589,7 @@ class loadDataset():
             self.tip_data = tip_kpts
         else:
             self.tip_data = None
-            if idx == 0:
+            if CFG_exist_tip_db and idx == 0:
                 print("----------- no tip data, check {YYMMDD}_tip ----------------")
 
         return (rgb, depth)
