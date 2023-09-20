@@ -56,9 +56,10 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230908', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230908_cam', 'target cam db Name')   ## name ,default, help
-# flags.DEFINE_string('obj_db', '230905_obj', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230907', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230907_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
+flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -873,7 +874,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.90, min_tracking_confidence=0.94)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.90, min_tracking_confidence=FLAGS.mp_value)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
@@ -944,6 +945,9 @@ def main(argv):
     total_count = 0
     t1 = time.time()
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        if FLAGS.seq is not None and seqName != FLAGS.seq:
+            continue
+
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
             dbs = []
@@ -957,8 +961,6 @@ def main(argv):
             total_count += len(dbs[0])
             tasks.append((preprocess_multi_cam, (dbs,)))
 
-    # tasks = tasks[4 :]  # adjust for debug
-
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:
         # global_tqdm.set_description(f"{seqName} - total : ")
@@ -969,10 +971,12 @@ def main(argv):
     proc_time = round((time.time() - t1) / 60., 2)
     print("total process time : %s min" % (str(proc_time)))
 
-
     print("start segmentation - deeplab_v3")
     if flag_deep_segmentation:
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+            if FLAGS.seq is not None and seqName != FLAGS.seq:
+                continue
+
             seqDir = os.path.join(rootDir, seqName)
             for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
 
@@ -998,16 +1002,32 @@ def main(argv):
 
     print("end segmentation - deeplab_v3")
 
+
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        if FLAGS.seq is not None and seqName != FLAGS.seq:
+            continue
+
         total_num = 0
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+
+            mp_num_list = []
             for camID in camIDset:
                 anno_dir = os.path.join(baseDir, FLAGS.db+'_result', seqName, trialName, 'annotation', camID)
                 num_anno = len(os.listdir(anno_dir))
                 total_num += num_anno
 
-        print("total json num in seq %s : %s" % (seqName, total_num))
+                mp_dir = os.path.join(baseDir, FLAGS.db, seqName, trialName, 'rgb_crop', camID)
+                num_mp = len(os.listdir(mp_dir))
+                mp_num_list.append(num_mp)
+            mp_num_list.sort()
+            if mp_num_list[-2] < 60:
+                print("seq %s has not enough mediapipe results, try --seq {seq_name} --mp_value 0.9 (or 0.85)"%seqName)
+
+        print("[LOG] total json # in seq %s : %s --- update excel" % (seqName, total_num))
+
+
+
 
 if __name__ == '__main__':
 

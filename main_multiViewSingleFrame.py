@@ -29,10 +29,10 @@ import pandas as pd
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230907', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230907_cam', 'target db name')   ## name ,default, help
-flags.DEFINE_integer('start_seq', 1, 'start idx of sequence(ordered)')
-flags.DEFINE_integer('end_seq', 2, 'end idx of sequence(ordered)')
+flags.DEFINE_string('db', '230908', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230908_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_integer('start_seq', 0, 'start idx of sequence(ordered)')
+flags.DEFINE_integer('end_seq', 1, 'end idx of sequence(ordered)')
 
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
@@ -116,7 +116,7 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
             obj_param = None
 
             losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
-            # loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True)
+            loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True)
 
             for camIdx in detected_cams:
                 loss_cam = losses[camIdx]
@@ -191,8 +191,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                                                    penetration=use_penetration_loss, flag_headless=FLAGS.headless)
 
         model.contact = contact
-        # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
-        #                     flag_crop=True, flag_headless=FLAGS.headless)
+        loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+                            flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
         for camIdx in detected_cams:
@@ -264,7 +264,6 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         if CFG_WITH_OBJ:
             prev_obj_loss = cur_obj_loss
             # prev_depthseg_loss = cur_depthseg_loss
-
 
 
 
