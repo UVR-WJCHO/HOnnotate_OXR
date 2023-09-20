@@ -1041,7 +1041,7 @@ def main(argv):
                 target_mp_num = 60
 
             if mp_num_list[-2] < target_mp_num:
-                print("[!] seq %s has not enough hand results, try with --seq {seq_name} --mp_value 0.9 (or 0.85)"%seqName)
+                print("[!] seq %s has not enough hand results, try with --seq {seq_name} --mp_value 0.85"%seqName)
 
         # print("[LOG] total json # in seq %s : %s --- update excel" % (seqName, total_num))
 
