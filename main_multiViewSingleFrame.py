@@ -65,11 +65,11 @@ def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName
         obj_param = None
 
         losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
-                           loss_dict=loss_dict_global)
+                           loss_dict=loss_dict_global, flag_headless=FLAGS.headless)
 
         ### visualization for debug
         if flag_debug_vis_glob:
-            loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True)
+            loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True, flag_headless=FLAGS.headless)
 
         for camIdx in detected_cams:
             loss_cam = losses[camIdx]
@@ -120,9 +120,9 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
             hand_param = model()
             obj_param = None
 
-            losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
+            losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step, flag_headless=FLAGS.headless)
             if flag_debug_vis_part:
-                loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True)
+                loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True, flag_headless=FLAGS.headless)
 
             for camIdx in detected_cams:
                 loss_cam = losses[camIdx]
