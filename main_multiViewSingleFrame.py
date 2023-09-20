@@ -29,14 +29,15 @@ import pandas as pd
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_integer('start_seq', 0, 'start idx of sequence(ordered)')
-flags.DEFINE_integer('end_seq', 4, 'end idx of sequence(ordered)')
+flags.DEFINE_string('db', '230907', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230907_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_integer('start_seq', 1, 'start idx of sequence(ordered)')
+flags.DEFINE_integer('end_seq', 2, 'end idx of sequence(ordered)')
 
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
 # flags.DEFINE_string('seq_list', '230905_S02_obj_03_grasp_3', 'target sequence name')
-# flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
@@ -115,7 +116,7 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
             obj_param = None
 
             losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step)
-            # loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=CFG_WITH_OBJ, flag_crop=True)
+            # loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True)
 
             for camIdx in detected_cams:
                 loss_cam = losses[camIdx]
@@ -167,7 +168,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         flag_update_obj = True
 
     loss_weight = CFG_LOSS_WEIGHT
-    loss_weight['kpts2d'] = 0.75
+    loss_weight['kpts2d'] = 0.8
     model.input_scale.data *= torch.FloatTensor([0.95]).to('cuda')
 
     for iter in range(iter):
@@ -349,7 +350,7 @@ def main(argv):
 
                 ## skip the frame if detected hand is less than 3
                 detected_cams = []
-                for camIdx, camID in enumerate(CFG_CAMID_SET):
+                for camIdx, camID in enumerate(CFG_VALID_CAM):
                     if dataloader_set[camIdx][frame] is not None:
                         detected_cams.append(camIdx)
                 if len(detected_cams) < 2:

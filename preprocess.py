@@ -52,11 +52,13 @@ from natsort import natsorted
 
 
 
+flag_check_vert_marker_pair = False
+
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_string('obj_db', '230905_obj', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230908', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230908_cam', 'target cam db Name')   ## name ,default, help
+# flags.DEFINE_string('obj_db', '230905_obj', 'target cam db Name')   ## name ,default, help
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -70,7 +72,8 @@ Background matting을 위해 pretrained model 다운
 !pip install gdown -q
 !gdown https://drive.google.com/uc?id=1-t9SO--H4WmP7wUl1tVNNeDkq47hjbv4 -O model.pth -q
 """
-camResultDir = os.path.join(baseDir, FLAGS.cam_db)
+
+camResultDir = os.path.join(baseDir, FLAGS.db+'_cam')
 
 image_cols, image_rows = 1080, 1920
 
@@ -100,7 +103,6 @@ num_global = 0
 CFG_TIP_NAME = ['thumb', 'index', 'middle', 'ring', 'pinky']
 
 
-flag_check_vert_marker_pair = False
 
 
 class deeplab_opts():
@@ -225,7 +227,7 @@ class loadDataset():
         self.marker_cam_sampled = {}
         self.obj_pose_sampled = {}
 
-        self.obj_db_Dir = os.path.join(baseDir, FLAGS.obj_db)
+        self.obj_db_Dir = os.path.join(baseDir, FLAGS.db+'_obj')
 
         obj_dir_name = "_".join(seq.split('_')[:-2]) # 230612_S01_obj_01
         self.obj_data_Dir = os.path.join(self.obj_db_Dir, obj_dir_name)
@@ -294,6 +296,8 @@ class loadDataset():
             self.obj_mesh_data['faces'] = faces.verts_idx
         except:
             print("no obj mesh data : %s" % obj_mesh_path)
+
+        self.obj_scale = None
 
 
     def __len__(self):
@@ -393,8 +397,10 @@ class loadDataset():
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
             self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
-            obj_pose_data = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data)
+            obj_pose_data, scale = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data)
             self.obj_pose_sampled[str(save_idx)] = obj_pose_data
+            if self.obj_scale == None:
+                self.obj_scale = scale
 
         else:
             self.marker_sampled[str(save_idx)] = None
@@ -434,16 +440,41 @@ class loadDataset():
         obj_verts = obj_mesh['verts']
         verts_init = np.array(obj_verts[vertIDpermarker, :]) * 10.0
 
-        if obj_class in CFG_OBJECT_SCALE.keys():
-            verts_init /= 10.0
-            verts_init *= CFG_OBJECT_SCALE[obj_class]
-
+        # if obj_class in CFG_OBJECT_SCALE.keys():
+        #     verts_init /= 10.0
+        #     verts_init *= CFG_OBJECT_SCALE[obj_class]
         # scale factor 10, is .obj file has cm scale?
 
         # verts_pose = apply_transform(obj_init_pose, verts_init) * 100.0
 
         #verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
         #marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
+
+        ## calculate scale of initial mesh
+        scale = 1.0
+        if obj_class in CFG_OBJECT_SCALE:
+            mean = np.mean(verts_init, 0)
+            k = verts_init.shape[0]
+            expanded_mean = np.broadcast_to(mean, verts_init.shape)
+            sub = verts_init - expanded_mean
+            sub_squeeze = sub.flatten()
+            s1 = np.sqrt(np.sum(np.square(sub_squeeze)) / k)
+
+            ## calculate scale of marker mesh
+
+            mean = np.mean(marker_pose, 0)
+            k = marker_pose.shape[0]
+            expanded_mean = np.broadcast_to(mean, marker_pose.shape)
+            sub = marker_pose - expanded_mean
+            sub_squeeze = sub.flatten()
+            s2 = np.sqrt(np.sum(np.square(sub_squeeze)) / k)
+
+            scale = s2 / s1
+
+            verts_init = verts_init * scale
+
+        if obj_class in CFG_OBJECT_SCALE_SPECIFIC.keys():
+            verts_init = verts_init * CFG_OBJECT_SCALE_SPECIFIC[obj_class]
 
         R, t = tf.solve_rigid_tf_np(verts_init, marker_pose)
 
@@ -484,10 +515,7 @@ class loadDataset():
         err = np.average(err)
         assert err < 20, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
-
-
-
-        return pose_calc
+        return pose_calc, scale
 
     def saveObjdata(self):
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker.pkl'), 'wb') as f:
@@ -499,6 +527,8 @@ class loadDataset():
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_obj_pose.pkl'), 'wb') as f:
             pickle.dump(self.obj_pose_sampled, f, pickle.HIGHEST_PROTOCOL)
 
+        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_obj_scale.pkl'), 'wb') as f:
+            pickle.dump(self.obj_scale, f, pickle.HIGHEST_PROTOCOL)
 
     def getFgmask(self, idx):
         mask_fg_path = os.path.join(self.segfgDir, str(self.camID), str(self.camID) + "_%04d.png" % idx)
@@ -927,7 +957,7 @@ def main(argv):
             total_count += len(dbs[0])
             tasks.append((preprocess_multi_cam, (dbs,)))
 
-    # tasks = tasks[11:]  # adjust for debug
+    # tasks = tasks[4 :]  # adjust for debug
 
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:

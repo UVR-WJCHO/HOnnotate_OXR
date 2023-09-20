@@ -347,21 +347,32 @@ class ObjectLoader:
         self.obj_mesh_name = self.obj_class + '.obj'
         obj_mesh_path = os.path.join(self.obj_template_dir, self.obj_mesh_name)
 
+        obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % int(grasp_idx)) + '_' + str("%02d" % int(data_trial[-1]))
+
+        obj_scale_data_namme = obj_data_name + '_obj_scale.pkl'
+        obj_scale_data_path = os.path.join(self.obj_pose_dir, obj_scale_data_namme)
+        with open(obj_scale_data_path, 'rb') as f:
+            self.obj_scale = pickle.load(f)
+
         self.obj_mesh_data = {}
         verts, faces, _ = load_obj(obj_mesh_path)
         if self.obj_class in CFG_OBJECT_SCALE:
-            verts /= 10.0
+             verts *= float(self.obj_scale)
+
+        if self.obj_class in CFG_OBJECT_SCALE_SPECIFIC.keys():
+            verts *= float(CFG_OBJECT_SCALE_SPECIFIC[self.obj_class])
 
         self.obj_mesh_data['verts'] = verts
         self.obj_mesh_data['faces'] = faces.verts_idx
 
         # load from results of preprocess.py
-        obj_pose_data_name = obj_dir_name + '_grasp_' + str("%02d"%int(grasp_idx)) + '_' + str("%02d"%int(data_trial[-1])) + '_obj_pose.pkl'
+        obj_pose_data_name = obj_data_name + '_obj_pose.pkl'
         obj_pose_data_path = os.path.join(self.obj_pose_dir, obj_pose_data_name)
         with open(obj_pose_data_path, 'rb') as f:
             self.obj_init_pose = pickle.load(f)
 
-        marker_cam_data_name = obj_dir_name + '_grasp_' + str("%02d"%int(grasp_idx)) + '_' + str("%02d"%int(data_trial[-1])) + '_marker_cam.pkl'
+
+        marker_cam_data_name = obj_data_name + '_marker_cam.pkl'
         marker_cam_data_path = os.path.join(self.obj_pose_dir, marker_cam_data_name)
         with open(marker_cam_data_path, 'rb') as f:
             marker_cam_pose = pickle.load(f)

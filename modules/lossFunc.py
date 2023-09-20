@@ -795,8 +795,8 @@ class MultiViewLossFunc(nn.Module):
                     cv2.imshow(blend_gt_name, img_blend_gt)
                     cv2.imshow(blend_pred_name, img_blend_pred)
                     # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-                    cv2.imshow(blend_depth_gap_name, depth_gap)
-                    cv2.imshow(blend_seg_gap_name, seg_gap)
+                    # cv2.imshow(blend_depth_gap_name, depth_gap)
+                    # cv2.imshow(blend_seg_gap_name, seg_gap)
                     cv2.waitKey(0)
                 else:
                     cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
