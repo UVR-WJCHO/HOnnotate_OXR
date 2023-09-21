@@ -338,8 +338,6 @@ def main(argv):
             loss_func.set_for_evaluation()
             ## Start optimization per frame
             for frame in range(len(mas_dataloader)):
-                if frame > 1:
-                    break
                 t_start = time.time()
 
                 ## check visualizeMP results in {YYMMDD} folder, use for debugging
