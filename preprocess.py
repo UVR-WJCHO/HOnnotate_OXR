@@ -508,6 +508,7 @@ class loadDataset():
 
         ### debug
         if flag_check_vert_marker_pair:
+
             projection = self.extrinsics[self.camID].reshape(3, 4)
             marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
                                                  projection[:, 3:], self.intrinsics[self.camID],
@@ -525,7 +526,7 @@ class loadDataset():
                 image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
                 image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
                 cv2.imshow(f"debug marker to cam {self.camID}", image)
-                cv2.waitKey(0)
+                #cv2.imwrite(f"/scratch/nia/HOnnotate_OXR/debug/{k}.png", image)
 
         err = np.sum(abs(verts_debug - marker_debug), axis=1)
         err = np.average(err)
