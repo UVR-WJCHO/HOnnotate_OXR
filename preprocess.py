@@ -61,8 +61,8 @@ flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,def
 flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
-flags.DEFINE_integer('start_seq', None, 'start idx of sequence(ordered)')
-flags.DEFINE_integer('end_seq', None, 'end idx of sequence(ordered)')
+flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
+flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -963,8 +963,8 @@ def main(argv):
     t1 = time.time()
 
     seq_list = natsorted(os.listdir(rootDir))
-    if FLAGS.start_seq != None and FLAGS.end_seq != None:
-        seq_list = seq_list[FLAGS.start_seq:FLAGS.end_seq]
+    if FLAGS.start != None and FLAGS.end != None:
+        seq_list = seq_list[FLAGS.start:FLAGS.end]
 
     for seqIdx, seqName in enumerate(seq_list):
         if FLAGS.seq is not None and seqName != FLAGS.seq:
