@@ -29,7 +29,7 @@ if not CFG_exist_tip_db:
 CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'penetration': 1.0,
                    'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0, 'depth_obj': 1.0, 'seg_obj': 1.0, 'pose_obj':1.0}
 
-CFG_temporal_loss_weight = 0.5e5
+CFG_temporal_loss_weight = 0.5e4
 
 # given original images, tipGT generated for every 30 frames. We sample it to 1/3
 CFG_tipGT_interval = 10
