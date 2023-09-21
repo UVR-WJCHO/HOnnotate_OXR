@@ -336,6 +336,8 @@ def main(argv):
 
             loss_func.reset_prev_pose()
             loss_func.set_for_evaluation()
+
+            eval_num = 0
             ## Start optimization per frame
             for frame in range(len(mas_dataloader)):
                 t_start = time.time()
@@ -441,15 +443,15 @@ def main(argv):
 
                 print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
                 save_num += 1
+                eval_num += 1
 
-            if save_num != 0:
-                loss_func.save_evaluation(log_path, save_num)
+            loss_func.save_evaluation(log_path, eval_num)
 
-                # extract top 'num' indexes from depth f1 score and save as json
-                top_index = loss_func.filtering_top_quality_index(num=60).tolist()
-                p = os.path.join(target_dir_result, trialName)
-                with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
-                    json.dump(top_index, f)
+            # extract top 'num' indexes from depth f1 score and save as json
+            top_index = loss_func.filtering_top_quality_index(num=60).tolist()
+            p = os.path.join(target_dir_result, trialName)
+            with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
+                json.dump(top_index, f)
 
     print("total processed time(min) : ", round((time.time() - t0) / 60., 2))
     print("total processed frames : ", save_num)
