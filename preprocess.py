@@ -590,12 +590,12 @@ class loadDataset():
         tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
         if os.path.exists(tip_data_path):
             with open(tip_data_path, "r") as data:
-                tip_data = json.load(data)['shapes']
+                tip_data = json.load(data)['annotations'][0]
 
             tip_kpts = {}
             for tip in tip_data:
                 tip_name = tip['label']
-                tip_2d = tip['points'][0]
+                tip_2d = [tip['x'], tip['y']]
                 tip_kpts[tip_name] = np.round(tip_2d, 2)
 
             self.tip_data = tip_kpts
