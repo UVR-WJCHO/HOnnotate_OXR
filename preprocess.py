@@ -1018,33 +1018,32 @@ def main(argv):
 
     print("end segmentation - deeplab_v3")
 
-    target_mp_num = 60
+    # target_mp_num = 60
     for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
         total_num = 0
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
-
-            mp_num_list = []
+            # mp_num_list = []
             for camID in camIDset:
                 anno_dir = os.path.join(baseDir, FLAGS.db+'_result', seqName, trialName, 'annotation', camID)
                 num_anno = len(os.listdir(anno_dir))
                 total_num += num_anno
 
-                mp_dir = os.path.join(baseDir, FLAGS.db, seqName, trialName, 'rgb_crop', camID)
-                num_mp = len(os.listdir(mp_dir))
-                mp_num_list.append(num_mp)
-            mp_num_list.sort()
+            #     mp_dir = os.path.join(baseDir, FLAGS.db, seqName, trialName, 'rgb_crop', camID)
+            #     num_mp = len(os.listdir(mp_dir))
+            #     mp_num_list.append(num_mp)
+            # mp_num_list.sort()
 
-            if num_anno < 60:
-                target_mp_num = 50
-            else:
-                target_mp_num = 60
+            # if num_anno < 60:
+            #     target_mp_num = 50
+            # else:
+            #     target_mp_num = 60
 
             ## not for release
             # if mp_num_list[-2] < target_mp_num:
             #     print("[!] seq %s has not enough hand results, try with --seq {seq_name} --mp_value 0.85"%seqName)
 
-        # print("[LOG] total json # in seq %s : %s --- update excel" % (seqName, total_num))
+        print("[LOG] total json # in seq %s : %s" % (seqName, total_num))
 
     print("[log] total processed time : ", round((time.time() - t0) / 60., 2))
 
