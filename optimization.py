@@ -388,11 +388,10 @@ def main(argv):
 
                 ### initialize optimizer, scheduler
                 lr_init = CFG_LR_INIT * 0.2
-                lr_init_obj = CFG_LR_INIT_OBJ * 0.2
+                lr_init_obj = CFG_LR_INIT_OBJ
 
                 if flag_start:
                     lr_init *= 5.0
-                    lr_init_obj *= 5.0
                     flag_start = False
 
                 ### update global pose
