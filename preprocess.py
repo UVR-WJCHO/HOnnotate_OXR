@@ -585,13 +585,12 @@ class loadDataset():
             json.dump(self.info, w, ensure_ascii=False)
 
         self.debug = rgb.copy()
-
         ########## currently tip data processed on sampled data.
         ########## will be update to unsampled data
         tip_data_name = str(self.camID) + '_' + str(idx) + '.json'
         # tip_data_name = str(self.camID) + '_' + str(save_idx) + '.json'
         tip_data_path = os.path.join(self.tip_data_dir, tip_data_name)
-        if os.path.exists(tip_data_path):
+        if CFG_exist_tip_db and os.path.exists(tip_data_path):
             with open(tip_data_path, "r") as data:
                 tip_data = json.load(data)['annotations'][0]
 
@@ -604,8 +603,6 @@ class loadDataset():
             self.tip_data = tip_kpts
         else:
             self.tip_data = None
-            if CFG_exist_tip_db and idx == 0:
-                print("----------- no tip data, check {YYMMDD}_tip ----------------")
 
         return (rgb, depth)
 
