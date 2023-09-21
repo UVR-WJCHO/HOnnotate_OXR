@@ -49,7 +49,7 @@ CFG_NON_VISIBLE_WEIGHT = 0.8
 
 ######## 230829-230908
 # if included, .obj has mm scale
-CFG_OBJECT_SCALE = ["11_small_marker", "13_flat_screwdriver"]
+CFG_OBJECT_SCALE = ["05_wine_glass", "11_small_marker", "13_flat_screwdriver"]
 CFG_OBJECT_SCALE_SPECIFIC = {"16_golf_ball":0.45}
 
 CFG_vertspermarker = {
@@ -57,7 +57,7 @@ CFG_vertspermarker = {
     "02_potted_meat_can" : [1157,1127,1102],
     "03_banana" : [158,204,1018],
     "04_apple" : [81,273,283],
-    "05_wine_glass" : [264 ,434,354], #[1195,1950,1990],    494
+    "05_wine_glass" : [1279 ,1982,354], #[1195,1950,1990],    494
     "06_bowl" : [1010,536,548],
     "07_mug" : [862,1355,1322,],# [1363,1571,1346,],
     "08_plate" : [3400,3480,1040],
