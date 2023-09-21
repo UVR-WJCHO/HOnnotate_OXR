@@ -32,8 +32,8 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230908', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230908_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230905_cam', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start_seq', 0, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end_seq', 1, 'end idx of sequence(ordered)')
 
@@ -287,7 +287,7 @@ def main(argv):
 
         for trialIdx, trialName in enumerate(sorted(os.listdir(target_dir))):
             save_path = os.path.join(target_dir_result, trialName, "visualization")
-            log_path = os.path.join(CFG_ROOT_DIR, 'log' ,FLAGS.db, target_seq, trialName)
+            log_path = os.path.join(target_dir_result, trialName, 'log')
             if not os.path.isdir(log_path):
                 os.makedirs(log_path)
 
@@ -338,6 +338,8 @@ def main(argv):
             loss_func.set_for_evaluation()
             ## Start optimization per frame
             for frame in range(len(mas_dataloader)):
+                if frame > 1:
+                    break
                 t_start = time.time()
 
                 ## check visualizeMP results in {YYMMDD} folder, use for debugging
@@ -442,7 +444,7 @@ def main(argv):
                 print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
                 save_num += 1
 
-            # loss_func.save_evaluation(log_path, save_num)
+            loss_func.save_evaluation(log_path, save_num)
 
             # extract top 'num' indexes from depth f1 score and save as json
             top_index = loss_func.filtering_top_quality_index(num=60).tolist()
