@@ -58,8 +58,11 @@ flag_check_vert_marker_pair = False
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
+
+flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
+flags.DEFINE_integer('start_seq', None, 'start idx of sequence(ordered)')
+flags.DEFINE_integer('end_seq', None, 'end idx of sequence(ordered)')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -958,7 +961,12 @@ def main(argv):
     tasks = []
     total_count = 0
     t1 = time.time()
-    for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+
+    seq_list = natsorted(os.listdir(rootDir))
+    if FLAGS.start_seq != None and FLAGS.end_seq != None:
+        seq_list = seq_list[FLAGS.start_seq:FLAGS.end_seq]
+
+    for seqIdx, seqName in enumerate(seq_list):
         if FLAGS.seq is not None and seqName != FLAGS.seq:
             continue
 
