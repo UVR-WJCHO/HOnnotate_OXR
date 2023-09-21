@@ -274,6 +274,17 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
 
 def main(argv):
+    baseDir = os.path.join(os.getcwd(), 'dataset')
+
+    assert FLAGS.db == FLAGS.cam_db[:6], "wrong db-cam_db pair. check name"
+    assert os.path.exists(os.path.join(baseDir, FLAGS.db)), "no {YYMMDD} directory. check."
+    assert os.path.exists(os.path.join(baseDir, FLAGS.cam_db)), "no{YYMMDD}_cam directory. check."
+    assert os.path.exists(os.path.join(baseDir, FLAGS.db + '_obj')), "no {YYMMDD}_obj directory. check."
+    assert os.path.exists(
+        os.path.join(baseDir, 'obj_scanned_models')), "no dataset/obj_scanned_models directory. check."
+    assert os.path.exists(
+        os.path.join(os.getcwd(), 'modules/deepLabV3plus/checkpoints')), "no segmentation checkpoint folder. check."
+
     t0 = time.time()
     logging.get_absl_handler().setFormatter(None)
     save_num = 0

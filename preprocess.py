@@ -945,6 +945,15 @@ def done_callback(result):
 ################# depth scale value need to be update #################
 def main(argv):
 
+    ### check
+    assert FLAGS.db == FLAGS.cam_db[:6], "wrong db-cam_db pair. check name"
+    assert os.path.exists(os.path.join(baseDir, FLAGS.db)), "no {YYMMDD} directory. check."
+    assert os.path.exists(os.path.join(baseDir, FLAGS.cam_db)), "no{YYMMDD}_cam directory. check."
+    assert os.path.exists(os.path.join(baseDir, FLAGS.db + '_obj')), "no {YYMMDD}_obj directory. check."
+    assert os.path.exists(os.path.join(baseDir, 'obj_scanned_models')), "no dataset/obj_scanned_models directory. check."
+    assert os.path.exists(
+        os.path.join(os.getcwd(), 'modules/deepLabV3plus/checkpoints')), "no segmentation checkpoint folder. check."
+
     t0 = time.time()
     ### Setup ###
     rootDir = os.path.join(baseDir, FLAGS.db)
