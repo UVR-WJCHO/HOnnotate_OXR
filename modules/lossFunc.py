@@ -624,15 +624,18 @@ class MultiViewLossFunc(nn.Module):
 
 
     def save_evaluation(self, save_path, save_num):
-        csv_files = ['kpts_precision', 'kpts_recall', 'kpts_f1', 'mesh_precision', 'mesh_recall', 'mesh_f1', 'depth_precision', 'depth_recall', 'depth_f1']
-        for idx, file in enumerate(csv_files):
-            with open(os.path.join(save_path, file + '.csv'), "w", encoding='utf-8') as f:
-                ws = csv.writer(f)
-                ws.writerow(['total_avg', self.total_metrics[idx] / save_num])
-                ws.writerow(['frame', 'mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        if save_num == 0:
+            print("no data to save evaluation")
+        else:
+            csv_files = ['kpts_precision', 'kpts_recall', 'kpts_f1', 'mesh_precision', 'mesh_recall', 'mesh_f1', 'depth_precision', 'depth_recall', 'depth_f1']
+            for idx, file in enumerate(csv_files):
+                with open(os.path.join(save_path, file + '.csv'), "w", encoding='utf-8') as f:
+                    ws = csv.writer(f)
+                    ws.writerow(['total_avg', self.total_metrics[idx] / save_num])
+                    ws.writerow(['frame', 'mas', 'sub1', 'sub2', 'sub3', 'avg'])
 
-            df = self.dfs[file]
-            df.to_csv(os.path.join(save_path, file + '.csv'), mode='a', index=True, header=False)
+                df = self.dfs[file]
+                df.to_csv(os.path.join(save_path, file + '.csv'), mode='a', index=True, header=False)
 
 
     def filtering_top_quality_index(self, num=60):
