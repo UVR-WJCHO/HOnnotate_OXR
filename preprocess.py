@@ -992,7 +992,7 @@ def main(argv):
         for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
             if FLAGS.seq is not None and seqName != FLAGS.seq:
                 continue
-
+            print("seq : %s" % seqName)
             seqDir = os.path.join(rootDir, seqName)
             for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
 
