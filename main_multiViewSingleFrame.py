@@ -17,7 +17,7 @@ from utils.modelUtils import initialize_optimizer, update_optimizer, initialize_
 from absl import flags
 from absl import app
 from absl import logging
-
+from natsort import natsorted
 from config import *
 import time
 from utils.dataUtils import *
@@ -36,6 +36,7 @@ flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230905_cam', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start_seq', 0, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end_seq', 1, 'end idx of sequence(ordered)')
+flags.DEFINE_bool('all', False, 'if True, process all seq in db')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 
@@ -278,8 +279,11 @@ def main(argv):
     logging.get_absl_handler().setFormatter(None)
     save_num = 0
 
-    seq_list = sorted(os.listdir(os.path.join(CFG_DATA_DIR, FLAGS.db)))
-    seq_list = seq_list[FLAGS.start_seq:FLAGS.end_seq]
+    seq_list_all = natsorted(os.listdir(os.path.join(CFG_DATA_DIR, FLAGS.db)))
+    seq_list = seq_list_all[FLAGS.start_seq:FLAGS.end_seq]
+
+    if FLAGS.all:
+        seq_list = seq_list_all
 
     for target_seq in seq_list:
         target_dir = os.path.join(CFG_DATA_DIR, FLAGS.db, target_seq)
