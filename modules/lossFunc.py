@@ -511,7 +511,7 @@ class MultiViewLossFunc(nn.Module):
             pred_kpts2d = (self.img2bb @ uv1.T).T
 
             #1. 3D keypoints F1-Score
-            TP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
+            TP = 1e-7 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
             FP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
             FN = 0 #참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
             for idx, gt_kpt in enumerate(gt_kpts2d):
@@ -541,7 +541,8 @@ class MultiViewLossFunc(nn.Module):
 
             TP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked == gt_seg_hand, 0)) + \
                     np.sum(np.where(obj_seg_masked > 0, obj_seg_masked == gt_seg_obj, 0))
-
+            if TP == 0:
+                TP = 1e-7
             FP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked != gt_seg_hand, 0)) +\
                     np.sum(np.where(obj_seg_masked > 0, obj_seg_masked != gt_seg_obj, 0))
             # seg_masked_FN = (gt_seg_hand > 0) * (hand_seg_masked == 0) \

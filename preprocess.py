@@ -357,7 +357,7 @@ class loadDataset():
                 csv_dict[row[0]] = row[1]
         #====================================================
         #Sequence 내 공동정보 저장
-        with open(os.path.join(os.getcwd(), 'annotation_template.json')) as r:
+        with open(os.path.join(os.getcwd(), 'annotation_template.json'), encoding='UTF8') as r:
             info = json.load(r)
         #info keys 'info', 'actor', 'kinect_camera', 'infrared_camera', 'images', 'object', 'calibration', 'annotations', 'Mesh'
         # 기록해 놓은 actor 정보 받아오기
