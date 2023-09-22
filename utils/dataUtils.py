@@ -23,7 +23,7 @@ def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
     for anno_path in anno_path_list:
         anno = None
         ### load current annotation(include updated meta info.)
-        with open(anno_path, 'r') as file:
+        with open(anno_path, 'r', encoding='utf-8') as file:
             anno = json.load(file)
         imgID = anno['images']['id']
         ### update annotation

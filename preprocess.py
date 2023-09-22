@@ -582,7 +582,7 @@ class loadDataset():
         self.info['images']['height'] = rgb.shape[0]
         self.info['images']['date_created'] = dt.datetime.fromtimestamp(os.path.getctime(rgbPath)).strftime('%Y-%m-%d %H:%M')
         self.info['images']['frame_num'] = save_idx
-        with open(os.path.join(self.annotCamDir, "anno_%04d.json"%save_idx), "w") as w:
+        with open(os.path.join(self.annotCamDir, "anno_%04d.json"%save_idx), "w", encoding='cp949') as w:
             json.dump(self.info, w, ensure_ascii=False)
 
         self.debug = rgb.copy()

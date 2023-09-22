@@ -512,15 +512,16 @@ class MultiViewLossFunc(nn.Module):
 
             #1. 3D keypoints F1-Score
             TP = 1e-7 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
-            FP = 0 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
-            FN = 0 #참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
+            FP = 1e-7 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
+            FN = 1e-7 #참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
             for idx, gt_kpt in enumerate(gt_kpts2d):
                 pred_kpt = pred_kpts2d[idx]
                 if (pred_kpt == None).any():
                     FN += 1
-                if np.linalg.norm(gt_kpt - pred_kpt) < 50:
+                dist = np.linalg.norm(gt_kpt - pred_kpt)
+                if dist < 50:
                     TP += 1
-                elif np.linalg.norm(gt_kpt - pred_kpt) >= 50:
+                elif dist >= 50:
                     FP += 1
 
             keypoint_precision_score = TP / (TP + FP)
@@ -538,16 +539,16 @@ class MultiViewLossFunc(nn.Module):
             gt_seg_hand = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
             gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy()))
 
-
             TP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked == gt_seg_hand, 0)) + \
                     np.sum(np.where(obj_seg_masked > 0, obj_seg_masked == gt_seg_obj, 0))
-            if TP == 0:
-                TP = 1e-7
             FP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked != gt_seg_hand, 0)) +\
                     np.sum(np.where(obj_seg_masked > 0, obj_seg_masked != gt_seg_obj, 0))
             # seg_masked_FN = (gt_seg_hand > 0) * (hand_seg_masked == 0) \
             #                 + (gt_seg_obj > 0) * (obj_seg_masked == 0)
-            FN = 0 #np.sum(seg_masked_FN)
+
+            if TP == 0:
+                TP = 1e-7
+            FN = 1e-7 #np.sum(seg_masked_FN)
 
             mesh_seg_precision_score = TP/(TP+FP)
             mesh_seg_recall_score = TP / (TP + FN)
@@ -559,9 +560,9 @@ class MultiViewLossFunc(nn.Module):
             mesh_f1[camID] = mesh_seg_f1_score
 
             #3. hand depth accuracy
-            TP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
-            FP = 0 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이상
-            FN = 0 #참값이 존재하지만 키포인트 좌표의 깊이값이 존재하지 않는 경우(미태깅)
+            TP = 1e-7 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
+            FP = 1e-7 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이상
+            FN = 1e-7 #참값이 존재하지만 키포인트 좌표의 깊이값이 존재하지 않는 경우(미태깅)
 
             #pred_kpts2d
             # obj_depth, hand_depth
@@ -590,7 +591,7 @@ class MultiViewLossFunc(nn.Module):
                 else:
                     FP += 1
 
-            if TP == 0:
+            if TP < 1:
                 mesh_depth_precision_score = 0
                 mesh_depth_recall_score = 0
                 mesh_depth_f1_score = 0
