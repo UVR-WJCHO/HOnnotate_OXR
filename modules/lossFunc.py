@@ -675,6 +675,7 @@ class MultiViewLossFunc(nn.Module):
         for camIdx, camID in enumerate(CFG_CAMID_SET):
             if 'bb' not in self.dataloaders[camIdx][frame].keys():
                 self.set_gt_nobb(camIdx, camID, frame)
+                flag_bb_exist = False
             else:
                 # set gt to load original input
                 self.set_gt(camIdx, frame)
