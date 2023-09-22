@@ -97,6 +97,8 @@ class MultiViewLossFunc(nn.Module):
         reg_loss = ((mano_tensor - pose_mean_tensor) ** 2) * pose_reg_tensor
         return torch.sum(reg_loss, -1)
 
+    def set_gt_other_view(self, camIdx, frame):
+
     def set_gt(self, camIdx, frame):
         gt_sample = self.dataloaders[camIdx][frame]
 
@@ -650,11 +652,13 @@ class MultiViewLossFunc(nn.Module):
 
     def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
 
-        for camIdx in camIdxSet:
-            camID = CFG_CAMID_SET[camIdx]
-            # set gt to load original input
-            self.set_gt(camIdx, frame)
-            # set camera status for projection
+        for camIdx, camID in enumerate(CFG_CAMID_SET):
+            if self.dataloaders[camIdx][frame] != None:
+                self.set_gt_other_view(camIDx, frame)
+            else:
+                # set gt to load original input
+                self.set_gt(camIdx, frame)
+                # set camera status for projection
 
             # debug = np.squeeze(self.gt_kpts3d.cpu().detach().numpy())
             ## HAND ##
