@@ -17,8 +17,8 @@ CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = False
 
 # set True if 2D tip annotation data exists(from euclidsoft)
-CFG_exist_tip_db = True
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact', 'pose_obj', 'kpts_tip']
+CFG_exist_tip_db = False
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact', 'pose_obj']#, 'kpts_tip']
 
 if not CFG_exist_tip_db:
     assert 'kpts_tip' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
