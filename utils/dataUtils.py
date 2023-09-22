@@ -23,7 +23,7 @@ def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
     for anno_path in anno_path_list:
         anno = None
         ### load current annotation(include updated meta info.)
-        with open(anno_path, 'r', encoding='utf-8') as file:
+        with open(anno_path, 'r', encoding='cp949') as file:
             anno = json.load(file)
         imgID = anno['images']['id']
         ### update annotation
@@ -58,7 +58,7 @@ def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
         anno['Mesh'][0]['contact'] = contact_map.tolist()
 
         ### save full annotation
-        with open(anno_path, 'w', encoding='utf-8') as file:
+        with open(anno_path, 'w', encoding='cp949') as file:
             json.dump(anno, file, indent='\t', ensure_ascii=False)
 
 

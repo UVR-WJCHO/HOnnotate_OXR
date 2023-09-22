@@ -462,7 +462,7 @@ def main(argv):
                 top_index = loss_func.filtering_top_quality_index(num=60).tolist()
                 p = os.path.join(target_dir_result, trialName)
                 with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
-                    json.dump(top_index, f)
+                    json.dump(top_index, f, ensure_ascii=False)
 
     print("total processed time(min) : ", round((time.time() - t0) / 60., 2))
     print("total processed frames : ", save_num)
