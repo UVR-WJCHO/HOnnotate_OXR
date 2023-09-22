@@ -1004,7 +1004,11 @@ def main(argv):
 
     print("start segmentation - deeplab_v3")
     if flag_deep_segmentation:
-        for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+        seq_list = natsorted(os.listdir(rootDir))
+        if FLAGS.start != None and FLAGS.end != None:
+            seq_list = seq_list[FLAGS.start:FLAGS.end]
+
+        for seqIdx, seqName in enumerate(seq_list):
             if FLAGS.seq is not None and seqName != FLAGS.seq:
                 continue
             print("seq : %s" % seqName)
@@ -1034,7 +1038,13 @@ def main(argv):
     print("end segmentation - deeplab_v3")
 
     # target_mp_num = 60
-    for seqIdx, seqName in enumerate(sorted(os.listdir(rootDir))):
+    seq_list = natsorted(os.listdir(rootDir))
+    if FLAGS.start != None and FLAGS.end != None:
+        seq_list = seq_list[FLAGS.start:FLAGS.end]
+
+    for seqIdx, seqName in enumerate(seq_list):
+        if FLAGS.seq is not None and seqName != FLAGS.seq:
+            continue
         total_num = 0
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):

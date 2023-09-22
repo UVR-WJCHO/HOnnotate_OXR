@@ -215,9 +215,10 @@ Before Pre-process
 ```
     - dataset
         - ${YYMMDD}
-            - trials_${NUM}
-                - depth
-                - rgb
+			- ${YYMMDD_S#_obj_#_grasp_#}
+				- trials_${NUM}
+					- depth
+					- rgb
             ...
         - ${YYMMDD}_cam
         - ${YYMMDD}_cam_2 (없을 수 있음)
@@ -256,16 +257,17 @@ After Pre-Process
 ```
     - dataset
         - ${YYMMDD}
-            - trials_${NUM}
-                - depth
-                - depth_crop
-                - meta
-                - rgb
-                - rgb_crop
-                - segmentation
-                - segmentation_deep
-                - visualizeMP
-            ...
+			- ${YYMMDD_S#_obj_#_grasp_#}
+				- trials_${NUM}
+					- depth
+					- depth_crop
+					- meta
+					- rgb
+					- rgb_crop
+					- segmentation
+					- segmentation_deep
+					- visualizeMP
+				...
         - ${YYMMDD}_cam
         - ${YYMMDD}_obj
     - modules
