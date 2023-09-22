@@ -18,6 +18,7 @@ import csv
 import trimesh
 import open3d as o3d
 import pandas as pd
+from modules.utils.processing import gen_trans_from_patch_cv
 
 
 class MultiViewLossFunc(nn.Module):
@@ -60,6 +61,12 @@ class MultiViewLossFunc(nn.Module):
 
         self.obj_mesh_dense = None
 
+        self.init_bbox = {}
+        self.init_bbox["mas"] = [400, 60, 1120, 960]
+        self.init_bbox["sub1"] = [360, 0, 1120, 960]
+        self.init_bbox["sub2"] = [640, 180, 640, 720]
+        self.init_bbox["sub3"] = [680, 180, 960, 720]
+
     def reset_prev_pose(self):
         self.prev_hand_pose = None
         self.prev_hand_shape = None
@@ -97,7 +104,19 @@ class MultiViewLossFunc(nn.Module):
         reg_loss = ((mano_tensor - pose_mean_tensor) ** 2) * pose_reg_tensor
         return torch.sum(reg_loss, -1)
 
-    def set_gt_other_view(self, camIdx, frame):
+
+    def set_gt_nobb(self, camIdx, camID, frame):
+        gt_sample = self.dataloaders[camIdx][frame]
+        self.bb = self.init_bbox[str(camID)]
+        self.gt_rgb = gt_sample['rgb_raw'][self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
+        self.gt_depth = gt_sample['depth_raw'][0, self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
+
+        bb_c_x = float(self.bb[0] + 0.5 * self.bb[2])
+        bb_c_y = float(self.bb[1] + 0.5 * self.bb[3])
+        bb_width = float(self.bb[2])
+        bb_height = float(self.bb[3])
+        trans = gen_trans_from_patch_cv(bb_c_x, bb_c_y, bb_width, bb_height, 640, 480, 1.0, 0.0, (0.0, 0.0))
+        self.img2bb = trans
 
     def set_gt(self, camIdx, frame):
         gt_sample = self.dataloaders[camIdx][frame]
@@ -651,16 +670,16 @@ class MultiViewLossFunc(nn.Module):
         return top_index
 
     def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
-
+        flag_bb_exist = False
         for camIdx, camID in enumerate(CFG_CAMID_SET):
-            if self.dataloaders[camIdx][frame] != None:
-                self.set_gt_other_view(camIDx, frame)
+            if 'bb' not in self.dataloaders[camIdx][frame].keys():
+                self.set_gt_nobb(camIdx, camID, frame)
             else:
                 # set gt to load original input
                 self.set_gt(camIdx, frame)
+                flag_bb_exist = True
                 # set camera status for projection
 
-            # debug = np.squeeze(self.gt_kpts3d.cpu().detach().numpy())
             ## HAND ##
             # project hand joint
             joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
@@ -680,41 +699,18 @@ class MultiViewLossFunc(nn.Module):
             rgb_mesh = np.squeeze((pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
             depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
             seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy())
-
             seg_mesh = np.array(np.ceil(seg_mesh / np.max(seg_mesh)), dtype=np.uint8)
 
-            # if flag_obj and flag_evaluation:
-            #     pred_rendered_hand_only = self.cam_renderer[camIdx].render(verts_cam,pred['faces'], flag_rgb=True)
-            #     hand_depth = np.squeeze(pred_rendered_hand_only['depth'][0].cpu().detach().numpy())
-
-            #     hand_depth[hand_depth == 10] = 0
-            #     hand_depth *= 1000.
-
-            #     pred_rendered_obj_only = self.cam_renderer[camIdx].render(verts_cam_obj, pred_obj['faces'], flag_rgb=True)
-            #     obj_depth = np.squeeze(pred_rendered_obj_only['depth'][0].cpu().detach().numpy())
-
-            #     obj_depth[obj_depth == 10] = 0
-            #     obj_depth *= 1000.
-            #     obj_seg_masked = np.copy(obj_depth)
-            #     hand_seg_masked = np.where(abs(depth_mesh - obj_depth) < 1.0, 0, 1)
-            #     obj_seg_masked = np.where(abs(depth_mesh - hand_depth) < 1.0, 0, 1)
-            # seg_masked = hand_seg_masked + obj_seg_masked
-
-            # cv2.imshow("depth_mesh", np.asarray(depth_mesh / 1000 * 255, dtype=np.uint8))
-            # cv2.imshow("hand_depth", np.asarray(hand_depth / 1000 * 255, dtype=np.uint8))
-            # cv2.imshow("obj_depth", np.asarray(obj_depth / 1000 * 255, dtype=np.uint8))
-            # cv2.imshow("obj_seg_masked", np.asarray(obj_seg_masked * 255, dtype=np.uint8))
-            # cv2.imshow("hand_seg_masked", np.asarray(hand_seg_masked * 255, dtype=np.uint8))
-            # cv2.waitKey(0)
-
-            #==============================================================================================
-
-            gt_kpts2d = np.squeeze(self.gt_kpts2d.clone().cpu().numpy())
             pred_kpts2d = np.squeeze(pred_kpts2d.clone().cpu().detach().numpy())
+            if flag_bb_exist:
+                gt_kpts2d = np.squeeze(self.gt_kpts2d.clone().cpu().numpy())
+                # check if gt kpts is nan (not detected)
+                if np.isnan(gt_kpts2d).any():
+                    gt_kpts2d = np.zeros((21, 2))
 
-            # check if gt kpts is nan (not detected)
-            if np.isnan(gt_kpts2d).any():
-                gt_kpts2d = np.zeros((21, 2))
+            rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
+            if flag_bb_exist:
+                rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
 
             if flag_crop:
                 # show cropped size of input (480, 640)
@@ -722,66 +718,57 @@ class MultiViewLossFunc(nn.Module):
                 depth_input = np.squeeze(self.gt_depth.clone().cpu().numpy())
                 seg_input = np.squeeze(self.gt_seg.clone().cpu().numpy())
 
-                # if save_path is not None:
-                #     if not flag_headless:
-                #         cv2.imshow("rgb input", rgb_input)
-                #         cv2.imshow("depth_input", np.asarray(depth_input/1000 * 255, dtype=np.uint8))
-                #         cv2.waitKey(0)
-                #     else:
-                #         cv2.imwrite(os.path.join("./for_headless_server", 'rgb_input.png'), rgb_input)
-                #         cv2.imwrite(os.path.join("./for_headless_server", 'depth_input.png'), np.asarray(depth_input/1000 * 255, dtype=np.uint8))
-
                 # rendered image is original size (1080, 1920)
                 rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
                 depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
                 seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
-                # if flag_obj and flag_evaluation:
-                #     hand_seg_masked = hand_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                #     obj_seg_masked = obj_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                #     # seg_masked = seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-
-                #     hand_depth = hand_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-                #     obj_depth = obj_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-
-                uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
-                gt_kpts2d = (self.img2bb @ uv1.T).T
+                rgb_2d_pred = rgb_2d_pred[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2], :]
                 uv1 = np.concatenate((pred_kpts2d, np.ones_like(pred_kpts2d[:, :1])), 1)
                 pred_kpts2d = (self.img2bb @ uv1.T).T
+
+                if flag_bb_exist:
+                    rgb_2d_gt = rgb_2d_gt[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2], :]
+                    uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
+                    gt_kpts2d = (self.img2bb @ uv1.T).T
             else:
                 # show original size of input (1080, 1920)
                 rgb_input, depth_input, seg_input, seg_obj = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
-
-            rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
-            rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
-            rgb_seg = (rgb_input * seg_input[..., None]).astype(np.uint8)
 
             seg_mask = np.copy(seg_mesh)
             seg_mask[seg_mesh>0] = 1
             rgb_2d_pred *= seg_mask[..., None]
 
-            img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
             img_blend_pred = cv2.addWeighted(rgb_input, 1.0, rgb_2d_pred, 0.4, 0)
-            img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
 
+            if flag_bb_exist:
+                img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
+                rgb_seg = (rgb_input * seg_input[..., None]).astype(np.uint8)
+                img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
+
+            # create depth gap
             depth_mesh[depth_mesh==10] = 0
             depth_input[depth_input==10] = 0
             depth_gap = np.clip(np.abs(depth_input - depth_mesh)* 1000, a_min=0.0, a_max=255.0).astype(np.uint8)
             depth_gap[depth_mesh == 0] = 0
 
-            seg_a = seg_input - seg_mesh
-            seg_a[seg_a < 0] = 0
-            seg_b = seg_mesh - seg_input
-            seg_b[seg_b < 0] = 0
-            seg_gap = ((seg_a + seg_b) * 255.0).astype(np.uint8)
+            # create seg gap, gt required
+            if flag_bb_exist:
+                seg_a = seg_input - seg_mesh
+                seg_a[seg_a < 0] = 0
+                seg_b = seg_mesh - seg_input
+                seg_b[seg_b < 0] = 0
+                seg_gap = ((seg_a + seg_b) * 255.0).astype(np.uint8)
 
             if not flag_crop:
                 # resize images to (360, 640)
-                img_blend_gt = cv2.resize(img_blend_gt, dsize=(640,360), interpolation=cv2.INTER_LINEAR)
                 img_blend_pred = cv2.resize(img_blend_pred, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
-                img_blend_pred_seg = cv2.resize(img_blend_pred_seg, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
                 depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
-                seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+                if flag_bb_exist:
+                    img_blend_gt = cv2.resize(img_blend_gt, dsize=(640,360), interpolation=cv2.INTER_LINEAR)
+                    seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+                    img_blend_pred_seg = cv2.resize(img_blend_pred_seg, dsize=(640, 360),
+                                                    interpolation=cv2.INTER_LINEAR)
 
             blend_gt_name = "blend_gt_" + camID + "_" + str(frame)
             blend_pred_name = "blend_pred_" + camID + "_" + str(frame)
@@ -789,27 +776,18 @@ class MultiViewLossFunc(nn.Module):
             blend_depth_gap_name = "blend_depth_gap_" + camID + "_" + str(frame)
             blend_seg_gap_name = "blend_seg_gap_" + camID + "_" + str(frame)
 
-            # if not flag_headless:
-            #     cv2.imshow(blend_gt_name, img_blend_gt)
-            #     cv2.imshow(blend_pred_name, img_blend_pred)
-            #     # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-            #     # cv2.imshow(blend_depth_name, depth_gap)
-            #     # cv2.imshow(blend_seg_name, seg_gap)
-            #     cv2.waitKey(0)
-            # else:
-            #     cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
-            #     cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
-
             if save_path is None:
                 if not flag_headless:
-                    cv2.imshow(blend_gt_name, img_blend_gt)
+                    if flag_bb_exist:
+                        cv2.imshow(blend_gt_name, img_blend_gt)
                     cv2.imshow(blend_pred_name, img_blend_pred)
                     # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
                     # cv2.imshow(blend_depth_gap_name, depth_gap)
                     # cv2.imshow(blend_seg_gap_name, seg_gap)
                     cv2.waitKey(0)
                 else:
-                    cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
+                    if flag_bb_exist:
+                        cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
                     cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
                     cv2.imwrite(os.path.join("./for_headless_server", blend_depth_gap_name + '.png'), depth_gap)
             else:

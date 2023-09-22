@@ -130,8 +130,12 @@ class DataLoader:
         for idx in range(len(sample_dict)):
             sample = sample_dict[idx]
 
-            if sample == None:
-                sample_dict_torch[idx] = None
+            if 'bb' not in sample.keys():
+                sample_torch = {}
+                sample_torch['rgb_raw'] = torch.FloatTensor(sample['rgb_raw']).to(self.device)
+                sample_torch['depth_raw'] = torch.unsqueeze(torch.FloatTensor(sample['depth_raw']), 0).to(self.device)
+
+                sample_dict_torch[idx] = sample_torch
                 sample_kpt[idx] = None
             else:
                 sample_kpt_ = {}
@@ -188,7 +192,8 @@ class DataLoader:
         meta = self.get_meta(index)
 
         if meta['kpts'] is None:
-            return None
+            sample['rgb_raw'], sample['depth_raw'] = self.get_img(index, flag_bb=False)
+            return sample
         else:
             bb = np.asarray(meta['bb']).astype(int)
             sample['bb'] = np.copy(bb)
@@ -214,7 +219,6 @@ class DataLoader:
             sample['rgb'], sample['depth'], sample['depth_obj'], sample['seg'], sample['seg_obj'], \
                 rgb_raw, depth_raw = self.get_img(index)
 
-
             return sample
 
 
@@ -239,66 +243,62 @@ class DataLoader:
 
         return [cam_intrinsic, cam_extrinsic, dist_coeff]
 
-    def get_img(self, idx):
+    def get_img(self, idx, flag_bb=True):
         rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam, self.cam + '_%01d.jpg' % idx)
         depth_raw_path = os.path.join(self.depth_raw_path, self.cam, self.cam + '_%01d.png' % idx)
 
-        rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.jpg'%idx)
-        depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
-
-        # currently use temporal segmentation folder
-        # seg_path = os.path.join(self.seg_path, self.cam, 'raw_seg_results', self.cam+'_%04d.jpg'%idx)
-        # seg_obj_path = os.path.join(self.seg_obj_path, self.cam, self.cam + '_%04d.jpg' % idx)
-
-        seg_path = os.path.join(self.seg_deep_path, self.cam, 'raw_seg_results',  self.cam + '_%04d.png' % idx)
-
-        assert os.path.exists(rgb_path)
-        assert os.path.exists(depth_path)
-
         rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
         depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
-        # rgb_raw = None
-        # depth_raw = None
 
-        rgb = np.asarray(cv2.imread(rgb_path))
-        depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
-
-        # depth_vis = depth / np.max(depth)
-        # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
-        # cv2.imshow("depth", np.asarray(depth_vis * 255, dtype=np.uint8))
-        # cv2.waitKey(1)
-
-        # there are skipped frame for segmentation
-        if os.path.exists(seg_path):
-            seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)).astype(float)
+        if not flag_bb:
+            return rgb_raw, depth_raw
         else:
-            seg = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
+            rgb_path = os.path.join(self.rgb_path, self.cam, self.cam+'_%04d.jpg'%idx)
+            depth_path = os.path.join(self.depth_path, self.cam, self.cam+'_%04d.png'%idx)
+            seg_path = os.path.join(self.seg_deep_path, self.cam, 'raw_seg_results',  self.cam + '_%04d.png' % idx)
 
-        seg_hand = np.where(seg == 1, 1, 0)
-        seg_obj = np.where(seg == 2, 1, 0)
+            assert os.path.exists(rgb_path)
+            assert os.path.exists(depth_path)
 
-        depth_obj = depth.copy()
-        depth_obj[seg_obj == 0] = 0
-        depth[seg == 0] = 0
+            rgb = np.asarray(cv2.imread(rgb_path))
+            depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
 
-        # change depth image to m scale and background value as positive value
-        depth /= 1000.
-        depth_obj /= 1000.
+            # depth_vis = depth / np.max(depth)
+            # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
+            # cv2.imshow("depth", np.asarray(depth_vis * 255, dtype=np.uint8))
+            # cv2.waitKey(1)
 
-        depth_obj = np.where(seg != 2, 10, depth)
-        depth_hand = np.where(seg != 1, 10, depth)
+            # there are skipped frame for segmentation
+            if os.path.exists(seg_path):
+                seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)).astype(float)
+            else:
+                seg = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
 
-        # depth_vis_0 = depth_hand / np.max(depth_hand)
-        # depth_vis = depth_obj / np.max(depth_obj)
-        # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
-        # cv2.imshow("depth_obj", np.asarray(depth_vis * 255, dtype=np.uint8))
-        # cv2.imshow("depth_hand", np.asarray(depth_vis_0 * 255, dtype=np.uint8))
-        # cv2.imshow("seg", np.asarray(seg *122, dtype=np.uint8))
-        # cv2.waitKey(0)
+            seg_hand = np.where(seg == 1, 1, 0)
+            seg_obj = np.where(seg == 2, 1, 0)
 
-        # seg_hand[seg_hand==0] = 10
-        # seg_obj[seg_obj == 0] = 10
-        return rgb, depth_hand, depth_obj, seg_hand, seg_obj, rgb_raw, depth_raw
+            depth_obj = depth.copy()
+            depth_obj[seg_obj == 0] = 0
+            depth[seg == 0] = 0
+
+            # change depth image to m scale and background value as positive value
+            depth /= 1000.
+            depth_obj /= 1000.
+
+            depth_obj = np.where(seg != 2, 10, depth)
+            depth_hand = np.where(seg != 1, 10, depth)
+
+            # depth_vis_0 = depth_hand / np.max(depth_hand)
+            # depth_vis = depth_obj / np.max(depth_obj)
+            # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
+            # cv2.imshow("depth_obj", np.asarray(depth_vis * 255, dtype=np.uint8))
+            # cv2.imshow("depth_hand", np.asarray(depth_vis_0 * 255, dtype=np.uint8))
+            # cv2.imshow("seg", np.asarray(seg *122, dtype=np.uint8))
+            # cv2.waitKey(0)
+
+            # seg_hand[seg_hand==0] = 10
+            # seg_obj[seg_obj == 0] = 10
+            return rgb, depth_hand, depth_obj, seg_hand, seg_obj, rgb_raw, depth_raw
     
     def get_meta(self, idx):
         meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)

@@ -32,8 +32,8 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230905_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230906', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230906_cam', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
@@ -375,7 +375,7 @@ def main(argv):
                 #     valid_cam_list = ['mas', 'sub2', 'sub3']
 
                 for camIdx, camID in enumerate(valid_cam_list):
-                    if dataloader_set[camIdx][frame] is not None:
+                    if 'bb' in dataloader_set[camIdx][frame].keys():
                         detected_cams.append(camIdx)
                 if len(detected_cams) < 2:
                     print('detected hand is less than 2, skip the frame ', frame)
@@ -423,7 +423,6 @@ def main(argv):
                 """
                 __update_parts__(model, loss_func, detected_cams, frame,
                                  lr_init, trialName, iterperpart=40)
-
 
                 ### update all
                 __update_all__(model, model_obj, loss_func, detected_cams, frame,
