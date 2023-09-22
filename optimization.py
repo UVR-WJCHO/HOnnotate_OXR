@@ -46,7 +46,7 @@ flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
 
-def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName, iter=80):
+def __update_global__(model, loss_func, detected_cams, frame, lr_init, target_seq, trialName, iter=80):
 
     loss_dict_global = ['kpts_palm', 'reg']
 
@@ -86,13 +86,13 @@ def __update_global__(model, loss_func, detected_cams, frame, lr_init, trialName
         lr_scheduler.step()
 
         iter_t = time.time() - t_iter
-        logs = ["[{} - frame {}] [Global] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
+        logs = ["[{} - {} - frame {}] [Global] Iter: {}, Loss: {:.4f}".format(target_seq, trialName, frame, iter, total_loss.item())]
         logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
                  key in loss_dict_global]
         logging.info(''.join(logs))
 
 
-def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName, iterperpart=40):
+def __update_parts__(model, loss_func, detected_cams, frame, lr_init, target_seq, trialName, iterperpart=40):
 
     kps_loss = {}
 
@@ -142,13 +142,13 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, trialName,
             kps_loss[iter] = cur_kpt_loss
 
             iter_t = time.time() - t_iter
-            logs = ["[{} - frame {}] [Parts] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter,
+            logs = ["[{} - {} - frame {}] [Parts] Iter: {}, Loss: {:.4f}".format(target_seq, trialName, frame, iter,
                                                                                      total_loss.item())]
             logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
                      key in loss_dict_parts]
             logging.info(''.join(logs))
 
-def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, trialName, iter=100):
+def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, target_seq, trialName, iter=100):
     kps_loss = {}
     use_contact_loss = False
     use_penetration_loss = False
@@ -222,7 +222,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
 
         # iter_t = time.time() - t_iter
         # print("iter_t : ", iter_t)
-        logs = ["[{} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(trialName, frame, iter, total_loss.item())]
+        logs = ["[{} - {} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(target_seq, trialName, frame, iter, total_loss.item())]
         logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
                  key in CFG_LOSS_DICT]
         logging.info(''.join(logs))
@@ -412,7 +412,7 @@ def main(argv):
                     except : hand shape, hand pose 
                 """
                 __update_global__(model, loss_func, detected_cams, frame,
-                                  lr_init, trialName)
+                                  lr_init, target_seq, trialName)
 
                 ### update incrementally
                 """
@@ -422,11 +422,11 @@ def main(argv):
                     except : hand shape
                 """
                 __update_parts__(model, loss_func, detected_cams, frame,
-                                 lr_init, trialName, iterperpart=40)
+                                 lr_init, target_seq, trialName, iterperpart=40)
 
                 ### update all
                 __update_all__(model, model_obj, loss_func, detected_cams, frame,
-                               lr_init, lr_init_obj, trialName, iter=CFG_NUM_ITER)
+                               lr_init, lr_init_obj, target_seq, trialName, iter=CFG_NUM_ITER)
 
                 # update prev pose if temporal loss activated
                 pred_hand = model()
