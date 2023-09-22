@@ -486,7 +486,7 @@ class loadDataset():
         if obj_class in CFG_OBJECT_SCALE_SPECIFIC.keys():
             verts_init = verts_init * CFG_OBJECT_SCALE_SPECIFIC[obj_class]
 
-        if verts_init.shape[0] == 3:
+        if verts_init.shape[0] == 3 and obj_class not in CFG_OBJECT_NO4th_POINT:
             newpoints_verts_init = np.expand_dims((verts_init[1] + verts_init[2] - verts_init[0]), axis=0)
             newpoints_marker_pose = np.expand_dims((marker_pose[1] + marker_pose[2] - marker_pose[0]), axis=0)
             verts_init = np.concatenate((verts_init, newpoints_verts_init), axis=0)
@@ -527,7 +527,7 @@ class loadDataset():
                 image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
                 cv2.imshow(f"debug marker to cam {self.camID}", image)
                 #cv2.imwrite(f"/scratch/nia/HOnnotate_OXR/debug/{k}.png", image)
-
+                cv2.waitKey(0)
         err = np.sum(abs(verts_debug - marker_debug), axis=1)
         err = np.average(err)
         assert err < 20, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
