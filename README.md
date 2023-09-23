@@ -208,6 +208,7 @@ $ apt update
 $ apt-get update
 $ apt-get upgrade
 $ apt install sudo
+$ apt-get install libssl-dev
 $ apt-get install -y openssh-server
 $ apt-get install -y vim
 $ apt-get install -y wget
