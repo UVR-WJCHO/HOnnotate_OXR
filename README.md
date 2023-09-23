@@ -260,8 +260,11 @@ python preprocess.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam
 ```
 같은 날짜라도 시퀀스 별로 해당하는 cam 폴더가 다를 수 있음.
 데이터 처리 현황 탭의 해당되는 cam 폴더 이름 **반드시** 확인
-    --cam\_db ${YYMMDD}\_cam
-    --cam\_db ${YYMMDD}\_cam_2 (만약, 존재한다면)
+
+```
+python preprocess.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam
+python preprocess.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam_2 (만약, 존재한다면)
+```
 
 [!] seq {xxxx} has not enough hand results, try with ~~~  와 같은 오류 발생 시
 
