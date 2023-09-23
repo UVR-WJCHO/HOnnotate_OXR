@@ -297,20 +297,24 @@ After Pre-Process
 위의 파일 구조 확인 후, 메인 프로세스 진행. 
 처리하고자 하는 데이터의 날짜가 ${YYMMDD} 인경우, 
 ```
-python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM}
+python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start ${START_NUM} --end ${END_NUM}
 ```
 
 - \${YYMMDD} 폴더 안의 모든 시퀀스를 읽고, \${YYMMDD}_S00\_obj00\_grasp\_00 폴더 리스트 중 START_NUM 번째 폴더 부터 END_NUM 번째 폴더까지 작업하는 방식
 - 별도 프롬프트 열어서 START_NUM, END_NUM을 바꿔서 병렬 진행.
 - 예) 1번 프롬프트 
     ```
-    python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 0 --end_seq 4
+    python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start 0 --end 4
     ```
     2번 프롬프트
     ```
-    python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 4 --end_seq 8
+    python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start 4 --end 8
     ```
 - RTX3090의 경우 3개 실행 보다 2개 프롬프트 실행하는 것이 효율적이었음.
+- 사용하고자 하는 GPU를 지정해주고 싶은 경우
+  ```bash
+  CUDA_VISIBLE_DEVICES=${GPU_NUM} python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start 0 --end 4
+  ```
 
 - GUI가 없는 headless 서버에서 작업을 하는 경우
 ```
