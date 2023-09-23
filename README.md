@@ -8,6 +8,7 @@ $ cd HOnnotate_OXR
 ```
 
 ## Installation(Linux server)
+도커를 설치하지 않고 로컬에서 설치하여 진행하는 경우 이하 순서 대로 진행
 - Conda 설치
 ```bash
 $ wget https://repo.anaconda.com/archive/Anaconda3-2023.07-2-Linux-x86_64.sh
@@ -79,7 +80,8 @@ $ python setup.py install
 $ cd 
 ```
 
-## Headless Server Setting
+## Docker setting
+도커를 사용하여 진행할 경우
 - Docker 설치
 Reference 참조 ([http://deepmi.me/linux/2021/01/08/docker/](http://deepmi.me/linux/2021/01/08/docker/))
 ```bash
@@ -198,6 +200,22 @@ $ vi /etc/ssh/sshd_config
 $ passwd root # root password 설정
 ```
 
+## ETC
+1. tmux 활용법 (프롬프트 나누기)
+```bash
+$ apt-get install tmux
+$ tmux new # 새로운 세션 생성
+##세션 내에서
+ctrl+b ${PANE_NUM} # PANE_NUM번 창으로 이동
+ctrl+b+c # 세션 추가
+ctrl+d # tmux 세션 밖으로 나감
+ctrl+x # 현재 창 제거
+
+##세션 밖에서
+$ tmux attach # tmux 세선으로 돌아감
+$ tmux kill-session # tmux 세션 전체 삭제
+```
+
 ## Setup
 
 - Clone the repository and checkout the develop branch
@@ -279,24 +297,24 @@ After Pre-Process
 위의 파일 구조 확인 후, 메인 프로세스 진행. 
 처리하고자 하는 데이터의 날짜가 ${YYMMDD} 인경우, 
 ```
-python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM}
+python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM}
 ```
 
 - \${YYMMDD} 폴더 안의 모든 시퀀스를 읽고, \${YYMMDD}_S00\_obj00\_grasp\_00 폴더 리스트 중 START_NUM 번째 폴더 부터 END_NUM 번째 폴더까지 작업하는 방식
 - 별도 프롬프트 열어서 START_NUM, END_NUM을 바꿔서 병렬 진행.
 - 예) 1번 프롬프트 
     ```
-    python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 0 --end_seq 4
+    python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 0 --end_seq 4
     ```
     2번 프롬프트
     ```
-    python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 4 --end_seq 8
+    python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 4 --end_seq 8
     ```
 - RTX3090의 경우 3개 실행 보다 2개 프롬프트 실행하는 것이 효율적이었음.
 
 - GUI가 없는 headless 서버에서 작업을 하는 경우
 ```
-python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM} --headless True
+python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM} --headless True
 ``` 
 - 최적화 결과 확인은 for_headless_server/ 폴더에 그때 그때 저장되므로 확인 가능. 
 
@@ -305,6 +323,18 @@ python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --star
 
 ex) \${YYMMDD}_S00\_obj00\_grasp\_00.zip, ${YYMMDD}_S00\_obj00\_grasp\_01.zip, ...
 
+## Data Download
+- [벡터바이오 NAS](http://quickconnect.to/vectorbio)에서 직접 다운로드
+    - Headless의 경우 wget으로 다운로드가 안되어서 vscode를 이용해서 드래그 앤 드롭으로 옮기거나 scp 명령어를 사용
+    - scp ${로컬 pc 데이터 경로} ${서버 User Name}@${서버 IP}:${서버 dataset 경로}
+- 서버PC에서 다운로드
+    - scp datapc@${데이터 PC IP}:/mnt/download/${원하는 데이터 파일} ${원하는 경로}
+
+scp 옵션
+c : 데이터를 압축하여 전송한다.
+p(소) : 시간, 접근시간, 모드를 원본과 같도록 전송한다.
+r : 디렉터리를 전송한다.
+v : 전송과정을 상세히 출력하여 전송한다.
+
 ## Acknowledgement
 We borrowed a part of the open-source code of [HOnnotate](https://github.com/shreyashampali/HOnnotate?). 
-
