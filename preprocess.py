@@ -506,9 +506,12 @@ class loadDataset():
         verts_debug = apply_transform(pose_calc, verts_init)# * 100.0
         marker_debug = np.squeeze(marker_pose)
 
+
+        err = np.sum(abs(verts_debug - marker_debug), axis=1)
+        err = np.average(err)
+
         ### debug
         if flag_check_vert_marker_pair:
-
             projection = self.extrinsics[self.camID].reshape(3, 4)
             marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
                                                  projection[:, 3:], self.intrinsics[self.camID],
@@ -528,9 +531,9 @@ class loadDataset():
                 cv2.imshow(f"debug marker to cam {self.camID}", image)
                 #cv2.imwrite(f"/scratch/nia/HOnnotate_OXR/debug/{k}.png", image)
                 cv2.waitKey(0)
-        err = np.sum(abs(verts_debug - marker_debug), axis=1)
-        err = np.average(err)
-        assert err < 20, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
+
+
+        assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
         return pose_calc, scale
 

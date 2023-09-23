@@ -17,8 +17,8 @@ CFG_WITH_OBJ = True
 CFG_EARLYSTOPPING = False
 
 # set True if 2D tip annotation data exists(from euclidsoft)
-CFG_exist_tip_db = True
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact', 'pose_obj', 'kpts_tip']
+CFG_exist_tip_db = False
+CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact', 'pose_obj']#, 'kpts_tip']
 
 if not CFG_exist_tip_db:
     assert 'kpts_tip' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
@@ -51,7 +51,7 @@ CFG_NON_VISIBLE_WEIGHT = 0.8
 # if included, .obj has mm scale
 CFG_OBJECT_SCALE = ["05_wine_glass", "11_small_marker", "13_flat_screwdriver"]
 CFG_OBJECT_SCALE_SPECIFIC = {"16_golf_ball":0.45}
-CFG_OBJECT_NO4th_POINT = ["24_Scrub_cleanser_bottle"]
+CFG_OBJECT_NO4th_POINT = ["24_Scrub_cleanser_bottle", "29_foldable_phone"]
 
 CFG_vertspermarker = {
     "01_cracker_box" : [1865,1859,4434,1070],
