@@ -62,6 +62,23 @@ $ make -j$(nproc)
 $ make install-pip-package
 ```
 
+cmake에서 오류가 발생하는 경우
+```bash
+$ wget https://github.com/Kitware/CMake/releases/download/v3.27.6/cmake-3.27.6.tar.gz
+$ cd cmake-3.27.6.tar.gz
+$ ./bootstrap --prefix=$HOME/cmake-install
+$ make 
+$ make install
+$ vim ~/.bashrc
+    # vim 에디터에서 이하 내용 추가
+    export PATH=$HOME/cmake-install/bin:$PATH
+    export CMAKE_PREFIX_PATH=$HOME/cmake-install:$CMAKE_PREFIX_PAT
+$ source ~/.bashrc
+$ cmake --version
+# cmake version 3.23.2 라고 뜨면 정상
+```
+
+
 - [manopth](https://github.com/hassony2/manopth) 설치
 ```bash
 $ cd
