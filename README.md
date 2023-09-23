@@ -65,7 +65,8 @@ $ make install-pip-package
 cmake에서 오류가 발생하는 경우
 ```bash
 $ wget https://github.com/Kitware/CMake/releases/download/v3.27.6/cmake-3.27.6.tar.gz
-$ cd cmake-3.27.6.tar.gz
+$ tar -zvxf cmake-3.27.6.tar.gz
+$ cd cmake-3.27.6
 $ ./bootstrap --prefix=$HOME/cmake-install
 $ make 
 $ make install
