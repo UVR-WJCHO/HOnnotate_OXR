@@ -161,7 +161,7 @@ ctrl + p + q
 #################################
 ```
 
-- Pull Docker Image (본인 서버 버전에 맏는 이미지)
+- Pull Docker Image (본인 서버 버전에 맞는 이미지)
 ```
 **Process** 
 
