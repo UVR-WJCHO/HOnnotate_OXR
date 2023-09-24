@@ -89,7 +89,7 @@ $ vim ~/.bashrc
     export CMAKE_PREFIX_PATH=$HOME/cmake-install:$CMAKE_PREFIX_PAT
 $ source ~/.bashrc
 $ cmake --version
-# cmake version 3.23.2 라고 뜨면 정상
+# cmake version 3.27.6 라고 뜨면 정상
 ```
 
 
