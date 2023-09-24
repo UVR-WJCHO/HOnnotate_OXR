@@ -173,6 +173,7 @@ ctrl + p + q
 ```
 
 - Run docker w/ port forwarding & volume mounting
+  
 **Port forwarding**
 → docker container 내부로 편리하게 접속하기 위한 작업 
 → local pc에서도 vscode/terminal을 통해 container에 접근
