@@ -379,8 +379,10 @@ class ObjectLoader:
 
         self.marker_cam_pose = {}
         for key in marker_cam_pose:
-            self.marker_cam_pose[key] = torch.FloatTensor(marker_cam_pose[key]).to(self.device)
-
+            if marker_cam_pose[key] is None:
+                self.marker_cam_pose[key] = None
+            else:
+                self.marker_cam_pose[key] = torch.FloatTensor(marker_cam_pose[key]).to(self.device)
 
     def read_obj(self, file_path):
         verts = []

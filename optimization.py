@@ -32,8 +32,8 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230906', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230906_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230905_cam', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 

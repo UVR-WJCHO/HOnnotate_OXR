@@ -92,8 +92,13 @@ class MultiViewLossFunc(nn.Module):
         self.main_Ms_obj = self.Ms[obj_main_cam_idx]
 
     def set_object_marker_pose(self, obj_marker_cam_pose, obj_class):
-        self.gt_obj_marker = torch.unsqueeze(obj_marker_cam_pose, 0)
         self.vertIDpermarker = CFG_vertspermarker[str(obj_class)]
+
+        if obj_marker_cam_pose != None:
+            self.gt_obj_marker = torch.unsqueeze(obj_marker_cam_pose, 0)
+        else:
+            self.gt_obj_marker = None
+
 
     def get_pose_constraint_tensor(self):
         pose_mean_tensor = torch.tensor(params.pose_mean_list).cuda()
@@ -240,9 +245,12 @@ class MultiViewLossFunc(nn.Module):
                 pred_obj_verts_marker = pred_obj['verts'][:, self.vertIDpermarker, :] * 10.0
                 gt_obj_verts_marker = self.gt_obj_marker
 
-                loss_pose_obj = (pred_obj_verts_marker - gt_obj_verts_marker) ** 2
-                loss_pose_obj = torch.sum(loss_pose_obj.reshape(self.bs, -1), -1)
-                loss['pose_obj'] = loss_pose_obj * 2e-1
+                if gt_obj_verts_marker is not None:
+                    loss_pose_obj = (pred_obj_verts_marker - gt_obj_verts_marker) ** 2
+                    loss_pose_obj = torch.sum(loss_pose_obj.reshape(self.bs, -1), -1)
+                    loss['pose_obj'] = loss_pose_obj * 2e-1
+                else:
+                    loss['pose_obj'] = self.default_zero
 
             if render:
                 pred_rendered = pred_render_set[camIdx]
