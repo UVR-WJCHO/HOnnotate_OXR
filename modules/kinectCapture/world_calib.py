@@ -130,10 +130,6 @@ class WorldCalib():
 
             coord_homo = np.concatenate((coord.T, np.ones((1,4))), axis=0) # world coordinate
             world_coord = P @ coord_homo # camera's coordinate
-            projection = self.extrinsics[self.camera].reshape(3,4)
-            projection = np.concatenate((projection, h), axis=0)
-            projection = np.linalg.inv(projection)
-            world_coord = projection @ world_coord # master's coordinate
             world_coord = world_coord[:3].T
 
             cameras = ['mas', 'sub1', 'sub2', 'sub3']
@@ -154,9 +150,6 @@ class WorldCalib():
 
                 cv2.imwrite(os.path.join(self.result_dir, f"{cam}_world.png"), image)
 
-            projection = self.extrinsics[self.camera].reshape(3,4)
-            projection = np.concatenate((projection, h), axis=0)
-            projection = np.linalg.inv(projection)
             P = projection @ P
             np.save(os.path.join(self.result_dir, "global_world.npy"), P[:3])
 
