@@ -43,6 +43,7 @@ flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapip
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
 # flags.DEFINE_string('seq_list', '230905_S02_obj_03_grasp_3', 'target sequence name')
 flags.DEFINE_bool('headless', False, 'headless mode for visualization')
+FLAGS(sys.argv)
 
 # torch.autograd.set_detect_anomaly(True)
 

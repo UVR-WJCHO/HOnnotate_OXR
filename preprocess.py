@@ -976,7 +976,7 @@ def main(argv):
     '''
 
     print("---------------start preprocess seq ---------------")
-    process_count = 4
+    process_count = 1
 
     tasks = []
     total_count = 0
