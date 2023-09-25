@@ -52,7 +52,7 @@ from natsort import natsorted
 
 
 
-flag_check_vert_marker_pair = True
+flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
