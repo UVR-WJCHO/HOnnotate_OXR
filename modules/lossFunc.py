@@ -91,8 +91,8 @@ class MultiViewLossFunc(nn.Module):
     def set_object_main_extrinsic(self, obj_main_cam_idx):
         self.main_Ms_obj = self.Ms[obj_main_cam_idx]
 
-    def set_object_marker_pose(self, obj_marker_cam_pose, obj_class):
-        self.vertIDpermarker = CFG_vertspermarker[str(obj_class)]
+    def set_object_marker_pose(self, obj_marker_cam_pose, obj_class, CFG_DATE):
+        self.vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
 
         if obj_marker_cam_pose != None:
             self.gt_obj_marker = torch.unsqueeze(obj_marker_cam_pose, 0)

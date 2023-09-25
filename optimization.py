@@ -46,6 +46,20 @@ flags.DEFINE_bool('headless', False, 'headless mode for visualization')
 
 # torch.autograd.set_detect_anomaly(True)
 
+
+### check config date ###
+CFG_DATE = None
+if FLAGS.db in ['230829', '230830', '230904', '230905', '230906', '230907', '230908']:
+    CFG_DATE = '230829~230908'
+elif FLAGS.db in ['230909', '230910', '230911', '230912', '230913']:
+    CFG_DATE = '230909~230913'
+elif FLAGS.db in ['230914']:
+    CFG_DATE = '230914'
+elif FLAGS.db in ['230915', '230916', '230917', '230918', '230919', '230920', '230921',  '230922', '230923', '230924', '230925',  '230926', '230927']:
+    CFG_DATE = '230915~'
+else:
+    assert False, 'no CFG date matches, contact KAIST'
+
 def __update_global__(model, loss_func, detected_cams, frame, lr_init, target_seq, trialName, iter=80):
 
     loss_dict_global = ['kpts_palm', 'reg']
@@ -395,7 +409,7 @@ def main(argv):
                     model_obj.update_pose(pose=obj_pose)
 
                     marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
-                    loss_func.set_object_marker_pose(marker_cam_pose,  obj_dataloader.obj_class)
+                    loss_func.set_object_marker_pose(marker_cam_pose, obj_dataloader.obj_class, CFG_DATE)
 
                 ### initialize optimizer, scheduler
                 lr_init = CFG_LR_INIT * 0.2

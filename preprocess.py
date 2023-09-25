@@ -51,13 +51,12 @@ import modules.common.transforms as tf
 from natsort import natsorted
 
 
-
 flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230909', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230909_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
@@ -106,7 +105,18 @@ num_global = 0
 
 CFG_TIP_NAME = ['thumb', 'index', 'middle', 'ring', 'pinky']
 
-
+### check config date ###
+CFG_DATE = None
+if FLAGS.db in ['230829', '230830', '230904', '230905', '230906', '230907', '230908']:
+    CFG_DATE = '230829~230908'
+elif FLAGS.db in ['230909', '230910', '230911', '230912', '230913']:
+    CFG_DATE = '230909~230913'
+elif FLAGS.db in ['230914']:
+    CFG_DATE = '230914'
+elif FLAGS.db in ['230915', '230916', '230917', '230918', '230919', '230920', '230921',  '230922', '230923', '230924', '230925',  '230926', '230927']:
+    CFG_DATE = '230915~'
+else:
+    assert False, 'no CFG date matches, contact KAIST'
 
 
 class deeplab_opts():
@@ -446,7 +456,7 @@ class loadDataset():
         # generate initial obj pose (4, 4)
         obj_init_pose = generate_pose([0,0,0],[0,0,0])
 
-        vertIDpermarker = CFG_vertspermarker[str(obj_class)]
+        vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
         obj_verts = obj_mesh['verts']
         verts_init = np.array(obj_verts[vertIDpermarker, :]) * 10.0
 
@@ -945,7 +955,6 @@ def done_callback(result):
 
 ################# depth scale value need to be update #################
 def main(argv):
-
     ### check
     assert FLAGS.db == FLAGS.cam_db[:6], "wrong db-cam_db pair. check name"
     assert os.path.exists(os.path.join(baseDir, FLAGS.db)), "no {YYMMDD} directory. check."
@@ -954,6 +963,7 @@ def main(argv):
     assert os.path.exists(os.path.join(baseDir, 'obj_scanned_models')), "no dataset/obj_scanned_models directory. check."
     assert os.path.exists(
         os.path.join(os.getcwd(), 'modules/deepLabV3plus/checkpoints')), "no segmentation checkpoint folder. check."
+
 
     t0 = time.time()
     ### Setup ###

@@ -55,7 +55,12 @@ CFG_OBJECT_SCALE_SPECIFIC = {"16_golf_ball":0.45}
 CFG_OBJECT_NO4th_POINT = ["24_Scrub_cleanser_bottle", "29_foldable_phone"]
 CFG_OBJECT_4th_POINT = ["09_spoon"]
 
+
+
 CFG_vertspermarker = {
+
+    '230829~230908':
+        {
     "01_cracker_box" : [1865,1859,4434,1070],
     "02_potted_meat_can" : [1157,1127,1102],
     "03_banana" : [158,204,1018],
@@ -77,7 +82,7 @@ CFG_vertspermarker = {
     "19_disk_lid" : [1988,3366,3367],
     "20_smartphone" : [1352,828,1127],
     "21_mouse" : [46,582,1536],
-    "22_tape" : [1544,1220,1671],   
+    "22_tape" : [1544,1220,1671],
     "23_master_chef_can" : [4586,4597,4695],
     "24_Scrub_cleanser_bottle" : [2795,2948,2966],
     "25_large_marker" : [1152,1396,3007],
@@ -85,10 +90,21 @@ CFG_vertspermarker = {
     "27_note" : [334,3,733],
     "28_scissors" : [3932,3948,3407],
     "29_foldable_phone" : [2002,2005,1728],
-    "30_cardboard_box" : [418,1314,413,1297]
+    "30_cardboard_box" : [418,1314,413,1297]},
+
+'230909~230913':
+    {},
+
+'230914':
+    {},
+
+'230915~':
+    {}
 }
 
 ####################
+
+
 
 CFG_valid_index = [[0, 1,2, 5,6, 9,10, 13,14, 17,18],
                    [0, 1,2,3, 5,6,7, 9,10,11, 13,14,15, 17,18,19]]
