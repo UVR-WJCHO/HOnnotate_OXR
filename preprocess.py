@@ -57,7 +57,7 @@ flag_check_vert_marker_pair = False
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230910', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230910_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
+flags.DEFINE_float('mp_value', 0.90, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
