@@ -334,6 +334,10 @@ class ObjectLoader:
         self.base_path = base_path
         self.obj_dir = os.path.join(base_path, data_date + '_obj')
 
+        base_path = os.path.join(base_path, data_date+'_result', data_type, data_trial)
+        rgb_path = os.path.join(base_path, 'rgb', 'mas')
+        len_total = len(os.listdir(rgb_path))
+
         obj_dir_name = "_".join(data_type.split('_')[:-2]) # 230612_S01_obj_01
         self.obj_pose_dir = os.path.join(self.obj_dir, obj_dir_name)
 
@@ -376,6 +380,11 @@ class ObjectLoader:
         obj_pose_data_path = os.path.join(self.obj_pose_dir, obj_pose_data_name)
         with open(obj_pose_data_path, 'rb') as f:
             self.obj_init_pose = pickle.load(f)
+
+        self.quit = False
+        if len_total != self.obj_init_pose.shape[0]:
+            self.quit = True
+
 
         marker_cam_data_name = obj_data_name + '_marker_cam.pkl'
         marker_cam_data_path = os.path.join(self.obj_pose_dir, marker_cam_data_name)
