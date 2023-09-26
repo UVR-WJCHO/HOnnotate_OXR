@@ -55,8 +55,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230909', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230909_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230910', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230910_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.93, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
@@ -454,10 +454,16 @@ class loadDataset():
 
     def fit_markerToObj(self, marker_pose, obj_class, obj_mesh):
         # except if marker pose is nan
+
+        vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
+        pair_len = len(vertIDpermarker)
+
         target_marker_num = marker_pose.shape[0]
         valid_marker = []
         valid_idx = []
         for idx, i in enumerate(range(target_marker_num)):
+            if idx == pair_len:
+                break
             value = marker_pose[i, :]
             if not any(np.isnan(value)):
                 valid_marker.append(value)
@@ -468,7 +474,6 @@ class loadDataset():
         # generate initial obj pose (4, 4)
         obj_init_pose = generate_pose([0,0,0],[0,0,0])
 
-        vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
         obj_verts = obj_mesh['verts']
         verts_init = np.squeeze(np.array(obj_verts))
         verts_init = verts_init[vertIDpermarker, :] * 10.0
