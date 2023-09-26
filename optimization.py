@@ -61,12 +61,13 @@ elif FLAGS.db in ['230915', '230916', '230917', '230918', '230919', '230920', '2
 else:
     assert False, 'no CFG date matches, contact KAIST'
 
-def __update_global__(model, loss_func, detected_cams, frame, lr_init, target_seq, trialName, iter=80):
+
+def __update_global_wrist__(model, loss_func, detected_cams, frame, lr_init, target_seq, trialName, iter=40):
 
     loss_dict_global = ['kpts_palm', 'reg']
 
-    model.change_grads_all(root=True, rot=True, pose=False, shape=False, scale=True)
-    optimizer = initialize_optimizer(model, None, lr_init * 7.5, False, None)
+    model.change_grads_all(root=True, rot=False, pose=False, shape=False, scale=True)
+    optimizer = initialize_optimizer(model, None, lr_init * 4.0, False, None)
     lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
 
     loss_weight = {'kpts_palm': 1.0, 'reg': 1.0}
@@ -84,7 +85,53 @@ def __update_global__(model, loss_func, detected_cams, frame, lr_init, target_se
 
         ### visualization for debug
         if flag_debug_vis_glob:
-            loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True, flag_headless=FLAGS.headless)
+            loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=False, flag_crop=True, flag_headless=FLAGS.headless)
+
+        for camIdx in detected_cams:
+            loss_cam = losses[camIdx]
+            for key in loss_cam.keys():
+                loss_all[key] += loss_cam[key] * float(CFG_CAM_WEIGHT[camIdx])
+
+        for key in losses_single.keys():
+            loss_all[key] += losses_single[key]
+
+        total_loss = sum(loss_all[k] * loss_weight[k] for k in loss_dict_global) / len(detected_cams)
+
+        total_loss.backward(retain_graph=True)
+        optimizer.step()
+        lr_scheduler.step()
+
+        iter_t = time.time() - t_iter
+        logs = ["[{} - {} - frame {}] [Global] Iter: {}, Loss: {:.4f}".format(target_seq, trialName, frame, iter, total_loss.item())]
+        logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
+                 key in loss_dict_global]
+        logging.info(''.join(logs))
+
+
+def __update_global__(model, loss_func, detected_cams, frame, lr_init, target_seq, trialName, iter=40):
+
+    loss_dict_global = ['kpts_palm', 'reg']
+
+    model.change_grads_all(root=True, rot=True, pose=False, shape=False, scale=True)
+    optimizer = initialize_optimizer(model, None, lr_init, False, None)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.95)
+
+    loss_weight = {'kpts_palm': 1.0, 'reg': 1.0}
+    for iter in range(iter):
+        t_iter = time.time()
+        optimizer.zero_grad()
+
+        loss_all = {'kpts_palm': 0.0, 'reg': 0.0}
+
+        hand_param = model()
+        obj_param = None
+
+        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
+                           loss_dict=loss_dict_global, flag_headless=FLAGS.headless)
+
+        ### visualization for debug
+        if flag_debug_vis_glob:
+            loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=[detected_cams[0]], flag_obj=False, flag_crop=True, flag_headless=FLAGS.headless)
 
         for camIdx in detected_cams:
             loss_cam = losses[camIdx]
@@ -426,6 +473,8 @@ def main(argv):
                     target : wrist pose/rot, hand scale
                     except : hand shape, hand pose 
                 """
+                __update_global_wrist__(model, loss_func, detected_cams, frame,
+                                  lr_init, target_seq, trialName)
                 __update_global__(model, loss_func, detected_cams, frame,
                                   lr_init, target_seq, trialName)
 
