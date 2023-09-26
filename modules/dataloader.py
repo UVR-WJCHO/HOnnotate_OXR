@@ -334,8 +334,7 @@ class ObjectLoader:
         self.base_path = base_path
         self.obj_dir = os.path.join(base_path, data_date + '_obj')
 
-        base_path = os.path.join(base_path, data_date+'_result', data_type, data_trial)
-        rgb_path = os.path.join(base_path, 'rgb', 'mas')
+        rgb_path = os.path.join(base_path, data_date+'_result', data_type, data_trial, 'rgb', 'mas')
         len_total = len(os.listdir(rgb_path))
 
         obj_dir_name = "_".join(data_type.split('_')[:-2]) # 230612_S01_obj_01
@@ -381,22 +380,24 @@ class ObjectLoader:
         with open(obj_pose_data_path, 'rb') as f:
             self.obj_init_pose = pickle.load(f)
 
-        self.quit = False
-        if len_total != self.obj_init_pose.shape[0]:
-            self.quit = True
-
 
         marker_cam_data_name = obj_data_name + '_marker_cam.pkl'
         marker_cam_data_path = os.path.join(self.obj_pose_dir, marker_cam_data_name)
         with open(marker_cam_data_path, 'rb') as f:
             marker_cam_pose = pickle.load(f)
 
+        valid_obj_count = 0
         self.marker_cam_pose = {}
         for key in marker_cam_pose:
             if marker_cam_pose[key] is None:
                 self.marker_cam_pose[key] = None
             else:
                 self.marker_cam_pose[key] = torch.FloatTensor(marker_cam_pose[key]).to(self.device)
+                valid_obj_count += 1
+
+        self.quit = False
+        if len_total != valid_obj_count:
+            self.quit = True
 
 
 
