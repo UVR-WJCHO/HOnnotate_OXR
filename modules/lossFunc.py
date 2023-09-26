@@ -590,8 +590,8 @@ class MultiViewLossFunc(nn.Module):
             for i in range(21):
                 kpts2d = pred_kpts2d[i, :]
 
-                y = np.clip(int(kpts2d[1]), 0, 480)
-                x = np.clip(int(kpts2d[0]), 0, 640)
+                y = np.clip(int(kpts2d[1]), 0, 479)
+                x = np.clip(int(kpts2d[0]), 0, 639)
                 if gt_seg_hand[y, x] == 0:
                     continue
                 gt_hand_d = gt_depth_hand[y, x]
