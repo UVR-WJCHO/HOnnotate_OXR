@@ -365,12 +365,17 @@ class ObjectLoader:
         self.obj_mesh_data['verts'] = verts
         self.obj_mesh_data['faces'] = faces.verts_idx
 
+
         # load from results of preprocess.py
+        obj_scale_data_namme = obj_data_name + '_valid_idx.pkl'
+        obj_scale_data_path = os.path.join(self.obj_pose_dir, obj_scale_data_namme)
+        with open(obj_scale_data_path, 'rb') as f:
+            self.marker_valid_idx = pickle.load(f)
+
         obj_pose_data_name = obj_data_name + '_obj_pose.pkl'
         obj_pose_data_path = os.path.join(self.obj_pose_dir, obj_pose_data_name)
         with open(obj_pose_data_path, 'rb') as f:
             self.obj_init_pose = pickle.load(f)
-
 
         marker_cam_data_name = obj_data_name + '_marker_cam.pkl'
         marker_cam_data_path = os.path.join(self.obj_pose_dir, marker_cam_data_name)
@@ -383,6 +388,8 @@ class ObjectLoader:
                 self.marker_cam_pose[key] = None
             else:
                 self.marker_cam_pose[key] = torch.FloatTensor(marker_cam_pose[key]).to(self.device)
+
+
 
     def read_obj(self, file_path):
         verts = []

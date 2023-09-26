@@ -240,6 +240,7 @@ class loadDataset():
         self.marker_sampled = {}
         self.marker_cam_sampled = {}
         self.obj_pose_sampled = {}
+        self.marker_valid_idx_sampled = {}
 
         self.obj_db_Dir = os.path.join(baseDir, FLAGS.db+'_obj')
 
@@ -416,10 +417,10 @@ class loadDataset():
             marker_data = np.copy(self.obj_data_all[str(idx)])
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
 
-            obj_pose_data, scale, marker_data_valid = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data)
+            obj_pose_data, scale, marker_data_valid, valid_idx = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data)
 
             self.marker_cam_sampled[str(save_idx)] = marker_data_valid
-
+            self.marker_valid_idx_sampled[str(save_idx)] = valid_idx
             self.obj_pose_sampled[str(save_idx)] = obj_pose_data
             if self.obj_scale == None:
                 self.obj_scale = scale
@@ -428,6 +429,7 @@ class loadDataset():
             self.marker_sampled[str(save_idx)] = None
             self.marker_cam_sampled[str(save_idx)] = None
             self.obj_pose_sampled[str(save_idx)] = None
+            self.marker_valid_idx_sampled[str(save_idx)] = None
 
     def transform_marker_pose(self, marker_poses_mocap):
         obj_cam_ext = self.obj_cam_ext
@@ -568,7 +570,7 @@ class loadDataset():
 
         assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
-        return pose_calc, scale, output_marker_pose
+        return pose_calc, scale, output_marker_pose, valid_idx
 
     def saveObjdata(self):
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker.pkl'), 'wb') as f:
@@ -582,6 +584,10 @@ class loadDataset():
 
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_obj_scale.pkl'), 'wb') as f:
             pickle.dump(self.obj_scale, f, pickle.HIGHEST_PROTOCOL)
+
+        with open(os.path.join(self.obj_data_Dir, self.obj_pose_name + '_valid_idx.pkl'), 'wb') as f:
+            pickle.dump(self.marker_valid_idx_sampled, f, pickle.HIGHEST_PROTOCOL)
+
 
     def getFgmask(self, idx):
         mask_fg_path = os.path.join(self.segfgDir, str(self.camID), str(self.camID) + "_%04d.png" % idx)

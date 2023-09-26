@@ -32,8 +32,8 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230905', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230905_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230910', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230910_cam', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
@@ -457,7 +457,8 @@ def main(argv):
                     model_obj.update_pose(pose=obj_pose)
 
                     marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
-                    loss_func.set_object_marker_pose(marker_cam_pose, obj_dataloader.obj_class, CFG_DATE)
+                    marker_valid_idx = obj_dataloader.marker_valid_idx[str(frame)]
+                    loss_func.set_object_marker_pose(marker_cam_pose, marker_valid_idx, obj_dataloader.obj_class, CFG_DATE)
 
                 ### initialize optimizer, scheduler
                 lr_init = CFG_LR_INIT * 0.2
