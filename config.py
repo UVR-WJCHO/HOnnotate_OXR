@@ -50,7 +50,7 @@ CFG_NON_VISIBLE_WEIGHT = 0.8
 ######## 230829-230908
 # if included, .obj has mm scale
 CFG_OBJECT_SCALE = ["05_wine_glass", "11_small_marker", "13_flat_screwdriver"]
-CFG_OBJECT_SCALE_SPECIFIC = {"16_golf_ball":0.45}
+CFG_OBJECT_SCALE_SPECIFIC = {"16_golf_ball":0.43}
 
 CFG_OBJECT_NO4th_POINT = ["24_Scrub_cleanser_bottle", "29_foldable_phone"]
 CFG_OBJECT_4th_POINT = ["09_spoon"]

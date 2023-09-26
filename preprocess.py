@@ -57,7 +57,7 @@ flag_check_vert_marker_pair = False
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230910', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230910_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_float('mp_value', 0.88, 'target cam db Name')
+flags.DEFINE_float('mp_value', 0.85, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
@@ -415,9 +415,11 @@ class loadDataset():
 
             marker_data = np.copy(self.obj_data_all[str(idx)])
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
-            self.marker_cam_sampled[str(save_idx)] = marker_data_cam
 
-            obj_pose_data, scale = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data)
+            obj_pose_data, scale, marker_data_valid = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data)
+
+            self.marker_cam_sampled[str(save_idx)] = marker_data_valid
+
             self.obj_pose_sampled[str(save_idx)] = obj_pose_data
             if self.obj_scale == None:
                 self.obj_scale = scale
@@ -471,6 +473,7 @@ class loadDataset():
 
         marker_pose = np.asarray(valid_marker)
 
+        output_marker_pose = np.copy(marker_pose)
         # generate initial obj pose (4, 4)
         obj_init_pose = generate_pose([0,0,0],[0,0,0])
 
@@ -565,7 +568,7 @@ class loadDataset():
 
         assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
-        return pose_calc, scale
+        return pose_calc, scale, output_marker_pose
 
     def saveObjdata(self):
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker.pkl'), 'wb') as f:
