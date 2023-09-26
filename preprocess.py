@@ -453,12 +453,27 @@ class loadDataset():
         return world_coord, reprojected
 
     def fit_markerToObj(self, marker_pose, obj_class, obj_mesh):
+        # except if marker pose is nan
+        target_marker_num = marker_pose.shape[0]
+        valid_marker = []
+        valid_idx = []
+        for idx, i in enumerate(range(target_marker_num)):
+            value = marker_pose[i, :]
+            if not any(np.isnan(value)):
+                valid_marker.append(value)
+                valid_idx.append(idx)
+
+        marker_pose = np.asarray(valid_marker)
+
         # generate initial obj pose (4, 4)
         obj_init_pose = generate_pose([0,0,0],[0,0,0])
 
         vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
         obj_verts = obj_mesh['verts']
-        verts_init = np.array(obj_verts[vertIDpermarker, :]) * 10.0
+        verts_init = np.squeeze(np.array(obj_verts))
+        verts_init = verts_init[vertIDpermarker, :] * 10.0
+
+        verts_init = verts_init[valid_idx, :]
 
         # if obj_class in CFG_OBJECT_SCALE.keys():
         #     verts_init /= 10.0
