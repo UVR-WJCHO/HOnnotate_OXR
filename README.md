@@ -201,14 +201,15 @@ $ passwd root # root password 설정
 ## Setup
 
 - Clone the repository and checkout the develop branch
-- Download all resources in the link [Dropbox](https://www.dropbox.com/scl/fo/un34gknh23o8sr559j2d3/h?dl=0&rlkey=6ds7v183pp4htjy8hp1kq6wlh)
+- Download all resources in the link [Dropbox](https://www.dropbox.com/scl/fo/xnjkt8sy08f9gtawhnalq/h?rlkey=dbrjuciiuvtiqdcbcccoue7ss&dl=0)
 - Set the dataset structure as below. 
 - Make sure both the image folder and the hand result folder have the same sequence name.
 
-- 처리 [데이터 다운로드 NAS(벡터바이오)](http://quickconnect.to/vectorbio)에서 데이터 다운로드
-- [Segmentation model 드롭박스](https://www.dropbox.com/scl/fo/tkdh2bc5uakppo4znqbrr/h?rlkey=5dfewdej7p16mbc0jowxj5lfr&dl=0)에서 checkpoints에서 다운로드해서 modules/deepLabV3plus/checkpoints/ 에 위치
-- [Object mesh model 드롭박스](https://www.dropbox.com/scl/fi/t06828s9zgwbfuijtsufn/obj_scanned_models.zip?rlkey=spcx7q7lhitgc1x21wnhopyri&dl=0)에서 obj_scanned_models 다운로드해서 dataset/obj_scanned_models/ 에 위치
-- [Calibration 드롭박스](https://www.dropbox.com/scl/fi/oyecpc3vdd80v89empyzp/230905_cam-230908_cam.zip?rlkey=i46tivdj1p21rpfm11qllgaud&dl=0)에서 calibration 결과 다운 후 압축 해제해서 datset/ 에 위치
+- [데이터 다운로드 NAS(벡터바이오)](http://quickconnect.to/vectorbio)에서 데이터 다운로드
+- [NIA 데이터 처리 현황](https://docs.google.com/spreadsheets/d/19PbH92lJMY10QOgtV1uE8WUeRWxKzweciEngznSOQko/edit?usp=sharing) 작업 순서 탭 참조
+- Segmentation model 다운로드
+- Object mesh model 다운로드
+- Calibration 결과 다운로드
 - 이하 폴더 구조 확인
 
 Before Pre-process
