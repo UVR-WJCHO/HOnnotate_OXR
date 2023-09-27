@@ -201,10 +201,6 @@ $ passwd root # root password 설정
 ## Setup
 
 - Clone the repository and checkout the develop branch
-- Download all resources in the link [Dropbox](https://www.dropbox.com/scl/fo/xnjkt8sy08f9gtawhnalq/h?rlkey=dbrjuciiuvtiqdcbcccoue7ss&dl=0)
-- Set the dataset structure as below. 
-- Make sure both the image folder and the hand result folder have the same sequence name.
-
 - [데이터 다운로드 NAS(벡터바이오)](http://quickconnect.to/vectorbio)에서 데이터 다운로드
 - [NIA 데이터 처리 현황](https://docs.google.com/spreadsheets/d/19PbH92lJMY10QOgtV1uE8WUeRWxKzweciEngznSOQko/edit?usp=sharing) 작업 순서 탭 참조
 - Segmentation model 다운로드
