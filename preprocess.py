@@ -410,14 +410,14 @@ class loadDataset():
         info['object']['pose_data'] = csv_dict['object.pose_data']
         self.info = info
 
-    def updateObjdata(self, idx, save_idx):
+    def updateObjdata(self, idx, save_idx, grasp_id):
         if str(idx) in self.obj_data_all:
             self.marker_sampled[str(save_idx)] = self.obj_data_all[str(idx)]
 
             marker_data = np.copy(self.obj_data_all[str(idx)])
             marker_data_cam, self.marker_proj = self.transform_marker_pose(marker_data)
 
-            obj_pose_data, scale, marker_data_valid, valid_idx = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data)
+            obj_pose_data, scale, marker_data_valid, valid_idx = self.fit_markerToObj(marker_data_cam, self.obj_class, self.obj_mesh_data, grasp_id)
 
             self.marker_cam_sampled[str(save_idx)] = marker_data_valid
             self.marker_valid_idx_sampled[str(save_idx)] = valid_idx
@@ -456,10 +456,17 @@ class loadDataset():
 
         return world_coord, reprojected
 
-    def fit_markerToObj(self, marker_pose, obj_class, obj_mesh):
-        # except if marker pose is nan
-
+    def fit_markerToObj(self, marker_pose, obj_class, obj_mesh, grasp_id):
+        ## except if marker pose is nan
         vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
+
+        ## exceptional cases
+        if int(obj_class.split('_')[0]) == 29:
+            if grasp_id == 12:
+                vertIDpermarker = vertIDpermarker[0]
+            else:
+                vertIDpermarker = vertIDpermarker[1]
+
         pair_len = len(vertIDpermarker)
 
         target_marker_num = marker_pose.shape[0]
@@ -963,7 +970,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 else:
                     db.postProcessNone(save_idx)
             # object data only on master cam
-            dbs[0].updateObjdata(idx, save_idx)
+            dbs[0].updateObjdata(idx, save_idx, int(dbs[0].grasp_id))
 
             progress.update()
             global_tqdm.update()

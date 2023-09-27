@@ -340,18 +340,24 @@ class ObjectLoader:
         obj_dir_name = "_".join(data_type.split('_')[:-2]) # 230612_S01_obj_01
         self.obj_pose_dir = os.path.join(self.obj_dir, obj_dir_name)
 
-        grasp_idx = data_type.split('_')[-1]
-        obj_idx = data_type.split('_')[3]
-        obj_name = str(OBJType(int(obj_idx)).name)
-        self.obj_class = obj_idx + '_' + obj_name
-        self.obj_template_dir = os.path.join(base_path, 'obj_scanned_models', self.obj_class)
+        grasp_idx = int(data_type.split('_')[-1])
+        obj_idx = int(data_type.split('_')[3])
+        obj_name = str(OBJType(obj_idx).name)
+        self.obj_class = str(obj_idx) + '_' + obj_name
 
-        # load object mesh data (new scanned object need to be load through pytorch3d 'load_obj'
-        self.obj_mesh_name = self.obj_class + '.obj'
-        obj_mesh_path = os.path.join(self.obj_template_dir, self.obj_mesh_name)
+        target_mesh_class = self.obj_class + '.obj'
 
-        obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % int(grasp_idx)) + '_' + str("%02d" % int(data_trial[-1]))
+        ### set exceptional cases (foldable phone : grasp 12 / grasp 16,19)
+        if obj_idx == 29:
+            if grasp_idx == 12:
+                target_mesh_class = '29_foldable_phone.obj'
+            else:
+                target_mesh_class = '29_foldable_phone_2.obj'
 
+        obj_mesh_path = os.path.join(base_path, 'obj_scanned_models', target_mesh_class)
+
+        # load scale factor before load mesh data
+        obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % grasp_idx) + '_' + str("%02d" % int(data_trial[-1]))
         obj_scale_data_namme = obj_data_name + '_obj_scale.pkl'
         obj_scale_data_path = os.path.join(self.obj_pose_dir, obj_scale_data_namme)
         with open(obj_scale_data_path, 'rb') as f:
