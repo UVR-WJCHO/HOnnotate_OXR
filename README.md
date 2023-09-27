@@ -10,9 +10,13 @@ $ cd HOnnotate_OXR
 ## Data Download
 - [벡터바이오 NAS](http://quickconnect.to/vectorbio)에서 직접 다운로드
     - Headless의 경우 wget으로 다운로드가 안되어서 vscode를 이용해서 드래그 앤 드롭으로 옮기거나 scp 명령어를 사용
-    - scp -v ${로컬 pc 데이터 경로} ${서버 User Name}@${서버 IP}:${서버 dataset 경로}
+  ```bash	
+   $ scp -v ${로컬 pc 데이터 경로} ${서버 User Name}@${서버 IP}:${서버 dataset 경로}
+  ```
 - 데이터PC에서 다운로드(데이터 PC IP, password 등 엑셀시트에서 확인)
-    - scp -v datapc@${데이터 PC IP}:/mnt/upload/euclidsoft_230926/${YYMMDD}/${원하는 데이터 시퀀스}.zip ${저장 원하는 경로}
+  ```bahs
+    $ scp -v datapc@${데이터 PC IP}:/mnt/upload/euclidsoft_230926/${YYMMDD}/${원하는 데이터 시퀀스}.zip ${저장 원하는 경로}
+  ```
 
 scp 옵션
 c : 데이터를 압축하여 전송한다.
