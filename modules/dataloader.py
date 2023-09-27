@@ -345,7 +345,7 @@ class ObjectLoader:
         obj_dir_name = "_".join(data_type.split('_')[:-2]) # 230612_S01_obj_01
         self.obj_pose_dir = os.path.join(self.obj_dir, obj_dir_name)
 
-        grasp_idx = int(data_type.split('_')[-1])
+        self.grasp_idx = int(data_type.split('_')[-1])
         obj_idx = int(data_type.split('_')[3])
         obj_name = str(OBJType(obj_idx).name)
         self.obj_class = str(obj_idx) + '_' + obj_name
@@ -354,7 +354,7 @@ class ObjectLoader:
         obj_mesh_path = os.path.join(base_path, 'obj_scanned_models', target_mesh_class)
         ### set exceptional cases (foldable phone : grasp 12 / grasp 16,19)
         if obj_idx == 29:
-            if grasp_idx == 12:
+            if self.grasp_idx == 12:
                 target_mesh_class = '29_foldable_phone'
             else:
                 target_mesh_class = '29_foldable_phone_2'
@@ -363,7 +363,7 @@ class ObjectLoader:
         obj_mesh_path = os.path.join(obj_mesh_path, self.obj_mesh_name)
 
         # load scale factor before load mesh data
-        obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % grasp_idx) + '_' + str("%02d" % int(data_trial[-1]))
+        obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % self.grasp_idx) + '_' + str("%02d" % int(data_trial[-1]))
         obj_scale_data_namme = obj_data_name + '_obj_scale.pkl'
         obj_scale_data_path = os.path.join(self.obj_pose_dir, obj_scale_data_namme)
         with open(obj_scale_data_path, 'rb') as f:

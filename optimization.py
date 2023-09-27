@@ -462,7 +462,7 @@ def main(argv):
 
                     marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
                     marker_valid_idx = obj_dataloader.marker_valid_idx[str(frame)]
-                    loss_func.set_object_marker_pose(marker_cam_pose, marker_valid_idx, obj_dataloader.obj_class, CFG_DATE)
+                    loss_func.set_object_marker_pose(marker_cam_pose, marker_valid_idx, obj_dataloader.obj_class, CFG_DATE, obj_dataloader.grasp_idx)
 
                 ### initialize optimizer, scheduler
                 lr_init = CFG_LR_INIT * 0.2
