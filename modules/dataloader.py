@@ -107,20 +107,25 @@ class DataLoader:
 
         self.db_len = len(glob(os.path.join(self.rgb_raw_path, self.cam, '*.jpg')))
 
-        # set preprocessed sample as pickle
+        ### set preprocessed sample as pickle (only for debugging)
+        # sample_dict = {}
+        # sample_pkl_path = self.base_path + '/sample_'+ cam + '.pickle'
+        # if os.path.exists(sample_pkl_path):
+        #     print("found pre-loaded pickle of %s" % cam)
+        #     with open(sample_pkl_path, 'rb') as handle:
+        #         sample_dict = pickle.load(handle)
+        # else:
+        #     for frame in tqdm(range(self.db_len)):
+        #         sample = self.load_sample(frame)
+        #         sample_dict[frame] = sample
+        #     print("saving pickle of %s" % cam)
+        #     with open(sample_pkl_path, 'wb') as handle:
+        #         pickle.dump(sample_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         sample_dict = {}
-        sample_pkl_path = self.base_path + '/sample_'+ cam + '.pickle'
-        if os.path.exists(sample_pkl_path):
-            print("found pre-loaded pickle of %s" % cam)
-            with open(sample_pkl_path, 'rb') as handle:
-                sample_dict = pickle.load(handle)
-        else:
-            for frame in tqdm(range(self.db_len)):
-                sample = self.load_sample(frame)
-                sample_dict[frame] = sample
-            print("saving pickle of %s" % cam)
-            with open(sample_pkl_path, 'wb') as handle:
-                pickle.dump(sample_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        for frame in tqdm(range(self.db_len)):
+            sample = self.load_sample(frame)
+            sample_dict[frame] = sample
 
         self.sample_dict, self.sample_kpt = self.sample_to_torch(sample_dict)
 
