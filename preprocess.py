@@ -1062,8 +1062,8 @@ def main(argv):
     print("start segmentation - deeplab_v3")
     if flag_deep_segmentation:
         seq_list = natsorted(os.listdir(rootDir))
-        # if FLAGS.start != None and FLAGS.end != None:
-        #     seq_list = seq_list[FLAGS.start:FLAGS.end]
+        if FLAGS.start != None and FLAGS.end != None:
+            seq_list = seq_list[FLAGS.start:FLAGS.end]
 
         for seqIdx, seqName in enumerate(seq_list):
             if FLAGS.seq is not None and seqName != FLAGS.seq:
