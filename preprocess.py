@@ -574,8 +574,7 @@ class loadDataset():
                 #cv2.imwrite(f"/scratch/nia/HOnnotate_OXR/debug/{k}.png", image)
                 cv2.waitKey(0)
 
-
-        assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
+            assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
         return pose_calc, scale, output_marker_pose, valid_idx
 
