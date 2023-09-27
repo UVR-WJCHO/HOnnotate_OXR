@@ -107,20 +107,25 @@ class DataLoader:
 
         self.db_len = len(glob(os.path.join(self.rgb_raw_path, self.cam, '*.jpg')))
 
-        # set preprocessed sample as pickle
+        ### set preprocessed sample as pickle (only for debugging)
+        # sample_dict = {}
+        # sample_pkl_path = self.base_path + '/sample_'+ cam + '.pickle'
+        # if os.path.exists(sample_pkl_path):
+        #     print("found pre-loaded pickle of %s" % cam)
+        #     with open(sample_pkl_path, 'rb') as handle:
+        #         sample_dict = pickle.load(handle)
+        # else:
+        #     for frame in tqdm(range(self.db_len)):
+        #         sample = self.load_sample(frame)
+        #         sample_dict[frame] = sample
+        #     print("saving pickle of %s" % cam)
+        #     with open(sample_pkl_path, 'wb') as handle:
+        #         pickle.dump(sample_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
         sample_dict = {}
-        sample_pkl_path = self.base_path + '/sample_'+ cam + '.pickle'
-        if os.path.exists(sample_pkl_path):
-            print("found pre-loaded pickle of %s" % cam)
-            with open(sample_pkl_path, 'rb') as handle:
-                sample_dict = pickle.load(handle)
-        else:
-            for frame in tqdm(range(self.db_len)):
-                sample = self.load_sample(frame)
-                sample_dict[frame] = sample
-            print("saving pickle of %s" % cam)
-            with open(sample_pkl_path, 'wb') as handle:
-                pickle.dump(sample_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        for frame in tqdm(range(self.db_len)):
+            sample = self.load_sample(frame)
+            sample_dict[frame] = sample
 
         self.sample_dict, self.sample_kpt = self.sample_to_torch(sample_dict)
 
@@ -345,16 +350,17 @@ class ObjectLoader:
         obj_name = str(OBJType(obj_idx).name)
         self.obj_class = str(obj_idx) + '_' + obj_name
 
-        target_mesh_class = self.obj_class + '.obj'
-
+        target_mesh_class = self.obj_class
+        obj_mesh_path = os.path.join(base_path, 'obj_scanned_models', target_mesh_class)
         ### set exceptional cases (foldable phone : grasp 12 / grasp 16,19)
         if obj_idx == 29:
             if grasp_idx == 12:
-                target_mesh_class = '29_foldable_phone.obj'
+                target_mesh_class = '29_foldable_phone'
             else:
-                target_mesh_class = '29_foldable_phone_2.obj'
+                target_mesh_class = '29_foldable_phone_2'
 
-        obj_mesh_path = os.path.join(base_path, 'obj_scanned_models', target_mesh_class)
+        self.obj_mesh_name = target_mesh_class + '.obj'
+        obj_mesh_path = os.path.join(obj_mesh_path, self.obj_mesh_name)
 
         # load scale factor before load mesh data
         obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % grasp_idx) + '_' + str("%02d" % int(data_trial[-1]))
