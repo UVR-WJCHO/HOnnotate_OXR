@@ -254,8 +254,8 @@ class loadDataset():
 
         # load 3mm marker pose
         obj_origin_name = '3mm.txt'
-        if FLAGS.db+'_cam' != FLAGS.cam_db:
-            obj_origin_name = '3mm_2.txt'
+        # if FLAGS.db+'_cam' != FLAGS.cam_db:
+        #     obj_origin_name = '3mm_2.txt'
         if int(self.trial_num) == 0:
             print("... loading obj pose data for %s from %s "% (self.seq, obj_origin_name))
 
