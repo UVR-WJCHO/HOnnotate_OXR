@@ -29,7 +29,7 @@ v : 전송과정을 상세히 출력하여 전송한다.
   
 - 데이터PC에 마운트된 NAS로 업로드 (데이터 PC IP, password 등 엑셀시트에서 확인)
   ```bash
-  scp -v ${저장 되어있는 경로}/${업로드 해야하는 데이터 시퀀스}.zip datapc@${데이터 PC IP}:/mnt/upload/KAIST_output/${YYMMBB}/
+  $ scp -v ${저장 되어있는 경로}/${업로드 해야하는 데이터 시퀀스}.zip datapc@${데이터 PC IP}:/mnt/upload/KAIST_output/${YYMMBB}/
   ```
       
 ex) \${YYMMDD}_S00\_obj00\_grasp\_00.zip, ${YYMMDD}_S00\_obj00\_grasp\_01.zip, ...
