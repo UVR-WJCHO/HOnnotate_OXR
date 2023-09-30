@@ -28,7 +28,9 @@ v : 전송과정을 상세히 출력하여 전송한다.
 - 생성된 \${YYMMDD}_result 폴더 내의 **각 sequence 별로** 압축해서 ['유클리드소프트' NAS](http://data.labelon.kr/)에 업로드 (벡터바이오 NAS가 아님!)
   
 - 데이터PC에 마운트된 NAS로 업로드 (데이터 PC IP, password 등 엑셀시트에서 확인)
-    - scp -v ${저장 되어있는 경로}/${업로드 해야하는 데이터 시퀀스}.zip datapc@${데이터 PC IP}:/mnt/upload/KAIST_output/${YYMMBB}/
+  ```bash
+  scp -v ${저장 되어있는 경로}/${업로드 해야하는 데이터 시퀀스}.zip datapc@${데이터 PC IP}:/mnt/upload/KAIST_output/${YYMMBB}/
+  ```
       
 ex) \${YYMMDD}_S00\_obj00\_grasp\_00.zip, ${YYMMDD}_S00\_obj00\_grasp\_01.zip, ...
 
