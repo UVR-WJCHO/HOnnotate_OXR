@@ -400,6 +400,10 @@ def main(argv):
             ## Initialize object dataloader & model
             if CFG_WITH_OBJ:
                 obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter)
+                if obj_dataloader.quit:
+                    print("unvalid obj pose, skip trial")
+                    continue
+
                 obj_template_mesh = obj_dataloader.obj_mesh_data
                 model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh).to(CFG_DEVICE)
                 loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
