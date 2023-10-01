@@ -303,7 +303,7 @@ class loadDataset():
         img_len = len(os.listdir(os.path.join(self.rgbDir, 'mas')))
 
         self.quit = False
-        if obj_pose_len != img_len:
+        if obj_pose_len != img_len and abs(obj_pose_len-img_len) != 1:
             self.quit = True
 
         self.obj_data_all = obj_data
