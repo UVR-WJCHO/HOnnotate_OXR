@@ -346,14 +346,14 @@ class ObjectLoader:
         self.obj_pose_dir = os.path.join(self.obj_dir, obj_dir_name)
 
         self.grasp_idx = int(data_type.split('_')[-1])
-        obj_idx = int(data_type.split('_')[3])
-        obj_name = str(OBJType(obj_idx).name)
+        obj_idx = data_type.split('_')[3]
+        obj_name = str(OBJType(int(obj_idx)).name)
         self.obj_class = str(obj_idx) + '_' + obj_name
 
         target_mesh_class = self.obj_class
         obj_mesh_path = os.path.join(base_path, 'obj_scanned_models', target_mesh_class)
         ### set exceptional cases (foldable phone : grasp 12 / grasp 16,19)
-        if obj_idx == 29:
+        if int(obj_idx) == 29:
             if self.grasp_idx == 12:
                 target_mesh_class = '29_foldable_phone'
             else:
