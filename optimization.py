@@ -355,6 +355,7 @@ def main(argv):
     if FLAGS.start != None and FLAGS.end != None:
         seq_list = seq_list[FLAGS.start:FLAGS.end]
 
+    obj_unvalid_trials = []
     for target_seq in seq_list:
         target_dir = os.path.join(CFG_DATA_DIR, FLAGS.db, target_seq)
         target_dir_result = os.path.join(CFG_DATA_DIR, FLAGS.db + '_result', target_seq)
@@ -402,6 +403,7 @@ def main(argv):
                 obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter)
                 if obj_dataloader.quit:
                     print("unvalid obj pose, skip trial")
+                    obj_unvalid_trials.append(target_seq + '_' + trialName)
                     continue
 
                 obj_template_mesh = obj_dataloader.obj_mesh_data
@@ -535,6 +537,7 @@ def main(argv):
     print("total processed time(min) : ", round((time.time() - t0) / 60., 2))
     print("total processed frames : ", save_num)
 
+    print("(fill in google sheets) unvalid trials with wrong object pose data : ", obj_unvalid_trials)
 
 if __name__ == "__main__":
     app.run(main)
