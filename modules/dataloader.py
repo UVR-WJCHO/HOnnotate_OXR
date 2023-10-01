@@ -398,19 +398,12 @@ class ObjectLoader:
         with open(marker_cam_data_path, 'rb') as f:
             marker_cam_pose = pickle.load(f)
 
-        valid_obj_count = 0
         self.marker_cam_pose = {}
         for key in marker_cam_pose:
             if marker_cam_pose[key] is None:
                 self.marker_cam_pose[key] = None
             else:
                 self.marker_cam_pose[key] = torch.FloatTensor(marker_cam_pose[key]).to(self.device)
-                valid_obj_count += 1
-
-        self.quit = False
-        if len_total != valid_obj_count:
-            self.quit = True
-
 
 
     def read_obj(self, file_path):

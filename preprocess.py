@@ -55,8 +55,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230910', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230910_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230912', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230912_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.85, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
@@ -297,6 +297,14 @@ class loadDataset():
                     marker_pose[i, 2] = float(line[i*3 + 3]) - origin_z
                 obj_data[str(frame)] = marker_pose
                 frame += 1
+
+        ### check obj_pose is valid ###
+        obj_pose_len = len(obj_data) - 1
+        img_len = len(os.listdir(os.path.join(self.rgbDir, 'mas')))
+
+        self.quit = False
+        if obj_pose_len != img_len:
+            self.quit = True
 
         self.obj_data_all = obj_data
         self.marker_sampled['marker_num'] = self.obj_data_all['marker_num']
@@ -1026,6 +1034,8 @@ def main(argv):
     total_count = 0
     t1 = time.time()
 
+    obj_unvalid_trials = []
+
     seq_list = natsorted(os.listdir(rootDir))
     if FLAGS.start != None and FLAGS.end != None:
         seq_list = seq_list[FLAGS.start:FLAGS.end]
@@ -1044,10 +1054,17 @@ def main(argv):
                 # total_count += len(db)
                 # tasks.append((preprocess_single_cam, (db,)))
 
-            total_count += len(dbs[0])
-            tasks.append((preprocess_multi_cam, (dbs,)))
+            if dbs[0].quit:
+                print("wrong object pose data, continue to next trial")
+                obj_unvalid_trials.append(seqName + '_' + trialName)
+            else:
+                total_count += len(dbs[0])
+                tasks.append((preprocess_multi_cam, (dbs,)))
 
     # tasks = tasks[:12]
+
+    print("(fill in google sheets) unvalid trials with wrong object pose data : ", obj_unvalid_trials)
+
 
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:
@@ -1073,6 +1090,9 @@ def main(argv):
             for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
 
                 db = loadDataset(FLAGS.db, seqName, trialName)
+                if db.quit:
+                    continue
+
                 opts = deeplab_opts(db.obj_id)
 
                 dbDir = os.path.join(baseDir, FLAGS.db, seqName, trialName)
@@ -1129,6 +1149,7 @@ def main(argv):
 
     print("[log] total processed time : ", round((time.time() - t0) / 60., 2))
 
+    print("(fill in google sheets) unvalid trials with wrong object pose data : ", obj_unvalid_trials)
 
 if __name__ == '__main__':
 
