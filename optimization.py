@@ -32,8 +32,8 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230910', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230910_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '230911', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230911_cam_spare', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
@@ -457,6 +457,9 @@ def main(argv):
 
                 ## set object init pose and marker pose as GT for projected vertex.
                 if CFG_WITH_OBJ:
+                    if frame > len(obj_dataloader):
+                        print('no obj pose')
+                        continue
                     obj_pose = obj_dataloader[frame][:-1, :]
                     # obj_pose[:3, -1] *= 0.1
                     model_obj.update_pose(pose=obj_pose)

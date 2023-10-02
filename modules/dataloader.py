@@ -441,7 +441,7 @@ class ObjectLoader:
         return sample
 
     def __len__(self):
-        return self.obj_init_pose.shape[0]
+        return len(self.obj_init_pose)
 
 
 
