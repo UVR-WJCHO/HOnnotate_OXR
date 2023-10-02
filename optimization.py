@@ -460,7 +460,11 @@ def main(argv):
                     if frame > len(obj_dataloader):
                         print('no obj pose')
                         continue
-                    obj_pose = obj_dataloader[frame][:-1, :]
+                    obj_pose = obj_dataloader[frame]
+                    if obj_pose == None:
+                        print('no obj pose')
+                        continue
+                    obj_pose = obj_pose[:-1, :]
                     # obj_pose[:3, -1] *= 0.1
                     model_obj.update_pose(pose=obj_pose)
 
