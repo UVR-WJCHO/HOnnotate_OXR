@@ -461,7 +461,7 @@ def main(argv):
                         print('no obj pose')
                         continue
                     obj_pose = obj_dataloader[frame]
-                    if obj_pose == None:
+                    if obj_pose is None:
                         print('no obj pose')
                         continue
                     obj_pose = obj_pose[:-1, :]
