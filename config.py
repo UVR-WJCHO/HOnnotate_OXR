@@ -45,7 +45,7 @@ CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3
 #                          'sub2':[1.0, 1.0,1.0,1.0,1.0],
 #                          'sub3':[0.5,1.5,1.5,1.0,1.0]}
 ## apply on dataloader pkl creation
-CFG_NON_VISIBLE_WEIGHT = 0.2
+CFG_NON_VISIBLE_WEIGHT = 0.3
 
 ######## 230829-230908
 # if included, .obj has mm scale
