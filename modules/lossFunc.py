@@ -230,7 +230,7 @@ class MultiViewLossFunc(nn.Module):
                                   * self.gt_visibility[valid_idx]
 
                 loss_kpts2d = torch.sum(loss_kpts2d.reshape(self.bs, -1), -1)
-                loss['kpts2d'] = loss_kpts2d * 2e0
+                loss['kpts2d'] = loss_kpts2d * 5e0
 
             if 'depth_rel' in self.loss_dict:
                 joint_depth_rel = joints_set[camIdx][:, :, -1] - joints_set[camIdx][:, 0, -1]
