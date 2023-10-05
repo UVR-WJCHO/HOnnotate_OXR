@@ -55,8 +55,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230916', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230916_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230915', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230915_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.90, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
