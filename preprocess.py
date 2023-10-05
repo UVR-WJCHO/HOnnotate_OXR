@@ -479,10 +479,12 @@ class loadDataset():
 
         ## exceptional cases
         if int(obj_class.split('_')[0]) == 29:
-            if grasp_id == 12:
-                vertIDpermarker = vertIDpermarker[0]
-            else:
-                vertIDpermarker = vertIDpermarker[1]
+            vertIDpermarker = vertIDpermarker[0]
+            ## no open phone after 230912
+            # if grasp_id == 12:
+            #     vertIDpermarker = vertIDpermarker[0]
+            # else:
+            #     vertIDpermarker = vertIDpermarker[1]
 
         pair_len = len(vertIDpermarker)
 
