@@ -8,7 +8,7 @@ CFG_VALID_CAM = ['mas', 'sub1', 'sub2', 'sub3']
 CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
 
 CFG_LR_INIT = 0.05
-CFG_LR_INIT_OBJ = 0.008
+CFG_LR_INIT_OBJ = 0.05
 
 
 CFG_NUM_ITER = 50

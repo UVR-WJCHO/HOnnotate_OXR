@@ -126,7 +126,8 @@ class DataLoader:
         for frame in tqdm(range(self.db_len)):
             sample = self.load_sample(frame)
             sample_dict[frame] = sample
-
+            # if frame > 5:
+            #     break
         self.sample_dict, self.sample_kpt = self.sample_to_torch(sample_dict)
 
     def sample_to_torch(self, sample_dict):

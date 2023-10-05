@@ -257,7 +257,7 @@ class MultiViewLossFunc(nn.Module):
                 if gt_obj_verts_marker is not None:
                     loss_pose_obj = (pred_obj_verts_marker - gt_obj_verts_marker) ** 2
                     loss_pose_obj = torch.sum(loss_pose_obj.reshape(self.bs, -1), -1)
-                    loss['pose_obj'] = loss_pose_obj * 1e0
+                    loss['pose_obj'] = loss_pose_obj * 1e1
                 else:
                     loss['pose_obj'] = self.default_zero
 
@@ -807,7 +807,7 @@ class MultiViewLossFunc(nn.Module):
                     # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
                     # cv2.imshow(blend_depth_gap_name, depth_gap)
                     # cv2.imshow(blend_seg_gap_name, seg_gap)
-                    cv2.waitKey(0)
+                    cv2.waitKey(1)
                 else:
                     if flag_bb_exist:
                         cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
