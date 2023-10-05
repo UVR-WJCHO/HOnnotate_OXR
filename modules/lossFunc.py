@@ -257,7 +257,7 @@ class MultiViewLossFunc(nn.Module):
                 if gt_obj_verts_marker is not None:
                     loss_pose_obj = (pred_obj_verts_marker - gt_obj_verts_marker) ** 2
                     loss_pose_obj = torch.sum(loss_pose_obj.reshape(self.bs, -1), -1)
-                    loss['pose_obj'] = loss_pose_obj * 1e3
+                    loss['pose_obj'] = loss_pose_obj * 1e2
                 else:
                     loss['pose_obj'] = self.default_zero
 
