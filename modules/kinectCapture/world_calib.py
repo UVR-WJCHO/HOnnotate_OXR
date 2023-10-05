@@ -63,7 +63,9 @@ class WorldCalib():
             image = cv2.imread(self.image_path)
 
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            retval, corners = cv2.findChessboardCorners(gray, self.nSize)
+            # retval, corners = cv2.findChessboardCorners(gray, self.nSize)
+            retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_NORMALIZE_IMAGE)
+            # retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_LARGER + cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_NORMALIZE_IMAGE)
 
             if retval:
                 criteria = (cv2.TERM_CRITERIA_EPS +
