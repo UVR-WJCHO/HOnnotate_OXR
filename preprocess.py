@@ -55,8 +55,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230912', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230912_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230916', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230916_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.90, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
@@ -489,13 +489,13 @@ class loadDataset():
         target_marker_num = marker_pose.shape[0]
         valid_marker = []
         valid_idx = []
-        for idx, i in enumerate(range(target_marker_num)):
-            if idx == pair_len:
+        for i in range(target_marker_num):
+            if i == pair_len:
                 break
             value = marker_pose[i, :]
             if not any(np.isnan(value)):
                 valid_marker.append(value)
-                valid_idx.append(idx)
+                valid_idx.append(i)
 
         marker_pose = np.asarray(valid_marker)
 
