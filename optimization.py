@@ -234,6 +234,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     if CFG_WITH_OBJ:
         optimizer_obj = initialize_optimizer_obj(model_obj, lr_init_obj)
         flag_update_obj = True
+        lr_scheduler_obj = torch.optim.lr_scheduler.StepLR(optimizer_obj, step_size=5, gamma=0.95)
 
     loss_weight = CFG_LOSS_WEIGHT
     loss_weight['kpts2d'] = 0.8
@@ -279,6 +280,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         optimizer.step()
         if CFG_WITH_OBJ and flag_update_obj:
             optimizer_obj.step()
+            lr_scheduler_obj.step()
         # lr_scheduler.step()
 
 
@@ -303,7 +305,7 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                 early_stopping_patience_obj = 0
 
             if early_stopping_patience_obj > CFG_PATIENCE_obj:
-                flag_update_obj = False
+                # flag_update_obj = False
                 ## criteria for contact loss
                 if 'contact' in CFG_LOSS_DICT:
                     use_contact_loss = True
