@@ -50,7 +50,7 @@ CFG_NON_VISIBLE_WEIGHT = 0.3
 ######## 230829-230908
 # if included, .obj has mm scale
 CFG_OBJECT_SCALE = ["05_wine_glass", "11_small_marker", "13_flat_screwdriver"]
-CFG_OBJECT_SCALE_SPECIFIC = {"16_golf_ball":0.43}
+CFG_OBJECT_SCALE_SPECIFIC = {"16_golf_ball":0.43, "05_wine_glass":0.95}
 
 CFG_OBJECT_NO4th_POINT = ["24_Scrub_cleanser_bottle", "29_foldable_phone"]
 CFG_OBJECT_4th_POINT = ["09_spoon"]
@@ -133,7 +133,7 @@ CFG_vertspermarker = {
     "02_potted_meat_can" : [1157,1127,410,1099],
     "03_banana" : [93,190,1018,74],
     "04_apple" : [681,820,925,830],
-    "05_wine_glass" : [1184,1354,354,1829,1245],
+    "05_wine_glass" : [1279,2012,2030,1829,1399],#[1184,1354,354,1829,1245],
     "06_bowl" : [954,585,594,1116],
     "07_mug" : [862,1355,1325,918],
     "08_plate" : [1000,1080,1040,1282],
@@ -150,10 +150,10 @@ CFG_vertspermarker = {
     "19_disk_lid" : [1863,3367,3468,2665,1785],
     "20_smartphone" : [1431,844,1054,2974],
     "21_mouse" : [521,1037,1532,248],
-    "22_tape" : [413,1449,529,1576],
+    "22_tape" : [1473,1175,1741,1379],
     "23_master_chef_can" : [4586,4580,4646],#,x,x],
     "24_Scrub_cleanser_bottle" : [5834,2957,2973,5844],#,2873],
-    "25_large_marker" : [1152,1314,1342],
+    "25_large_marker" : [1152,1311,3361],
     "26_stapler" : [1937,847,601,501],
     "27_note" : [334,3,753,1968,1984],
     "28_scissors" : [3931,4101,3992,305],
