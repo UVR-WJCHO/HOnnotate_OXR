@@ -152,7 +152,6 @@ class WorldCalib():
 
                 cv2.imwrite(os.path.join(self.result_dir, f"{cam}_world.png"), image)
 
-            P = projection @ P
             np.save(os.path.join(self.result_dir, "global_world.npy"), P[:3])
 
 
