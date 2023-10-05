@@ -316,11 +316,11 @@ class loadDataset():
         self.obj_template_dir = os.path.join(baseDir, 'obj_scanned_models', self.obj_class)
 
         target_mesh_class = self.obj_class
-        if int(self.obj_id) == 29:
-            if int(self.grasp_id) == 12:
-                target_mesh_class = '29_foldable_phone'
-            else:
-                target_mesh_class = '29_foldable_phone_2'
+        # if int(self.obj_id) == 29:
+        #     if int(self.grasp_id) == 12:
+        #         target_mesh_class = '29_foldable_phone'
+        #     else:
+        #         target_mesh_class = '29_foldable_phone_2'
 
         # load object mesh data (new scanned object need to be load through pytorch3d 'load_obj'
         obj_mesh_path = os.path.join(self.obj_template_dir, target_mesh_class) + '.obj'
