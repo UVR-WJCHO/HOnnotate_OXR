@@ -43,7 +43,7 @@ ex) \${YYMMDD}_S00\_obj00\_grasp\_00.zip, ${YYMMDD}_S00\_obj00\_grasp\_01.zip, .
   ```bash
   $ for num in {21..26}
   $ do
-  $     sshpass -p ${데이터pc password} scp -rv ${저장 되어있는 경로}/230912_S06_obj_${num}_\* datapc@${데이터 PC IP}:/mnt/nas_dir/KAIST_output/${YYMMBB}/
+  $     sshpass -p ${데이터pc password} scp -rv ${저장 되어있는 경로}/230912_S06_obj_${num}_* datapc@${데이터 PC IP}:/mnt/nas_dir/KAIST_output/${YYMMBB}/
   $ done
   ```
       
