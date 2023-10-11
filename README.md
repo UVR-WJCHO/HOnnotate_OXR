@@ -16,7 +16,7 @@ $ cd HOnnotate_OXR
   ```
 - 데이터PC에서 다운로드(데이터 PC IP, password 등 엑셀시트에서 확인)
   ```bahs
-    $ scp -v datapc@${데이터 PC IP}:/mnt/nas_dir/euclidsoft_230926/${YYMMDD}/${원하는 데이터 시퀀스}.zip ${저장 원하는 경로}
+    $ scp -v datapc@${데이터 PC IP}:/mnt/nas_dir/Vector_Kaist/${YYMMDD}/${원하는 데이터 시퀀스}.zip ${저장 원하는 경로}
   ```
 
 scp 옵션
