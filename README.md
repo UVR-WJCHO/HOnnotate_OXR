@@ -41,6 +41,8 @@ ex) \${YYMMDD}_S00\_obj00\_grasp\_00.zip, ${YYMMDD}_S00\_obj00\_grasp\_01.zip, .
 - 한번에 여러 폴더 업로드(ex. 230912_S06_obj_21_\*~230912_S06_obj_26_\*을 한번에 업로드하고자 함)
 - ${num}은 ${}포함해서 그대로 입력
   ```bash
+  # sshpass 없는 경우 설치
+  $ apt-get install sshpass
   $ for num in {21..26}
   $ do
   $     sshpass -p ${데이터pc password} scp -rv ${저장 되어있는 경로}/230912_S06_obj_${num}_* datapc@${데이터 PC IP}:/mnt/nas_dir/KAIST_output/${YYMMBB}/
