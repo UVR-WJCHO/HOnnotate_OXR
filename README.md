@@ -244,7 +244,8 @@ $ passwd root # root password 설정
 
 - Clone the repository and checkout the develop branch
 - [데이터 다운로드 NAS(벡터바이오)](http://quickconnect.to/vectorbio)에서 데이터 다운로드
-- [NIA 데이터 처리 현황](https://docs.google.com/spreadsheets/d/19PbH92lJMY10QOgtV1uE8WUeRWxKzweciEngznSOQko/edit?usp=sharing) 작업 순서 탭 참조
+- 반드시 [NIA 데이터 처리 현황](https://docs.google.com/spreadsheets/d/19PbH92lJMY10QOgtV1uE8WUeRWxKzweciEngznSOQko/edit?usp=sharing) 작업 순서 탭의 설명 확인.
+
 - Segmentation model 다운로드
 - Object mesh model 다운로드
 - Calibration 결과 다운로드
@@ -311,24 +312,24 @@ After Pre-Process
 위의 파일 구조 확인 후, 메인 프로세스 진행. 
 처리하고자 하는 데이터의 날짜가 ${YYMMDD} 인경우, 
 ```
-python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM}
+python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM}
 ```
 
 - \${YYMMDD} 폴더 안의 모든 시퀀스를 읽고, \${YYMMDD}_S00\_obj00\_grasp\_00 폴더 리스트 중 START_NUM 번째 폴더 부터 END_NUM 번째 폴더까지 작업하는 방식
 - 별도 프롬프트 열어서 START_NUM, END_NUM을 바꿔서 병렬 진행.
 - 예) 1번 프롬프트 
     ```
-    python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 0 --end_seq 4
+    python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 0 --end_seq 4
     ```
     2번 프롬프트
     ```
-    python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 4 --end_seq 8
+    python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq 4 --end_seq 8
     ```
-- RTX3090의 경우 3개 실행 보다 2개 프롬프트 실행하는 것이 효율적이었음.
+- 2개 프롬프트 실행하는 경우 GPU 메모리 error 발생. 하드웨어 스펙 따라서 조정 필요.
 
 - GUI가 없는 headless 서버에서 작업을 하는 경우
 ```
-python main_multiViewSingleFrame.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM} --headless True
+python optimization.py --db ${YYMMDD} --cam_db ${YYMMDD}_cam --start_seq ${START_NUM} --end_seq ${END_NUM} --headless True
 ``` 
 - 최적화 결과 확인은 for_headless_server/ 폴더에 그때 그때 저장되므로 확인 가능. 
 
