@@ -45,8 +45,8 @@ def BundleAdjustment(cameras, objPointsList, imgPointsLeft, imgPointsRight, came
     imgPoints = np.concatenate(imgPointsLeft+imgPointsRight, axis=0)
 
     # with shape (n_observations,) contains indices of cameras (from 0 to n_cameras - 1) involved in each observation.
-    cameraIndicesLeft = [i for i,x in enumerate(objPointsList) for _ in range(x.shape[0])]
-    cameraIndicesRight = [i+1 for i,x in enumerate(objPointsList) for _ in range(x.shape[0])]
+    cameraIndicesLeft = [i % numCameras for i,x in enumerate(objPointsList) for _ in range(x.shape[0])]
+    cameraIndicesRight = [(i+1) % numCameras for i,x in enumerate(objPointsList) for _ in range(x.shape[0])]
     cameraIndices = np.array(cameraIndicesLeft + cameraIndicesRight, dtype=int)
     # with shape (n_observations,) contatins indices of points (from 0 to n_points - 1) involved in each observation.
     pointIndices = np.array([*range(numPoints)] * 2, dtype=int)

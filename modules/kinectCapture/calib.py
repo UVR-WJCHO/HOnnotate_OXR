@@ -56,6 +56,16 @@ class Calibration():
                 print("wrong directory for calibration")
                 exit()
 
+        target_path1 = os.path.join(base_dir, opt.dir, f"{self.cameras[-1]}_{self.cameras[0]}")
+        target_path2 = os.path.join(base_dir, opt.dir, f"{self.cameras[0]}_{self.cameras[-1]}")
+        if os.path.exists(target_path1):
+            self.imgDirList.append(target_path1)
+        elif os.path.exists(target_path2):
+            self.imgDirList.append(target_path2)
+        else:
+            print("no last sequence")
+            exit()
+
         self.resultDir = os.path.join(base_dir, f"{opt.dir}")
 
         assert os.path.exists(os.path.join(self.resultDir, "cameraInfo.txt")), 'cameraInfo.txt does not exist, run AzureKinectInfo.py first!'
@@ -84,7 +94,6 @@ class Calibration():
 
     
     def Calibrate(self):
-        #TODO: order of cameraParams
         for i in range(self.numCameras - 1):
             left_cam = self.cameras[i]
             right_cam = self.cameras[i+1]
@@ -103,6 +112,16 @@ class Calibration():
             params = np.concatenate((self.cameraParams[left_cam],h), axis=0)
             self.objPoints.append((np.linalg.inv(params) @ points3d.T).T[:,:3]) # 3d points in world coordinate (master cameras' coordinate)
 
+        print('sub3 - mas')
+        left_cam = self.cameras[-1]
+        right_cam = self.cameras[0]
+        retval, R, T, pt2dL, pt2dR, pt3dL, pt3dR = StereoCalibrate(self.imgDirList[-1], left_cam, right_cam, self.intrinsic, self.distCoeffs,
+                    imgInt=self.imgInt, numImg=opt.num, nsize=self.nSize, minSize=self.minSize, vis_mode=opt.vis)
+        self.imgPointsLeft.append(pt2dL)
+        self.imgPointsRight.append(pt2dR)
+        points3d = np.concatenate((pt3dL, np.ones((pt3dL.shape[0],1))), axis=1) # 3d points in i-th camera's coordinate
+        params = np.concatenate((self.cameraParams[left_cam],h), axis=0)
+        self.objPoints.append((np.linalg.inv(params) @ points3d.T).T[:,:3]) # 3d points in world coordinate (master cameras' coordinate)
 
     def BA(self):
         cameraParams = np.zeros((self.numCameras, 12)) # flattened extrinsic paramters
