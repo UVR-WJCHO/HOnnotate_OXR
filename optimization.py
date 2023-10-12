@@ -26,6 +26,9 @@ from cProfile import Profile
 from pstats import Stats
 import pandas as pd
 
+# gpu memory usage limit
+torch.cuda.set_per_process_memory_fraction(0.95, device=0)
+
 flag_debug_vis_glob = False
 flag_debug_vis_part = False
 flag_debug_vis_all = False
