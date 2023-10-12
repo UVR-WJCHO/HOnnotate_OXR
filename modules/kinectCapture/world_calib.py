@@ -56,6 +56,29 @@ class WorldCalib():
         self.depth = cv2.imread(depth_path, -1)
 
     
+    def checker_format(self, nSize):
+        nChecker = nSize[0] * nSize[1]
+        checker_formats = [
+            {
+                0: np.arange(nChecker),
+                1: np.arange(nChecker).reshape(nSize[1], nSize[0]).transpose().ravel()
+            },
+            {
+                0: np.arange(nChecker).reshape(nSize[1], nSize[0])[:,::-1].ravel(),
+                1: np.arange(nChecker).reshape(nSize[1], nSize[0])[:,::-1].transpose().ravel()
+            },
+            {
+                0: np.arange(nChecker).reshape(nSize[1], nSize[0])[::-1,:].ravel(),
+                1: np.arange(nChecker).reshape(nSize[1], nSize[0])[::-1,:].transpose().ravel()
+            },
+            {
+                0: np.arange(nChecker)[::-1],
+                1: np.arange(nChecker).reshape(nSize[1], nSize[0]).transpose().ravel()[::-1]
+            },
+        ]
+        return checker_formats
+
+
     def InitWorldCoordinate(self):
         colors = [(0,0,255), (0,255,0), (255,0,0)]
         if opt.world_coordinate is None:
@@ -63,9 +86,15 @@ class WorldCalib():
             image = cv2.imread(self.image_path)
 
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
             # retval, corners = cv2.findChessboardCorners(gray, self.nSize)
-            retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_NORMALIZE_IMAGE)
+            retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_ACCURACY)
             # retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_LARGER + cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_NORMALIZE_IMAGE)
+
+            if not retval and (self.camera == 'sub2'):
+                print("try with (5,5) checkerboard size")
+                self.nSize = (5,5)
+                retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_ACCURACY)
 
             if retval:
                 criteria = (cv2.TERM_CRITERIA_EPS +
@@ -77,24 +106,7 @@ class WorldCalib():
                 return
 
             # visualize world coordinates
-            checker_formats = [
-                {
-                    0: np.arange(30),
-                    1: np.arange(30).reshape(5,6).transpose().ravel()
-                },
-                {
-                    0: np.arange(30).reshape(5,6)[:,::-1].ravel(),
-                    1: np.arange(30).reshape(5,6)[:,::-1].transpose().ravel()
-                },
-                {
-                    0: np.arange(30).reshape(5,6)[::-1,:].ravel(),
-                    1: np.arange(30).reshape(5,6)[::-1,:].transpose().ravel()
-                },
-                {
-                    0: np.arange(30)[::-1],
-                    1: np.arange(30).reshape(5,6).transpose().ravel()[::-1]
-                },
-            ]
+            checker_formats = self.checker_format(self.nSize)
 
             for i, format in enumerate(checker_formats):
                 for transposed in format:

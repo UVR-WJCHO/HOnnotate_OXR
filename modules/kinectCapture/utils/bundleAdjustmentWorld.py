@@ -28,7 +28,6 @@ def Fun(params, objPoints, intrinsicMatrices, cameraParams, cameraIndices, imgPo
 
 
 def BundleAdjustment(worldProjection, cameras, objPoints, imgPoints, cameraParams, intrinsicMatrices):
-
     numCameras = len(cameras)
     numPoints = objPoints.shape[0]
     objPoints = np.concatenate((objPoints.T, np.ones((1, numPoints ))), axis=0)
@@ -39,7 +38,7 @@ def BundleAdjustment(worldProjection, cameras, objPoints, imgPoints, cameraParam
     for i, camera in enumerate(cameras):
         intrinsic[i] = intrinsicMatrices[camera]
         extrinsic[i] = cameraParams[camera].reshape(3,4)
-        cameraIndices += [i] * 30
+        cameraIndices += [i] * (numPoints // numCameras)
     cameraIndices = np.array(cameraIndices, dtype=int)
 
 

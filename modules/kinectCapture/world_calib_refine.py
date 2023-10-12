@@ -64,18 +64,48 @@ class WorldCalib():
             self.depth_path[cam] = os.path.join(depth_dir, cam, f'{cam}_{opt.index}.png')
 
     
+    def checker_format(self, nSize):
+        nChecker = nSize[0] * nSize[1]
+        checker_formats = [
+            {
+                0: np.arange(nChecker),
+                1: np.arange(nChecker).reshape(nSize[1], nSize[0]).transpose().ravel()
+            },
+            {
+                0: np.arange(nChecker).reshape(nSize[1], nSize[0])[:,::-1].ravel(),
+                1: np.arange(nChecker).reshape(nSize[1], nSize[0])[:,::-1].transpose().ravel()
+            },
+            {
+                0: np.arange(nChecker).reshape(nSize[1], nSize[0])[::-1,:].ravel(),
+                1: np.arange(nChecker).reshape(nSize[1], nSize[0])[::-1,:].transpose().ravel()
+            },
+            {
+                0: np.arange(nChecker)[::-1],
+                1: np.arange(nChecker).reshape(nSize[1], nSize[0]).transpose().ravel()[::-1]
+            },
+        ]
+        return checker_formats
+
     def InitWorldCoordinate(self):
         colors = [(0,0,255), (0,255,0), (255,0,0)]
-        # mas - 0, sub2 - 3
 
         detected_corners = {}
+        nSize = {}
+        different_size = False
         for cam in self.cameras:
             image = cv2.imread(self.image_path[cam])
             print(self.image_path[cam])
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             # retval, corners = cv2.findChessboardCorners(gray, self.nSize)
-            retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_NORMALIZE_IMAGE)
+            retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_ACCURACY)
             # retval, corners = cv2.findChessboardCornersSB(gray, self.nSize, flags = cv2.CALIB_CB_LARGER + cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_NORMALIZE_IMAGE)
+            
+            nSize[cam] = self.nSize
+            if not retval and (cam == 'sub2'):
+                print(f"try with (5,5) checkerboard size for {cam}")
+                retval, corners = cv2.findChessboardCornersSB(gray, (5,5), flags = cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_ACCURACY)
+                nSize[cam] = (5,5)
+                different_size = True
 
             assert retval, f"all cameras input should valid checkerboard iamge \nthere is no detection {cam}"
 
@@ -84,36 +114,22 @@ class WorldCalib():
             corners = cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
             detected_corners[cam] = corners
         
-        checker_formats = [
-            {
-                0: np.arange(30),
-                1: np.arange(30).reshape(5,6).transpose().ravel()
-            },
-            {
-                0: np.arange(30).reshape(5,6)[:,::-1].ravel(),
-                1: np.arange(30).reshape(5,6)[:,::-1].transpose().ravel()
-            },
-            {
-                0: np.arange(30).reshape(5,6)[::-1,:].ravel(),
-                1: np.arange(30).reshape(5,6)[::-1,:].transpose().ravel()
-            },
-            {
-                0: np.arange(30)[::-1],
-                1: np.arange(30).reshape(5,6).transpose().ravel()[::-1]
-            },
-        ]
-
         objPoints = []
         imgPoints = []
 
         for cam, idx in zip(self.cameras, self.world_idx):
+            checker_formats = self.checker_format(nSize[cam])
             format = checker_formats[int(idx)]
             for transposed in format:
-                retval, objp, xy, R, T = self.SolvePnP(detected_corners[cam], reorder_idx=format[transposed], transposed=transposed, cam=cam)
+                retval, objp, xy, R, T = self.SolvePnP(detected_corners[cam], reorder_idx=format[transposed], transposed=transposed, cam=cam, nSize=nSize[cam])
                 if not retval: continue
                 P = np.concatenate((R, T), axis=1)
-                objPoints.append(objp)
-                imgPoints.append(xy)
+                if different_size and cam=='mas':
+                    objPoints.append(objp[:25])
+                    imgPoints.append(xy[:25])
+                else:
+                    objPoints.append(objp)
+                    imgPoints.append(xy)
 
         P = np.concatenate((P, h), axis=0)
         projection = self.extrinsics[cam].reshape(3,4)
@@ -163,20 +179,20 @@ class WorldCalib():
             cv2.imwrite(os.path.join(self.result_dir, f"{cam}_world.png"), image)
 
 
-    def SolvePnP(self, pts_2d, reorder_idx, transposed, cam):
+    def SolvePnP(self, pts_2d, reorder_idx, transposed, cam, nSize):
         if transposed:
-            objp = np.zeros((self.nSize[0]*self.nSize[1],3), np.float32)
-            objp[:,:2] = np.mgrid[0:self.nSize[1],0:self.nSize[0]].T.reshape(-1,2)
+            objp = np.zeros((nSize[0]*nSize[1],3), np.float32)
+            objp[:,:2] = np.mgrid[0:nSize[1],0:nSize[0]].T.reshape(-1,2)
         else:
-            objp = np.zeros((self.nSize[1]*self.nSize[0],3), np.float32)
-            objp[:,:2] = np.mgrid[0:self.nSize[0],0:self.nSize[1]].T.reshape(-1,2)
+            objp = np.zeros((nSize[1]*nSize[0],3), np.float32)
+            objp[:,:2] = np.mgrid[0:nSize[0],0:nSize[1]].T.reshape(-1,2)
         objp *= 65
 
         corners = pts_2d[reorder_idx]
 
         normalized_points = cv2.undistortPoints(corners, self.intrinsic[cam], self.distCoeffs[cam])
         normalized_points = normalized_points.squeeze().transpose()
-        normalized_points = np.concatenate((normalized_points, np.ones((1, self.nSize[0] * self.nSize[1]))), 0)
+        normalized_points = np.concatenate((normalized_points, np.ones((1, nSize[0] * nSize[1]))), 0)
         undistorted_points = np.matmul(self.intrinsic[cam], normalized_points)[:2]
         xy = undistorted_points.transpose()
         depth = cv2.imread(self.depth_path[cam], -1)
