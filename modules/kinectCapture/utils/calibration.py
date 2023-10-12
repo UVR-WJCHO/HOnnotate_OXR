@@ -10,8 +10,8 @@ from utils.geometry import uv2xyz
 def CvCornerFinder(path, nsize, vis_mode):
     color = cv2.imread(path)
     gray = cv2.cvtColor(color, cv2.COLOR_BGR2GRAY)
-    # retval, corners = cv2.findChessboardCorners(gray,nsize)
-    retval, corners = cv2.findChessboardCornersSB(gray, nsize, flags=cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_NORMALIZE_IMAGE)
+    retval, corners = cv2.findChessboardCorners(gray,nsize)
+    # retval, corners = cv2.findChessboardCornersSB(gray, nsize, flags=cv2.CALIB_CB_EXHAUSTIVE + cv2.CALIB_CB_ACCURACY)
 
     if retval:
         criteria = (cv2.TERM_CRITERIA_EPS +
