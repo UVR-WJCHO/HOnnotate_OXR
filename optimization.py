@@ -26,6 +26,7 @@ from cProfile import Profile
 from pstats import Stats
 import pandas as pd
 
+torch.cuda.set_per_process_memory_fraction(0.95, device=0)
 
 flag_debug_vis_glob = False
 flag_debug_vis_part = False
@@ -422,6 +423,7 @@ def main(argv):
             eval_num = 0
             ## Start optimization per frame
             for frame in range(len(mas_dataloader)):
+                torch.cuda.empty_cache()
                 t_start = time.time()
 
                 ## check visualizeMP results in {YYMMDD} folder, use for debugging
