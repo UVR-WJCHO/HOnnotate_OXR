@@ -546,6 +546,11 @@ def main(argv):
                 with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
                     json.dump(top_index, f, ensure_ascii=False)
 
+            del mas_dataloader.sample_dict
+            del sub1_dataloader.sample_dict
+            del sub2_dataloader.sample_dict
+            del sub3_dataloader.sample_dict
+
             del mas_dataloader
             del sub1_dataloader
             del sub2_dataloader
