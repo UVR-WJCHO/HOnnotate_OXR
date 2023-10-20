@@ -25,7 +25,10 @@ import matplotlib.pyplot as plt
 from glob import glob
 
 def predict(rgb, opts):
-    os.environ["CUDA_VISIBLE_DEVICES"] = opts.gpu_id
+
+    if os.environ.get('CUDA_VISIBLE_DEVICES') is None:
+        os.environ["CUDA_VISIBLE_DEVICES"] = opts.gpu_id
+        
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') 
     model = network.modeling.__dict__[opts.model](21, output_stride=opts.output_stride)
     utils.set_bn_momentum(model.backbone, momentum=0.01)
