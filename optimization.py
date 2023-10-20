@@ -58,10 +58,8 @@ elif FLAGS.db in ['230909', '230910', '230911', '230912', '230913']:
     CFG_DATE = '230909~230913'
 elif FLAGS.db in ['230914']:
     CFG_DATE = '230914'
-elif FLAGS.db in ['230915', '230916', '230917', '230918', '230919', '230920', '230921',  '230922', '230923', '230924', '230925',  '230926', '230927']:
-    CFG_DATE = '230915~'
 else:
-    assert False, 'no CFG date matches, contact KAIST'
+    CFG_DATE = '230915~'
 
 
 def __update_global_wrist__(model, loss_func, detected_cams, frame, lr_init, target_seq, trialName, iter=40):
