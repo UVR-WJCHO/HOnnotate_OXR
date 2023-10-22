@@ -34,8 +34,8 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230915', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230915_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '231006', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231006_cam', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
@@ -464,7 +464,7 @@ def main(argv):
                         print('no obj pose')
                         continue
                     obj_pose = obj_dataloader[frame]
-                    if obj_pose is None:
+                    if obj_pose is None or len(obj_pose.shape) != 2:
                         print('no obj pose')
                         continue
                     obj_pose = obj_pose[:-1, :]
