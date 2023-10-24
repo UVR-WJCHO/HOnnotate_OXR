@@ -15,17 +15,26 @@ if [ ! -d "$directory" ]; then
   exit 1
 fi
 
+base_name=$(dirname "$directory")
+
 # Get the directory name without the full path
 dir_name=$(basename "$directory")
-
-mkdir "./$dir_name"
 
 # Create a zip file for each subdirectory
 for subdirectory in "$directory"/*; do
   if [ -d "$subdirectory" ]; then
     sub_dir_name=$(basename "$subdirectory")
     zip_file="$dir_name/$sub_dir_name.zip"
-    zip -r "$zip_file" "$subdirectory"
+    
+    cd $base_name
+    cd $dir_name
+    cd $sub_dir_name
+    
+    zip -r "../../$zip_file" .
+    
+    cd ..
+    cd ..
+    cd ..
 
     # Check if the zip operation was successful
     if [ $? -eq 0 ]; then
