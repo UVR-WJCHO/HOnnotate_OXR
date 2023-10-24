@@ -138,8 +138,11 @@ class DataLoader:
 
             if 'bb' not in sample.keys():
                 sample_torch = {}
-                sample_torch['rgb_raw'] = torch.FloatTensor(sample['rgb_raw']).to(self.device)
-                sample_torch['depth_raw'] = torch.unsqueeze(torch.FloatTensor(sample['depth_raw']), 0).to(self.device)
+                sample_torch['rgb_raw'] = sample['rgb_raw']
+                sample_torch['depth_raw'] = sample['depth_raw']
+
+                # sample_torch['rgb_raw'] = torch.FloatTensor(sample['rgb_raw']).to(self.device)
+                # sample_torch['depth_raw'] = torch.unsqueeze(torch.FloatTensor(sample['depth_raw']), 0).to(self.device)
 
                 sample_dict_torch[idx] = sample_torch
                 sample_kpt[idx] = None
@@ -152,8 +155,10 @@ class DataLoader:
                 sample_torch['img2bb'] = sample['img2bb']
                 sample_torch['kpts2d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts2d']), 0).to(self.device)
                 sample_torch['kpts3d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d']), 0).to(self.device)
-                sample_torch['rgb'] = torch.FloatTensor(sample['rgb']).to(self.device)
-                sample_torch['depth'] = torch.unsqueeze(torch.FloatTensor(sample['depth']), 0).to(self.device)
+
+                sample_torch['rgb'] = sample['rgb']
+                sample_torch['depth'] = sample['depth']
+
                 sample_torch['depth_obj'] = torch.unsqueeze(torch.FloatTensor(sample['depth_obj']), 0).to(self.device)
                 sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
                 sample_torch['seg_obj'] = torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)

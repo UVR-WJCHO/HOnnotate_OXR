@@ -119,9 +119,14 @@ class MultiViewLossFunc(nn.Module):
 
     def set_gt_nobb(self, camIdx, camID, frame):
         gt_sample = self.dataloaders[camIdx][frame]
+
+        gt_rgb_raw = torch.FloatTensor(gt_sample['rgb_raw']).to(self.device)
+        gt_depth_raw = torch.unsqueeze(torch.FloatTensor(gt_sample['depth_raw']), 0).to(self.device)
+
+
         self.bb = self.init_bbox[str(camID)]
-        self.gt_rgb = gt_sample['rgb_raw'][self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
-        self.gt_depth = gt_sample['depth_raw'][0, self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
+        self.gt_rgb = gt_rgb_raw[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
+        self.gt_depth = gt_depth_raw[0, self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2]]
 
         bb_c_x = float(self.bb[0] + 0.5 * self.bb[2])
         bb_c_y = float(self.bb[1] + 0.5 * self.bb[3])
@@ -138,8 +143,9 @@ class MultiViewLossFunc(nn.Module):
         self.gt_kpts2d = gt_sample['kpts2d']
         self.gt_kpts3d = gt_sample['kpts3d']
 
-        self.gt_rgb = gt_sample['rgb']
-        self.gt_depth = gt_sample['depth']
+        self.gt_rgb = torch.FloatTensor(gt_sample['rgb']).to(self.device)
+        self.gt_depth = torch.unsqueeze(torch.FloatTensor(gt_sample['depth']), 0).to(self.device)
+
         self.gt_depth_obj = gt_sample['depth_obj']
 
         # if no gt seg, mask is 1 in every pixel
