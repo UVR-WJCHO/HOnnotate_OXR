@@ -55,8 +55,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230915', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230915_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '231024', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231024_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
@@ -143,13 +143,13 @@ def deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, opts):
 
 class loadDataset():
     def __init__(self, db, seq, trial):
-        self.seq = seq # 230612_S01_obj_01_grasp_1
-        self.db = db    # 230905
-        assert len(seq.split('_')) == 6, 'invalid sequence name, ex. 230612_S01_obj_01_grasp_01'
+        self.seq = seq # 231024_S01_obj_27_inter_6
+        self.db = db    # 231024
+        assert len(seq.split('_')) == 6, 'invalid sequence name, ex. 231024_S01_obj_27_inter_6'
 
         self.subject_id = seq.split('_')[1][1:]
         self.obj_id = seq.split('_')[3]
-        self.grasp_id = seq.split('_')[5]
+        self.grasp_id = seq.split('_')[5]   # inter_id
         self.trial = trial
         self.trial_num = trial.split('_')[1]
 
@@ -273,7 +273,7 @@ class loadDataset():
             origin_z = float(line[3]) * 1000.
 
         # load marker set pose
-        self.obj_pose_name = obj_dir_name + '_grasp_' + str("%02d"%int(self.grasp_id))+ '_' + str("%02d"%int(self.trial_num))
+        self.obj_pose_name = obj_dir_name + '_inter_' + str("%01d"%int(self.grasp_id))+ '_' + str("%02d"%int(self.trial_num))
         obj_pose_data = os.path.join(self.obj_data_Dir, self.obj_pose_name+'.txt')
         # print(obj_pose_data)
         assert os.path.isfile(obj_pose_data),"no obj pose data : %s" % obj_pose_data
@@ -315,27 +315,38 @@ class loadDataset():
 
         # load object mesh info
         self.obj_class = self.obj_id + '_' + str(OBJType(int(self.obj_id)).name)
-        self.obj_template_dir = os.path.join(baseDir, 'obj_scanned_models', self.obj_class)
+        self.obj_template_dir = os.path.join(baseDir, 'obj_scanned_models', 'interaction', self.obj_class)
 
-        target_mesh_class = self.obj_class
-        # if int(self.obj_id) == 29:
-        #     if int(self.grasp_id) == 12:
-        #         target_mesh_class = '29_foldable_phone'
-        #     else:
-        #         target_mesh_class = '29_foldable_phone_2'
 
-        # load object mesh data (new scanned object need to be load through pytorch3d 'load_obj'
-        obj_mesh_path = os.path.join(self.obj_template_dir, target_mesh_class) + '.obj'
-
+        obj_mesh_path_list = []
+        # interactable obj has different parts num
+        if int(self.obj_id) == 20 or int(self.obj_id) == 21:
+            target_mesh_class = self.obj_class
+            obj_mesh_path = os.path.join(self.obj_template_dir, target_mesh_class) + '.obj'
+            obj_mesh_path_list.append(obj_mesh_path)
+        elif int(self.obj_id) == 27 or int(self.obj_id) == 28 or int(self.obj_id) == 29:
+            for i in range(3):
+                target_mesh_class = self.obj_class + '_0' + str(i+1)
+                obj_mesh_path = os.path.join(self.obj_template_dir, target_mesh_class) + '.obj'
+                obj_mesh_path_list.append(obj_mesh_path)
+        else:
+            for i in range(2):
+                target_mesh_class = self.obj_class + '_0' + str(i+1)
+                obj_mesh_path = os.path.join(self.obj_template_dir, target_mesh_class) + '.obj'
+                obj_mesh_path_list.append(obj_mesh_path)
 
         # self.obj_mesh_data = self.read_obj(obj_mesh_path)
         self.obj_mesh_data = {}
-        try:
-            verts, faces, _ = load_obj(obj_mesh_path)
-            self.obj_mesh_data['verts'] = verts
-            self.obj_mesh_data['faces'] = faces.verts_idx
-        except:
-            print("no obj mesh data : %s" % obj_mesh_path)
+        self.obj_mesh_data['verts'] = {}
+        self.obj_mesh_data['faces'] = {}
+
+        for i, obj_mesh_path in enumerate(obj_mesh_path_list):
+            try:
+                verts, faces, _ = load_obj(obj_mesh_path)
+                self.obj_mesh_data['verts'][i] = verts
+                self.obj_mesh_data['faces'][i] = faces.verts_idx
+            except:
+                print("no obj mesh data : %s" % obj_mesh_path)
 
         self.obj_scale = None
 
@@ -686,8 +697,6 @@ class loadDataset():
     def procImg(self, images, mp_hand):
         rgb, depth = images
         image_rows, image_cols, _ = rgb.shape
-        kps = np.empty((21, 3), dtype=np.float32)
-        kps[:] = np.nan
         idx_to_coordinates = None
 
         # crop initial image with each camera view's pre-defined bbox
@@ -699,53 +708,76 @@ class loadDataset():
         results = mp_hand.process(cv2.cvtColor(rgb_init, cv2.COLOR_BGR2RGB))
 
         if results.multi_hand_landmarks and len(results.multi_hand_landmarks[0].landmark) == 21:
-            hand_landmark = results.multi_hand_landmarks[0]
-            idx_to_coordinates = {}
-            # wristDepth = depth[
-            #     int(hand_landmark.landmark[0].y * image_rows), int(hand_landmark.landmark[0].x * image_cols)]
-            for idx_land, landmark in enumerate(hand_landmark.landmark):
-                landmark_px = [landmark.x * bbox[2] + bbox[0], landmark.y * bbox[3] + bbox[1]]
-                if landmark_px:
-                    # landmark_px has fliped x axis
-                    idx_to_coordinates[idx_land] = [landmark_px[0], landmark_px[1]]
+            hands_list = []
+            kps_list = []
+            side_list = []
+            for i in range(len(results.multi_hand_landmarks)):
+                hand_landmark = results.multi_hand_landmarks[i]
+                hand_side = results.multi_handedness[i].classification[0].label
+                idx_to_coordinates = {}
+                kps = np.empty((21, 3), dtype=np.float32)
+                kps[:] = np.nan
+                # wristDepth = depth[
+                #     int(hand_landmark.landmark[0].y * image_rows), int(hand_landmark.landmark[0].x * image_cols)]
+                for idx_land, landmark in enumerate(hand_landmark.landmark):
+                    landmark_px = [landmark.x * bbox[2] + bbox[0], landmark.y * bbox[3] + bbox[1]]
+                    if landmark_px:
+                        # landmark_px has fliped x axis
+                        idx_to_coordinates[idx_land] = [landmark_px[0], landmark_px[1]]
 
-                    kps[idx_land, 0] = landmark_px[0]
-                    kps[idx_land, 1] = landmark_px[1]
-                    # save relative depth on z axis
-                    kps[idx_land, 2] = landmark.z
+                        kps[idx_land, 0] = landmark_px[0]
+                        kps[idx_land, 1] = landmark_px[1]
+                        # save relative depth on z axis
+                        kps[idx_land, 2] = landmark.z
+
+                hands_list.append(idx_to_coordinates)
+                kps_list.append(kps)
+                side_list.append(hand_side)
+
 
         # 전체 이미지에서 손 검출이 안되는 경우 이전 bbox로 크롭한 후에 다시 검출
-        if not results.multi_hand_landmarks or len(results.multi_hand_landmarks[0].landmark) != 21 or np.any(
-                np.isnan(kps)):
-            bbox = self.prev_bbox
-            rgb_crop = rgb[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-            results = mp_hand.process(cv2.cvtColor(rgb_crop, cv2.COLOR_BGR2RGB))
-            if results.multi_hand_landmarks:
-                hand_landmarks = results.multi_hand_landmarks[0]
-                idx_to_coordinates = {}
-                # wristDepth = depth[int(hand_landmarks.landmark[0].y * bbox[3] + bbox[1]), int(
-                #     hand_landmarks.landmark[0].x * bbox[2] + bbox[0])]
-                for idx_land, landmarks in enumerate(hand_landmarks.landmark):
-                    landmarks_px = [int(landmarks.x * bbox[2] + bbox[0]), int(landmarks.y * bbox[3] + bbox[1])]
-                    if landmarks_px:
-                        idx_to_coordinates[idx_land] = landmarks_px
-
-                        kps[idx_land, 0] = landmarks_px[0]
-                        kps[idx_land, 1] = landmarks_px[1]
-                        # save relative depth on z axis
-                        kps[idx_land, 2] = landmarks.z
+        # if not results.multi_hand_landmarks or len(results.multi_hand_landmarks[0].landmark) != 21 or np.any(
+        #         np.isnan(kps)):
+        #     bbox = self.prev_bbox
+        #     rgb_crop = rgb[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+        #     results = mp_hand.process(cv2.cvtColor(rgb_crop, cv2.COLOR_BGR2RGB))
+        #     if results.multi_hand_landmarks:
+        #         hand_landmarks = results.multi_hand_landmarks[0]
+        #         idx_to_coordinates = {}
+        #         # wristDepth = depth[int(hand_landmarks.landmark[0].y * bbox[3] + bbox[1]), int(
+        #         #     hand_landmarks.landmark[0].x * bbox[2] + bbox[0])]
+        #         for idx_land, landmarks in enumerate(hand_landmarks.landmark):
+        #             landmarks_px = [int(landmarks.x * bbox[2] + bbox[0]), int(landmarks.y * bbox[3] + bbox[1])]
+        #             if landmarks_px:
+        #                 idx_to_coordinates[idx_land] = landmarks_px
+        #
+        #                 kps[idx_land, 0] = landmarks_px[0]
+        #                 kps[idx_land, 1] = landmarks_px[1]
+        #                 # save relative depth on z axis
+        #                 kps[idx_land, 2] = landmarks.z
 
         if idx_to_coordinates is None:
             return None
 
-        bbox = self.extractBbox(idx_to_coordinates, image_rows, image_cols)
-        rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
-        depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+        bbox_list = []
+        img2bb_trans_list = []
+        bb2img_trans_list = []
+        procImgSet_list = []
 
-        procImgSet = [rgbCrop, depthCrop]
-        self.prev_bbox = np.copy(bbox)
+        for idx_to_coordinates in hands_list:
+            bbox = self.extractBbox(idx_to_coordinates, image_rows, image_cols)
+            rgbCrop, img2bb_trans, bb2img_trans, _, _, = augmentation_real(rgb, bbox, flip=False)
+            depthCrop = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
 
-        return [bbox, img2bb_trans, bb2img_trans, procImgSet, kps]
+            procImgSet = [rgbCrop, depthCrop]
+            # self.prev_bbox = np.copy(bbox)
+
+            bbox_list.append(bbox)
+            img2bb_trans_list.append(img2bb_trans)
+            bb2img_trans_list.append(bb2img_trans)
+            procImgSet_list.append(procImgSet)
+
+        return [bbox_list, img2bb_trans_list, bb2img_trans_list, procImgSet_list, kps_list, side_list]
 
     def extractBbox(self, idx_to_coord, image_rows, image_cols):
             # consider fixed size bbox
@@ -864,29 +896,35 @@ class loadDataset():
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
+    # all list
+    def postProcess(self, idx, procImgSet_list, bb_list, img2bb_list, bb2img_list, kps_list, processed_kpts_list, visibility_list, side_list):
 
-    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
+        for procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility, side in zip(procImgSet_list, bb_list, img2bb_list, bb2img_list, kps_list, processed_kpts_list, visibility_list, side_list):
+            if str(side) is 'Right':
+                continue
 
-        rgbName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
-        depthName = str(self.camID) + '_' + format(idx, '04') + '.png'
-        cv2.imwrite(os.path.join(self.rgbCropDir, rgbName), procImgSet[0])
-        cv2.imwrite(os.path.join(self.depthCropDir, depthName), procImgSet[1])
-        # cv2.imwrite(os.path.join(self.rgbCropDir_result, rgbName), procImgSet[0])
-        # cv2.imwrite(os.path.join(self.rgbCropDir_result, depthName), procImgSet[1])
+            rgbName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
+            depthName = str(self.camID) + '_' + format(idx, '04') + '.png'
+            cv2.imwrite(os.path.join(self.rgbCropDir, rgbName), procImgSet[0])
+            cv2.imwrite(os.path.join(self.depthCropDir, depthName), procImgSet[1])
+            # cv2.imwrite(os.path.join(self.rgbCropDir_result, rgbName), procImgSet[0])
+            # cv2.imwrite(os.path.join(self.rgbCropDir_result, depthName), procImgSet[1])
 
-        vis = paint_kpts(None, procImgSet[0], processed_kpts, visibility)
-        imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
-        cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+            vis = procImgSet[0]
+            vis = paint_kpts(None, vis, processed_kpts, visibility)
+            imgName = str(side) + str(self.camID) + '_' + format(idx, '04') + '.jpg'
+            cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+
+            meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
+                         'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts),
+                         '2D_tip_gt': self.tip_data, 'visibility': visibility}
+
+            metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
+            jsonPath = os.path.join(self.metaDir, metaName)
+            with open(jsonPath, 'wb') as f:
+                pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
 
-        meta_info = {'bb': bb, 'img2bb': np.float32(img2bb),
-                     'bb2img': np.float32(bb2img), 'kpts': np.float32(kps), 'kpts_crop': np.float32(processed_kpts),
-                     '2D_tip_gt': self.tip_data, 'visibility': visibility}
-
-        metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
-        jsonPath = os.path.join(self.metaDir, metaName)
-        with open(jsonPath, 'wb') as f:
-            pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
     def computeVisibility(self, kpts):
         vis = np.ones(21)
@@ -956,7 +994,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.90, min_tracking_confidence=FLAGS.mp_value)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.70, min_tracking_confidence=FLAGS.mp_value)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
@@ -980,16 +1018,20 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
             for db, images, output in zip(dbs, images_list, output_list):
                 if output is not None:
-                    bb, img2bb, bb2img, procImgSet, kps = output
-                    procKps = db.translateKpts(np.copy(kps), img2bb)
-                    visibility = db.computeVisibility(procKps)
-                    db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
+                    procKps_list = []
+                    vis_list = []
+                    bbox_list, img2bb_trans_list, bb2img_trans_list, procImgSet_list, kps_list, side_list = output
 
-                    # if flag_segmentation:
-                    #     db.segmentation(save_idx, procImgSet, procKps, img2bb)
+                    for bb, img2bb, bb2img, procImgSet, kps in zip(bbox_list, img2bb_trans_list, bb2img_trans_list, procImgSet_list, kps_list):
+                        procKps = db.translateKpts(np.copy(kps), img2bb)
+                        visibility = db.computeVisibility(procKps)
+                        procKps_list.append(procKps)
+                        vis_list.append(visibility)
+
+                    db.postProcess(save_idx, procImgSet_list, bbox_list, img2bb_trans_list, bb2img_trans_list, kps_list, procKps_list, vis_list, side_list)
                 else:
                     db.postProcessNone(save_idx)
-            # object data only on master cam
+            ### object data only on master cam
             dbs[0].updateObjdata(idx, save_idx, int(dbs[0].grasp_id))
 
             progress.update()
@@ -1032,7 +1074,7 @@ def main(argv):
     '''
 
     print("---------------start preprocess seq ---------------")
-    process_count = 4
+    process_count = 1
 
     tasks = []
     total_count = 0
