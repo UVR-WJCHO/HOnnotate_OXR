@@ -85,6 +85,12 @@ $ pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 -
 $ pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu117_pyt1131/download.html
 ```
 
+for windows
+```bash
+$ git clone https://github.com/facebookresearch/pytorch3d.git
+$ cd pytorch3d && pip install -e .
+```
+
 - Open3D 설치
 ```bash
 $ pip install open3d
