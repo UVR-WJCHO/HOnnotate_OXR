@@ -36,8 +36,8 @@ flag_debug_vis_all = False
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '231007', 'target db name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '231007_cam', 'target db name')   ## name ,default, help
-flags.DEFINE_integer('start', 89, 'start idx of sequence(ordered)')
-flags.DEFINE_integer('end', 90, 'end idx of sequence(ordered)')
+flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
+flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 
