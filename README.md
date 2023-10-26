@@ -87,6 +87,7 @@ $ pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.
 
 for windows
 ```bash
+vs2019 c++을 사용한 데스크톱 개발 필요.
 $ git clone https://github.com/facebookresearch/pytorch3d.git
 $ cd pytorch3d && pip install -e .
 ```
