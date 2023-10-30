@@ -26,6 +26,8 @@ from skimage.color import rgb2gray, rgb2hsv
 from skimage.filters import threshold_otsu
 
 
+from utils.uvd_transform import *
+
 # others
 import cv2
 from PIL import Image
@@ -55,8 +57,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230915', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230915_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '231030', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231030_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
@@ -912,44 +914,6 @@ class loadDataset():
         return vis
 
 
-
-"""
-def preprocess_single_cam(db, tqdm_func, global_tqdm):
-    with tqdm_func(total=len(db)) as progress:
-        progress.set_description(f"{db.seq} - {db.trial} [{db.camID}]")
-        mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.3)
-        db.init_info()
-
-        save_idx = 0
-        for idx in range(len(db)):
-            if idx % 3 != 0:
-                progress.update()
-                global_tqdm.update()
-                continue
-            images = db.getItem(idx, save_idx)
-            images = db.undistort(images)
-            output = db.procImg(images, mp_hand)
-
-            if not output[0] is None:
-                bb, img2bb, bb2img, procImgSet, kps = output
-                procKps = db.translateKpts(np.copy(kps), img2bb)
-                db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps)
-
-                db.updateObjdata(idx, save_idx)
-
-                if flag_segmentation:
-                    db.segmentation(save_idx, procImgSet, procKps, img2bb)
-                if flag_deep_segmentation:
-                    db.deepSegmentation(save_idx, procImgSet)
-
-            progress.update()
-            global_tqdm.update()
-            save_idx += 1
-
-        db.saveObjdata()
-
-    return True
-"""
 def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
     with tqdm_func(total=len(dbs[0])) as progress:
@@ -978,6 +942,33 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 images_list.append(images)
                 output_list.append(output)
 
+
+            ## postprocess ##
+            # output 일부씩 하나의 pose로 최적화해서 나머지 pose와 relative pose 비교.
+            if len(output_list) != 0:       # > 2:
+                model = Model_mp_valid(dbs, images_list, output_list)
+
+                # if kps list is [0, 1, 2, None], test with [0, 1], [1, 2], [0, 2]
+                # if kps list is [0, 1, None, 3], test with [0, 1], [1, 3], [0, 3]
+                # if kps list is [0, 1, 2, 3], test with [0, 1, 2], [0, 1, 3], [0, 2, 3], [1,2,3]
+                for validate_combination in model.valid_candidates:
+                    optm = torch.optim.Adam(model.parameters(), lr=0.1, betas=(0.5, 0.99))
+
+                    cam_list = camIDset[validate_combination]
+                    Ks_list = model.Ks[validate_combination]
+                    ext_list = model.Ms[validate_combination]
+
+                    refined_joint = optimize_kps(model, optm, device, cam_list, Ks_list, ext_list, n=10)
+
+                    # 최적화에 사용되지 않은 나머지 mediapipe pose가 최적화된 pose에 비해 얼마나 outlier인지 relative pose 형태로 비교.
+                    # 모든 포즈와의 relative 차이를 계산해서, 최적화에 사용된 pose와는 difference가 작고, 사용되지 않은 pose와의 diff가 큰 경우에만 제외해야함.
+                    # 잘못된 pose를 최적화에 사용한 경우는 최적화에 사용한 pose들과의 diff도 어느정도 클거라고 예상중. 확인 필요.
+                    validate_mp(model, validate_combination, refined_joint)
+
+                    # 만약 outlier라면 관련된 meta, visualizeMP 삭제해서 이후 과정에 제외되도록 처리 필요. (어떤 데이터 삭제해야하는지 체크해야함)
+                    print(".")
+
+
             for db, images, output in zip(dbs, images_list, output_list):
                 if output is not None:
                     bb, img2bb, bb2img, procImgSet, kps = output
@@ -1000,14 +991,76 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
     return True
 
-
-
 def error_callback(result):
     print("Error!")
 
 def done_callback(result):
     # print("Done. Result: ", result)
     return
+
+
+class Model_mp_valid(nn.Module):
+    def __init__(self, dbs, images_list, output_list):
+        super().__init__()
+        weights = torch.FloatTensor(np.zeros((21, 3)))  # [21,3]
+        self.weights = nn.Parameter(weights)
+
+        self.Ks = [dbs[0].K, dbs[1].K, dbs[2].K, dbs[3].K]
+        self.Ms = [dbs[0].extrinsics['mas'].reshape((3, 4)),
+                   dbs[0].extrinsics['sub1'].reshape((3, 4)),
+                   dbs[0].extrinsics['sub2'].reshape((3, 4)),
+                   dbs[0].extrinsics['sub3'].reshape((3, 4))]
+
+        # include (21, 3) or None
+        self.kps = [output_list[0][-1], output_list[1][-1], output_list[2][-1], output_list[3][-1]]
+
+        # if kps list is [0, 1, 2, None], test with [0, 1], [1, 2]
+        # if kps list is [0, 1, 2, 3], test with [0, 1, 2], [0, 1, 3], [0, 2, 3], [1,2,3]
+        self.valid_candidates = None
+
+
+    def forward(self):
+        output_joint = self.weights
+        return output_joint
+
+def optimize_kps(frame, model, optimizer, device, cam_list, Ks_list, ext_list, n=100):
+    losses = []
+    for i in range(n):
+        print("%d / %d"%(i+1, n))
+        losslist = []
+        refined_joint = model()
+
+        # add weight for each cam's loss
+        for camIdx in camIdxSet:
+            # world 좌표계 xyz pose를 각 카메라에 대한 xyz로 변환
+            joints_cam = torch.unsqueeze(mano3DToCam3D(self.init_joint, self.Ms[camIdx]), 0)
+            # 각 카메라에 projection
+            pred_kpts2d = projectPoints(joints_cam, self.Ks[camIdx])
+            # mp 2D pose 결과와 비교
+            loss = (pred_kpts2d - self.mp_kpts2d) ** 2
+            losslist.append(loss)
+
+        loss = sum(losslist) / len(losslist)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.detach().cpu())
+
+    result_joint = model()
+
+    return result_joint
+
+
+def validate_mp(model):
+    # projection the final model pose
+    # compare with each mp 2D kps
+    # find outlier
+
+
+    # rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
+
+    return None
+
 
 ################# depth scale value need to be update #################
 def main(argv):
@@ -1032,7 +1085,7 @@ def main(argv):
     '''
 
     print("---------------start preprocess seq ---------------")
-    process_count = 4
+    process_count = 1
 
     tasks = []
     total_count = 0
@@ -1076,9 +1129,11 @@ def main(argv):
         pool.map(global_tqdm, tasks, error_callback, done_callback)
     print("---------------end preprocess ---------------")
 
-
     proc_time = round((time.time() - t1) / 60., 2)
     print("total process time : %s min" % (str(proc_time)))
+
+
+
 
     print("start segmentation - deeplab_v3")
     if flag_deep_segmentation:
