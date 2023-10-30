@@ -57,8 +57,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '231030', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '231030_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230920', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230920_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
@@ -915,18 +915,18 @@ class loadDataset():
 
 
 def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
-
     with tqdm_func(total=len(dbs[0])) as progress:
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.90, min_tracking_confidence=FLAGS.mp_value)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.30, min_tracking_confidence=FLAGS.mp_value)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
             db.init_info()
 
         save_idx = 0
+        init_joint = None
         for idx in range(len(dbs[0])):
             if idx % 3 != 0:
                 progress.update()
@@ -935,51 +935,108 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
             images_list = []
             output_list = []
+            kps_list = []
+            failure = 0
             for db, mp_hand in zip(dbs, mp_hand_list):
                 images = db.getItem(idx, save_idx)
                 images = db.undistort(images)
                 output = db.procImg(images, mp_hand)
                 images_list.append(images)
                 output_list.append(output)
+                if output is not None:
+                    output = output[-1]
+                else:
+                    failure += 1
+                kps_list.append(output)
 
+            v_Ks = [dbs[0].K, dbs[1].K, dbs[2].K, dbs[3].K]
+            v_Ms = [dbs[0].extrinsics['mas'].reshape((3, 4)),
+                    dbs[0].extrinsics['sub1'].reshape((3, 4)),
+                    dbs[0].extrinsics['sub2'].reshape((3, 4)),
+                    dbs[0].extrinsics['sub3'].reshape((3, 4))]
+
+            # include (21, 3) or None
+            v_kps_list = [kps_list[0], kps_list[1], kps_list[2], kps_list[3]]
+
+            # if kps list is [0, 1, 2, None], test with [0, 1], [1, 2]
+            # if kps list is [0, 1, 2, 3], test with [0, 1, 2], [0, 1, 3], [0, 2, 3], [1,2,3]
+            # valid_candidates = []
+            # if v_kps.count(None) == 0:
+            #     valid_candidates = [0, 1, 2, 3]
+            # elif v_kps.count(None) == 1:
+            #     for i in range(len(v_kps) - 1):
+            #         if i != v_kps.index(None):
+            #             valid_candidates.append(i)
 
             ## postprocess ##
             # output 일부씩 하나의 pose로 최적화해서 나머지 pose와 relative pose 비교.
-            if len(output_list) != 0:       # > 2:
-                model = Model_mp_valid(dbs, images_list, output_list)
+            valid_kps_dict = {}
+            valid_Ks_dict = {}
+            valid_Ms_dict = {}
+            valid_candidates = []
+            if failure < 2:
+                for v_idx, v_kps in enumerate(v_kps_list):
+                    if v_kps is not None:
+                        valid_kps_dict[v_idx] = v_kps #ex {0:kps0, 2:kps2, 3:kps3}
+                        valid_Ks_dict[v_idx] = v_Ks[v_idx]
+                        valid_Ms_dict[v_idx] = v_Ms[v_idx]
+                        valid_candidates.append(v_idx) #ex [0, 2, 3]
+                refined_joint_dict = {}
+                for t_idx in valid_candidates: #ex 0
+                    v_list = list(valid_kps_dict.keys())
+                    v_list.remove(t_idx) #ex [2, 3]
 
-                # if kps list is [0, 1, 2, None], test with [0, 1], [1, 2], [0, 2]
-                # if kps list is [0, 1, None, 3], test with [0, 1], [1, 3], [0, 3]
-                # if kps list is [0, 1, 2, 3], test with [0, 1, 2], [0, 1, 3], [0, 2, 3], [1,2,3]
-                for validate_combination in model.valid_candidates:
-                    optm = torch.optim.Adam(model.parameters(), lr=0.1, betas=(0.5, 0.99))
+                    Ks_list = []
+                    ext_list = []
+                    kps_list = []
+                    for v_idx in v_list:
+                        kps_list.append(valid_kps_dict[v_idx]) #ex [kps2, kps3]
+                        Ks_list.append(v_Ks[v_idx])
+                        ext_list.append(v_Ms[v_idx])
+                    model = Model_mp_valid(init_joint)
+                    optm = torch.optim.Adam(model.parameters(), lr=0.1)
+                    refined_joint = optimize_kps(model, optm, Ks_list, ext_list, kps_list, n=1000) #ex [kps2, kps3]으로 최적화된 joint(21, 3)
+                    refined_joint_dict[t_idx] = refined_joint
 
-                    cam_list = camIDset[validate_combination]
-                    Ks_list = model.Ks[validate_combination]
-                    ext_list = model.Ms[validate_combination]
+                #######
+                #ex [kps0, None, kps2, kps3]
+                #valid_kps_dict = {0:kps0, 2:kps2, 3:kps3}
+                #refined_joint = {0:(kps2, kps3로 최적화된 joint), 2:(kps0, kps3로 최적화된 joint), 3:(kps0, kps2로 최적화된 joint)}
+                #######
 
-                    refined_joint = optimize_kps(model, optm, device, cam_list, Ks_list, ext_list, n=10)
+                # 최적화에 사용되지 않은 나머지 mediapipe pose가 최적화된 pose에 비해 얼마나 outlier인지 relative pose 형태로 비교.
+                # 모든 포즈와의 relative 차이를 계산해서, 최적화에 사용된 pose와는 difference가 작고, 사용되지 않은 pose와의 diff가 큰 경우에만 제외해야함.
+                # 잘못된 pose를 최적화에 사용한 경우는 최적화에 사용한 pose들과의 diff도 어느정도 클거라고 예상중. 확인 필요.
+                outlier, inlier = validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict)
 
-                    # 최적화에 사용되지 않은 나머지 mediapipe pose가 최적화된 pose에 비해 얼마나 outlier인지 relative pose 형태로 비교.
-                    # 모든 포즈와의 relative 차이를 계산해서, 최적화에 사용된 pose와는 difference가 작고, 사용되지 않은 pose와의 diff가 큰 경우에만 제외해야함.
-                    # 잘못된 pose를 최적화에 사용한 경우는 최적화에 사용한 pose들과의 diff도 어느정도 클거라고 예상중. 확인 필요.
-                    validate_mp(model, validate_combination, refined_joint)
+                #맞는 refined_joint의 평균값을 init_joint로 사용
+                if len(inlier) > 0:
+                    init_joint = refined_joint_dict[inlier[0]]
+                for f_idx, (db, images, output) in enumerate(zip(dbs, images_list, output_list)):
+                    if output is not None:
+                        if f_idx in inlier:
+                            bb, img2bb, bb2img, procImgSet, kps = output
+                            procKps = db.translateKpts(np.copy(kps), img2bb)
+                            visibility = db.computeVisibility(procKps)
+                            db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
+                        else:
+                            db.postProcessNone(save_idx)
+                    else:
+                        db.postProcessNone(save_idx)
+                    
 
-                    # 만약 outlier라면 관련된 meta, visualizeMP 삭제해서 이후 과정에 제외되도록 처리 필요. (어떤 데이터 삭제해야하는지 체크해야함)
-                    print(".")
+            # for db, images, output in zip(dbs, images_list, output_list):
+            #     if output is not None:
+            #         bb, img2bb, bb2img, procImgSet, kps = output
+            #         procKps = db.translateKpts(np.copy(kps), img2bb)
+            #         visibility = db.computeVisibility(procKps)
+            #         db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
 
+            #         # if flag_segmentation:
+            #         #     db.segmentation(save_idx, procImgSet, procKps, img2bb)
+            #     else:
+            #         db.postProcessNone(save_idx)
 
-            for db, images, output in zip(dbs, images_list, output_list):
-                if output is not None:
-                    bb, img2bb, bb2img, procImgSet, kps = output
-                    procKps = db.translateKpts(np.copy(kps), img2bb)
-                    visibility = db.computeVisibility(procKps)
-                    db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
-
-                    # if flag_segmentation:
-                    #     db.segmentation(save_idx, procImgSet, procKps, img2bb)
-                else:
-                    db.postProcessNone(save_idx)
             # object data only on master cam
             dbs[0].updateObjdata(idx, save_idx, int(dbs[0].grasp_id))
 
@@ -1000,45 +1057,32 @@ def done_callback(result):
 
 
 class Model_mp_valid(nn.Module):
-    def __init__(self, dbs, images_list, output_list):
+    def __init__(self, init_joint):
         super().__init__()
-        weights = torch.FloatTensor(np.zeros((21, 3)))  # [21,3]
+        if init_joint is None:
+            init_joint = np.ones((21, 3))
+        weights = torch.FloatTensor(init_joint)  # [21,3]
         self.weights = nn.Parameter(weights)
-
-        self.Ks = [dbs[0].K, dbs[1].K, dbs[2].K, dbs[3].K]
-        self.Ms = [dbs[0].extrinsics['mas'].reshape((3, 4)),
-                   dbs[0].extrinsics['sub1'].reshape((3, 4)),
-                   dbs[0].extrinsics['sub2'].reshape((3, 4)),
-                   dbs[0].extrinsics['sub3'].reshape((3, 4))]
-
-        # include (21, 3) or None
-        self.kps = [output_list[0][-1], output_list[1][-1], output_list[2][-1], output_list[3][-1]]
-
-        # if kps list is [0, 1, 2, None], test with [0, 1], [1, 2]
-        # if kps list is [0, 1, 2, 3], test with [0, 1, 2], [0, 1, 3], [0, 2, 3], [1,2,3]
-        self.valid_candidates = None
-
 
     def forward(self):
         output_joint = self.weights
         return output_joint
 
-def optimize_kps(frame, model, optimizer, device, cam_list, Ks_list, ext_list, n=100):
+def optimize_kps(model, optimizer, Ks_list, ext_list, kps_list, n=100): 
     losses = []
     for i in range(n):
         print("%d / %d"%(i+1, n))
         losslist = []
-        refined_joint = model()
-
+        init_joint = model()
         # add weight for each cam's loss
-        for camIdx in camIdxSet:
+        for Ms, Ks, kps in zip(ext_list, Ks_list, kps_list):
             # world 좌표계 xyz pose를 각 카메라에 대한 xyz로 변환
-            joints_cam = torch.unsqueeze(mano3DToCam3D(self.init_joint, self.Ms[camIdx]), 0)
+            joints_cam = torch.unsqueeze(mano3DToCam3D(init_joint, torch.FloatTensor(Ms)), 0)
             # 각 카메라에 projection
-            pred_kpts2d = projectPoints(joints_cam, self.Ks[camIdx])
+            pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(Ks))
             # mp 2D pose 결과와 비교
-            loss = (pred_kpts2d - self.mp_kpts2d) ** 2
-            losslist.append(loss)
+            loss = (pred_kpts2d[0] - torch.FloatTensor(kps)[:, :2]) ** 2
+            losslist.append(loss.sum())
 
         loss = sum(losslist) / len(losslist)
         optimizer.zero_grad()
@@ -1051,15 +1095,27 @@ def optimize_kps(frame, model, optimizer, device, cam_list, Ks_list, ext_list, n
     return result_joint
 
 
-def validate_mp(model):
-    # projection the final model pose
-    # compare with each mp 2D kps
-    # find outlier
-
-
-    # rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
-
-    return None
+def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict):
+    outlier = []
+    inlier = []
+    for t_idx, v_joint in refined_joint_dict.items():
+        kps_diff = {}
+        for v_idx, Ks, Ms in zip(valid_Ks_dict.keys(), valid_Ks_dict.values(), valid_Ms_dict.values()):
+            joints_cam = torch.unsqueeze(mano3DToCam3D(v_joint, torch.FloatTensor(Ms)), 0)
+            pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(Ks))
+            diff = (valid_kps_dict[v_idx][:, :2] - pred_kpts2d.detach().numpy()[0]) ** 2
+            kps_diff[v_idx] = diff.mean()
+        for v_idx, diff in kps_diff.items():
+            if v_idx != t_idx:
+                if diff > 500:
+                    print("outlier in kps used for optimization")
+                    continue
+            elif v_idx == t_idx:
+                if diff > 500:
+                    outlier.append(t_idx)
+                else:
+                    inlier.append(t_idx)
+    return outlier, inlier
 
 
 ################# depth scale value need to be update #################
@@ -1210,6 +1266,52 @@ def main(argv):
 
     print("(fill in google sheets) unvalid trials with wrong object pose data : ", obj_unvalid_trials)
 
-if __name__ == '__main__':
+def main_test():
+    t0 = time.time()
+    ### Setup ###
+    rootDir = os.path.join(baseDir, FLAGS.db)
 
-    app.run(main)
+    ### Hand pose initialization(mediapipe) ###
+    '''
+    [TODO]
+        - consider two-hand situation (currently assume single hand detection)
+    '''
+
+    print("---------------start preprocess seq ---------------")
+    process_count = 1
+
+    tasks = []
+    total_count = 0
+    t1 = time.time()
+
+    obj_unvalid_trials = []
+
+    seq_list = natsorted(os.listdir(rootDir))
+    if FLAGS.start != None and FLAGS.end != None:
+        seq_list = seq_list[FLAGS.start:FLAGS.end]
+
+    for seqIdx, seqName in enumerate(seq_list):
+        if FLAGS.seq is not None and seqName != FLAGS.seq:
+            continue
+
+        seqDir = os.path.join(rootDir, seqName)
+        for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+            dbs = []
+            for camID in camIDset:
+                db = loadDataset(FLAGS.db, seqName, trialName)
+                db.init_cam(camID)
+                dbs.append(db)
+                # total_count += len(db)
+                # tasks.append((preprocess_single_cam, (db,)))
+
+            if dbs[0].quit:
+                print("wrong object pose data, continue to next trial")
+                obj_unvalid_trials.append(seqName + '_' + trialName)
+            else:
+                total_count += len(dbs[0])
+                with tqdm.tqdm(total=total_count) as global_tqdm:
+                    preprocess_multi_cam(dbs, tqdm_func=tqdm.tqdm, global_tqdm=global_tqdm)
+
+if __name__ == '__main__':
+    # app.run(main)
+    main_test()
