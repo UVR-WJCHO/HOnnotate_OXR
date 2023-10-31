@@ -954,19 +954,8 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                     dbs[0].extrinsics['sub1'].reshape((3, 4)),
                     dbs[0].extrinsics['sub2'].reshape((3, 4)),
                     dbs[0].extrinsics['sub3'].reshape((3, 4))]
-
             # include (21, 3) or None
             v_kps_list = [kps_list[0], kps_list[1], kps_list[2], kps_list[3]]
-
-            # if kps list is [0, 1, 2, None], test with [0, 1], [1, 2]
-            # if kps list is [0, 1, 2, 3], test with [0, 1, 2], [0, 1, 3], [0, 2, 3], [1,2,3]
-            # valid_candidates = []
-            # if v_kps.count(None) == 0:
-            #     valid_candidates = [0, 1, 2, 3]
-            # elif v_kps.count(None) == 1:
-            #     for i in range(len(v_kps) - 1):
-            #         if i != v_kps.index(None):
-            #             valid_candidates.append(i)
 
             ## postprocess ##
             # output 일부씩 하나의 pose로 최적화해서 나머지 pose와 relative pose 비교.
@@ -1018,7 +1007,6 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 #valid_kps_dict = {0:kps0, 2:kps2, 3:kps3}
                 #refined_joint = {0:(kps2, kps3로 최적화된 joint), 2:(kps0, kps3로 최적화된 joint), 3:(kps0, kps2로 최적화된 joint)}
                 #######
-
                 # 최적화에 사용되지 않은 나머지 mediapipe pose가 최적화된 pose에 비해 얼마나 outlier인지 relative pose 형태로 비교.
                 # 모든 포즈와의 relative 차이를 계산해서, 최적화에 사용된 pose와는 difference가 작고, 사용되지 않은 pose와의 diff가 큰 경우에만 제외해야함.
                 # 잘못된 pose를 최적화에 사용한 경우는 최적화에 사용한 pose들과의 diff도 어느정도 클거라고 예상중. 확인 필요.
@@ -1038,19 +1026,17 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                             db.postProcessNone(save_idx)
                     else:
                         db.postProcessNone(save_idx)
-                    
-
-            # for db, images, output in zip(dbs, images_list, output_list):
-            #     if output is not None:
-            #         bb, img2bb, bb2img, procImgSet, kps = output
-            #         procKps = db.translateKpts(np.copy(kps), img2bb)
-            #         visibility = db.computeVisibility(procKps)
-            #         db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
-
-            #         # if flag_segmentation:
-            #         #     db.segmentation(save_idx, procImgSet, procKps, img2bb)
-            #     else:
-            #         db.postProcessNone(save_idx)
+            elif failure == 2:
+                for db, images, output in zip(dbs, images_list, output_list):
+                    if output is not None:
+                        bb, img2bb, bb2img, procImgSet, kps = output
+                        procKps = db.translateKpts(np.copy(kps), img2bb)
+                        visibility = db.computeVisibility(procKps)
+                        db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
+                    else:
+                        db.postProcessNone(save_idx)
+            else:
+                print("0 or 1 mp results, skip")
 
             # object data only on master cam
             dbs[0].updateObjdata(idx, save_idx, int(dbs[0].grasp_id))
@@ -1075,29 +1061,29 @@ class Model_mp_valid(nn.Module):
     def __init__(self, init_joint):
         super().__init__()
         if init_joint is None:
-            init_joint = np.zeros((21, 3))
+            # init_joint = np.zeros((21, 3))
 
-            # init_joint = np.array([[-66.4330, -27.5448, 627.7579],
-            #         [-70.8482, -69.0388, 640.1729],
-            #         [-61.3277, -98.3064, 651.9626],
-            #         [-45.4325, -116.0726, 668.4021],
-            #         [-31.4607, -130.5446, 684.4095],
-            #         [-15.8951, -102.9330, 612.1378],
-            #         [3.1132, -131.4715, 608.7621],
-            #         [16.7528, -150.8425, 612.4157],
-            #         [30.0315, -165.2012, 617.0434],
-            #         [4.6063, -83.6252, 611.9430],
-            #         [37.8029, -102.9709, 612.7770],
-            #         [54.0316, -114.7373, 622.3978],
-            #         [67.8304, -123.7854, 631.3541],
-            #         [13.3150, -64.8315, 617.9886],
-            #         [43.4637, -82.6074, 629.5584],
-            #         [57.2314, -93.3979, 643.7996],
-            #         [71.7128, -100.8318, 656.1483],
-            #         [12.4814, -46.5963, 628.3045],
-            #         [38.0418, -61.7191, 636.2707],
-            #         [49.7975, -69.9237, 643.9062],
-            #         [58.5243, -77.1436, 651.9783]])
+            init_joint = np.array([[-66.4330, -27.5448, 627.7579],
+                    [-70.8482, -69.0388, 640.1729],
+                    [-61.3277, -98.3064, 651.9626],
+                    [-45.4325, -116.0726, 668.4021],
+                    [-31.4607, -130.5446, 684.4095],
+                    [-15.8951, -102.9330, 612.1378],
+                    [3.1132, -131.4715, 608.7621],
+                    [16.7528, -150.8425, 612.4157],
+                    [30.0315, -165.2012, 617.0434],
+                    [4.6063, -83.6252, 611.9430],
+                    [37.8029, -102.9709, 612.7770],
+                    [54.0316, -114.7373, 622.3978],
+                    [67.8304, -123.7854, 631.3541],
+                    [13.3150, -64.8315, 617.9886],
+                    [43.4637, -82.6074, 629.5584],
+                    [57.2314, -93.3979, 643.7996],
+                    [71.7128, -100.8318, 656.1483],
+                    [12.4814, -46.5963, 628.3045],
+                    [38.0418, -61.7191, 636.2707],
+                    [49.7975, -69.9237, 643.9062],
+                    [58.5243, -77.1436, 651.9783]])
 
         weights = torch.FloatTensor(init_joint)  # [21,3]
         self.weights = nn.Parameter(weights)
@@ -1105,6 +1091,7 @@ class Model_mp_valid(nn.Module):
     def forward(self):
         output_joint = self.weights
         return output_joint
+
 
 def optimize_kps(model, optimizer, Ks_list, ext_list, kps_list, n=100): 
     losses = []
