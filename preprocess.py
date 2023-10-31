@@ -57,8 +57,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230920', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230920_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '231030', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231030_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
@@ -998,6 +998,18 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                     refined_joint = optimize_kps(model, optm, Ks_list, ext_list, kps_list, n=1000) #ex [kps2, kps3]으로 최적화된 joint(21, 3)
                     refined_joint_dict[t_idx] = refined_joint
 
+                    # visualize
+                    for i in range(4):
+                        joints_cam = torch.unsqueeze(mano3DToCam3D(init_joint, torch.FloatTensor(ext_list[i])), 0)
+                        # 각 카메라에 projection
+                        pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(Ks_list[i]))
+                        pred_kpts2d = np.squeeze(pred_kpts2d.numpy())
+                        vis = paint_kpts(None, images_list[i], pred_kpts2d)
+                        cv2.imshow("vis optm output without %d" % t_idx, vis)
+                        cv2.waitKey(0)
+
+
+
                 #######
                 #ex [kps0, None, kps2, kps3]
                 #valid_kps_dict = {0:kps0, 2:kps2, 3:kps3}
@@ -1141,7 +1153,7 @@ def main(argv):
     '''
 
     print("---------------start preprocess seq ---------------")
-    process_count = 1
+    process_count = 4
 
     tasks = []
     total_count = 0
