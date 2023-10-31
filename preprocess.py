@@ -982,32 +982,35 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                         valid_Ms_dict[v_idx] = v_Ms[v_idx]
                         valid_candidates.append(v_idx) #ex [0, 2, 3]
                 refined_joint_dict = {}
+
+                model = Model_mp_valid(init_joint)#.cuda()
+                optm = torch.optim.Adam(model.parameters(), lr=2.0)
+
                 for t_idx in valid_candidates: #ex 0
+                    # prepare data
                     v_list = list(valid_kps_dict.keys())
                     v_list.remove(t_idx) #ex [2, 3]
-
                     Ks_list = []
                     ext_list = []
                     kps_list = []
                     for v_idx in v_list:
-                        kps_list.append(valid_kps_dict[v_idx]) #ex [kps2, kps3]
+                        kps_list.append(valid_kps_dict[v_idx])  # ex [kps2, kps3]
                         Ks_list.append(v_Ks[v_idx])
                         ext_list.append(v_Ms[v_idx])
-                    model = Model_mp_valid(init_joint)
-                    optm = torch.optim.Adam(model.parameters(), lr=0.1)
-                    refined_joint = optimize_kps(model, optm, Ks_list, ext_list, kps_list, n=1000) #ex [kps2, kps3]으로 최적화된 joint(21, 3)
+
+                    refined_joint = optimize_kps(model, optm, Ks_list, ext_list, kps_list, n=5000) #ex [kps2, kps3]으로 최적화된 joint(21, 3)
                     refined_joint_dict[t_idx] = refined_joint
+                    init_joint = refined_joint
 
-                    # visualize
-                    for i in range(4):
-                        joints_cam = torch.unsqueeze(mano3DToCam3D(init_joint, torch.FloatTensor(ext_list[i])), 0)
-                        # 각 카메라에 projection
-                        pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(Ks_list[i]))
-                        pred_kpts2d = np.squeeze(pred_kpts2d.numpy())
-                        vis = paint_kpts(None, images_list[i], pred_kpts2d)
-                        cv2.imshow("vis optm output without %d" % t_idx, vis)
-                        cv2.waitKey(0)
-
+                    # # visualize
+                    # for i in range(4):
+                    #     joints_cam = torch.unsqueeze(mano3DToCam3D(refined_joint, torch.FloatTensor(v_Ms[i])), 0)
+                    #     # 각 카메라에 projection
+                    #     pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(v_Ks[i]))
+                    #     pred_kpts2d = np.squeeze(pred_kpts2d.detach().numpy())
+                    #     vis = paint_kpts(None, images_list[i][0], pred_kpts2d)
+                    #     cv2.imshow("vis optm output without %d" % t_idx, vis)
+                    #     cv2.waitKey(0)
 
 
                 #######
@@ -1072,7 +1075,30 @@ class Model_mp_valid(nn.Module):
     def __init__(self, init_joint):
         super().__init__()
         if init_joint is None:
-            init_joint = np.ones((21, 3))
+            init_joint = np.zeros((21, 3))
+
+            # init_joint = np.array([[-66.4330, -27.5448, 627.7579],
+            #         [-70.8482, -69.0388, 640.1729],
+            #         [-61.3277, -98.3064, 651.9626],
+            #         [-45.4325, -116.0726, 668.4021],
+            #         [-31.4607, -130.5446, 684.4095],
+            #         [-15.8951, -102.9330, 612.1378],
+            #         [3.1132, -131.4715, 608.7621],
+            #         [16.7528, -150.8425, 612.4157],
+            #         [30.0315, -165.2012, 617.0434],
+            #         [4.6063, -83.6252, 611.9430],
+            #         [37.8029, -102.9709, 612.7770],
+            #         [54.0316, -114.7373, 622.3978],
+            #         [67.8304, -123.7854, 631.3541],
+            #         [13.3150, -64.8315, 617.9886],
+            #         [43.4637, -82.6074, 629.5584],
+            #         [57.2314, -93.3979, 643.7996],
+            #         [71.7128, -100.8318, 656.1483],
+            #         [12.4814, -46.5963, 628.3045],
+            #         [38.0418, -61.7191, 636.2707],
+            #         [49.7975, -69.9237, 643.9062],
+            #         [58.5243, -77.1436, 651.9783]])
+
         weights = torch.FloatTensor(init_joint)  # [21,3]
         self.weights = nn.Parameter(weights)
 
@@ -1094,13 +1120,18 @@ def optimize_kps(model, optimizer, Ks_list, ext_list, kps_list, n=100):
             pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(Ks))
             # mp 2D pose 결과와 비교
             loss = (pred_kpts2d[0] - torch.FloatTensor(kps)[:, :2]) ** 2
+
             losslist.append(loss.sum())
 
         loss = sum(losslist) / len(losslist)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        losses.append(loss.detach().cpu())
+
+        loss_ = float(loss.detach().cpu().numpy())
+
+        if loss_ < 3000:
+            break
 
     result_joint = model()
 
@@ -1117,16 +1148,34 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
             pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(Ks))
             diff = (valid_kps_dict[v_idx][:, :2] - pred_kpts2d.detach().numpy()[0]) ** 2
             kps_diff[v_idx] = diff.mean()
-        for v_idx, diff in kps_diff.items():
-            if v_idx != t_idx:
-                if diff > 500:
-                    print("outlier in kps used for optimization")
-                    continue
-            elif v_idx == t_idx:
-                if diff > 500:
-                    outlier.append(t_idx)
-                else:
-                    inlier.append(t_idx)
+
+        # t_idx : 최적화 과정에서 제외한 cam
+        # v_idx, kps_diff : t_idx를 제외하고 최적화한 자세를 v_idx의 mp result와 비교하였을 떄의 diff.
+
+        diff_notoptm = kps_diff[t_idx]
+        diff_optm = 0
+        for idx in valid_Ks_dict.keys():
+            if idx != t_idx:
+                diff_optm += kps_diff[idx]
+        diff_optm /= (len(valid_Ks_dict.keys()) - 1)
+
+        print("diff value of notoptimized : ", diff_notoptm)
+        print("avg diff value of optimized : ", diff_optm)
+        if diff_notoptm > 500 and diff_optm < 100:
+            outlier.append(t_idx)
+        else:
+            inlier.append(t_idx)
+
+        # for v_idx, diff in kps_diff.items():
+        #     if v_idx != t_idx:
+        #         if diff > 500:
+        #             print("outlier in kps used for optimization")
+        #             continue
+        #     elif v_idx == t_idx:
+        #         if diff > 500:
+        #             outlier.append(t_idx)
+        #         else:
+        #             inlier.append(t_idx)
     return outlier, inlier
 
 
