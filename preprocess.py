@@ -998,8 +998,8 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                     #     pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(v_Ks[i]))
                     #     pred_kpts2d = np.squeeze(pred_kpts2d.detach().numpy())
                     #     vis = paint_kpts(None, images_list[i][0], pred_kpts2d)
-                    #     cv2.imshow("vis optm output without %d" % t_idx, vis)
-                    #     cv2.waitKey(0)
+                    #     cv2.imshow("vis optm output without %d, %d cam" % (t_idx, i), vis)
+                    # cv2.waitKey(0)
 
 
                 #######
