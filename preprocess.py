@@ -1386,5 +1386,5 @@ def main_test():
                     preprocess_multi_cam(dbs, tqdm_func=tqdm.tqdm, global_tqdm=global_tqdm)
 
 if __name__ == '__main__':
-    # app.run(main)
-    main_test()
+    app.run(main)
+    # main_test()
