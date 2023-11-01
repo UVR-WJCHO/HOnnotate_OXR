@@ -61,6 +61,8 @@ flags.DEFINE_string('db', '231030', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '231030_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
 
+flags.DEFINE_string('obj_db', 'obj_scanned_models', 'target obj_scanned_models folder')   ## name ,default, help
+
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
@@ -317,7 +319,7 @@ class loadDataset():
 
         # load object mesh info
         self.obj_class = self.obj_id + '_' + str(OBJType(int(self.obj_id)).name)
-        self.obj_template_dir = os.path.join(baseDir, 'obj_scanned_models', self.obj_class)
+        self.obj_template_dir = os.path.join(baseDir, FLAGS.obj_db, self.obj_class)
 
         target_mesh_class = self.obj_class
         # if int(self.obj_id) == 29:
@@ -1173,7 +1175,7 @@ def main(argv):
     assert os.path.exists(os.path.join(baseDir, FLAGS.db)), "no {YYMMDD} directory. check."
     assert os.path.exists(os.path.join(baseDir, FLAGS.cam_db)), "no{YYMMDD}_cam directory. check."
     assert os.path.exists(os.path.join(baseDir, FLAGS.db + '_obj')), "no {YYMMDD}_obj directory. check."
-    assert os.path.exists(os.path.join(baseDir, 'obj_scanned_models')), "no dataset/obj_scanned_models directory. check."
+    assert os.path.exists(os.path.join(baseDir, FLAGS.obj_db)), "no dataset/obj_scanned_models directory. check."
     assert os.path.exists(
         os.path.join(os.getcwd(), 'modules/deepLabV3plus/checkpoints')), "no segmentation checkpoint folder. check."
 
