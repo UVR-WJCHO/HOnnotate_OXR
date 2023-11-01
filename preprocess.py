@@ -196,7 +196,7 @@ class loadDataset():
         self.debug_vis = os.path.join(self.dbDir, 'visualizeMP')
 
         os.makedirs(os.path.join(self.dbDir, 'visualizeMP_outlier'), exist_ok=True)
-        self.debug_vis = os.path.join(self.dbDir, 'visualizeMP_outlier')
+        self.debug_vis_outlier = os.path.join(self.dbDir, 'visualizeMP_outlier')
             
         self.rgbCropDir = None
         self.depthCropDir = None
@@ -875,7 +875,7 @@ class loadDataset():
     def postProcessOutlier(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
         vis = paint_kpts(None, procImgSet[0], processed_kpts, visibility)
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
-        cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+        cv2.imwrite(os.path.join(self.debug_vis_outlier, imgName), vis)
 
 
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
