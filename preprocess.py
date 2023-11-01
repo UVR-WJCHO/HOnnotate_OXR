@@ -57,11 +57,11 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '231030', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '231030_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
 
-flags.DEFINE_string('obj_db', 'obj_scanned_models', 'target obj_scanned_models folder')   ## name ,default, help
+flags.DEFINE_string('obj_db', 'obj_scanned_models_~230908', 'target obj_scanned_models folder')   ## name ,default, help
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
@@ -194,6 +194,9 @@ class loadDataset():
 
         os.makedirs(os.path.join(self.dbDir, 'visualizeMP'), exist_ok=True)
         self.debug_vis = os.path.join(self.dbDir, 'visualizeMP')
+
+        os.makedirs(os.path.join(self.dbDir, 'visualizeMP_outlier'), exist_ok=True)
+        self.debug_vis = os.path.join(self.dbDir, 'visualizeMP_outlier')
             
         self.rgbCropDir = None
         self.depthCropDir = None
@@ -869,6 +872,12 @@ class loadDataset():
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
 
+    def postProcessOutlier(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
+        vis = paint_kpts(None, procImgSet[0], processed_kpts, visibility)
+        imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
+        cv2.imwrite(os.path.join(self.debug_vis, imgName), vis)
+
+
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
 
         rgbName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
@@ -930,6 +939,9 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         save_idx = 0
         init_joint = None
         for idx in range(len(dbs[0])):
+            # if idx < 69:
+            #     continue
+
             if idx % 3 != 0:
                 progress.update()
                 global_tqdm.update()
@@ -975,7 +987,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 refined_joint_dict = {}
 
                 model = Model_mp_valid(init_joint)#.cuda()
-                optm = torch.optim.Adam(model.parameters(), lr=2.0)
+                optm = torch.optim.Adam(model.parameters(), lr=5.0)
 
                 for t_idx in valid_candidates: #ex 0
                     # prepare data
@@ -989,19 +1001,25 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                         Ks_list.append(v_Ks[v_idx])
                         ext_list.append(v_Ms[v_idx])
 
-                    refined_joint = optimize_kps(model, optm, Ks_list, ext_list, kps_list, n=5000) #ex [kps2, kps3]으로 최적화된 joint(21, 3)
-                    refined_joint_dict[t_idx] = refined_joint
-                    init_joint = refined_joint
+                    refined_joint = optimize_kps(model, optm, Ks_list, ext_list, kps_list, n=100) #ex [kps2, kps3]으로 최적화된 joint(21, 3)
+                    refined_joint_dict[t_idx] = refined_joint.clone().detach()
+                    # init_joint = refined_joint
 
                     # # visualize
                     # for i in range(4):
+                    #     if i != t_idx:
+                    #         continue
                     #     joints_cam = torch.unsqueeze(mano3DToCam3D(refined_joint, torch.FloatTensor(v_Ms[i])), 0)
                     #     # 각 카메라에 projection
                     #     pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(v_Ks[i]))
                     #     pred_kpts2d = np.squeeze(pred_kpts2d.detach().numpy())
                     #     vis = paint_kpts(None, images_list[i][0], pred_kpts2d)
-                    #     cv2.imshow("vis optm output without %d, %d cam" % (t_idx, i), vis)
-                    # cv2.waitKey(0)
+                    #     # mp_result = v_kps_list[i]
+                    #     # if mp_result is not None:
+                    #     #     vis = paint_kpts(None, vis, mp_result[:, :2])
+                    #     vis = cv2.resize(vis, (960, 540))
+                    #     cv2.imshow("frame %d : vis optm output without %d, %d cam" % (idx, t_idx, i), vis)
+                    # cv2.waitKey(1)
 
 
                 #######
@@ -1012,6 +1030,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 # 최적화에 사용되지 않은 나머지 mediapipe pose가 최적화된 pose에 비해 얼마나 outlier인지 relative pose 형태로 비교.
                 # 모든 포즈와의 relative 차이를 계산해서, 최적화에 사용된 pose와는 difference가 작고, 사용되지 않은 pose와의 diff가 큰 경우에만 제외해야함.
                 # 잘못된 pose를 최적화에 사용한 경우는 최적화에 사용한 pose들과의 diff도 어느정도 클거라고 예상중. 확인 필요.
+                # print("current frame num : ", idx)
                 outlier, inlier = validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict)
 
                 #맞는 refined_joint의 평균값을 init_joint로 사용
@@ -1025,7 +1044,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                             visibility = db.computeVisibility(procKps)
                             db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
                         else:
-                            db.postProcessNone(save_idx)
+                            db.postProcessOutlier(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
                     else:
                         db.postProcessNone(save_idx)
             elif failure == 2:
@@ -1097,8 +1116,9 @@ class Model_mp_valid(nn.Module):
 
 def optimize_kps(model, optimizer, Ks_list, ext_list, kps_list, n=100): 
     losses = []
+    prev_loss = 0
+    early_stop = 0
     for i in range(n):
-        print("%d / %d"%(i+1, n))
         losslist = []
         init_joint = model()
         # add weight for each cam's loss
@@ -1119,9 +1139,17 @@ def optimize_kps(model, optimizer, Ks_list, ext_list, kps_list, n=100):
 
         loss_ = float(loss.detach().cpu().numpy())
 
-        if loss_ < 3000:
-            break
+        # print("%d / %d : loss = %d"%(i+1, n, loss_))
 
+        if abs(prev_loss - loss_) < 1:
+            early_stop += 1
+        if loss_ < 500:
+            break
+        if early_stop > 5:
+            break
+        prev_loss = loss_
+
+    # print("loss after optm : ", loss_)
     result_joint = model()
 
     return result_joint
@@ -1135,7 +1163,8 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
         for v_idx, Ks, Ms in zip(valid_Ks_dict.keys(), valid_Ks_dict.values(), valid_Ms_dict.values()):
             joints_cam = torch.unsqueeze(mano3DToCam3D(v_joint, torch.FloatTensor(Ms)), 0)
             pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(Ks))
-            diff = (valid_kps_dict[v_idx][:, :2] - pred_kpts2d.detach().numpy()[0]) ** 2
+            pred_kpts2d = np.squeeze(pred_kpts2d.detach().numpy())
+            diff = (valid_kps_dict[v_idx][:, :2] - pred_kpts2d) ** 2
             kps_diff[v_idx] = diff.mean()
 
         # t_idx : 최적화 과정에서 제외한 cam
@@ -1148,23 +1177,15 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
                 diff_optm += kps_diff[idx]
         diff_optm /= (len(valid_Ks_dict.keys()) - 1)
 
-        print("diff value of notoptimized : ", diff_notoptm)
-        print("avg diff value of optimized : ", diff_optm)
-        if diff_notoptm > 500 and diff_optm < 100:
+        # print("diff value of notoptimized of cam %d: "% t_idx, diff_notoptm)
+        # print("avg diff value of optimized of cam %d: "% t_idx, diff_optm)
+        if diff_notoptm > 400 and diff_optm < 200:
             outlier.append(t_idx)
         else:
             inlier.append(t_idx)
 
-        # for v_idx, diff in kps_diff.items():
-        #     if v_idx != t_idx:
-        #         if diff > 500:
-        #             print("outlier in kps used for optimization")
-        #             continue
-        #     elif v_idx == t_idx:
-        #         if diff > 500:
-        #             outlier.append(t_idx)
-        #         else:
-        #             inlier.append(t_idx)
+        if diff_notoptm > 1000 and diff_optm > 1000:
+            print("both wrong in here")
     return outlier, inlier
 
 
