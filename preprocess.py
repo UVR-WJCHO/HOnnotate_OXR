@@ -872,8 +872,8 @@ class loadDataset():
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
 
-    def postProcessOutlier(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
-        vis = paint_kpts(None, procImgSet[0], processed_kpts, visibility)
+    def postProcessOutlier(self, idx, procImgSet, processed_kpts):
+        vis = paint_kpts(None, procImgSet[0], processed_kpts)
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.debug_vis_outlier, imgName), vis)
 
@@ -1044,7 +1044,9 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                             visibility = db.computeVisibility(procKps)
                             db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
                         else:
-                            db.postProcessOutlier(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
+                            bb, img2bb, bb2img, procImgSet, kps = output
+                            procKps = db.translateKpts(np.copy(kps), img2bb)
+                            db.postProcessOutlier(save_idx, procImgSet, procKps)
                     else:
                         db.postProcessNone(save_idx)
             elif failure == 2:
@@ -1179,7 +1181,7 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
 
         # print("diff value of notoptimized of cam %d: "% t_idx, diff_notoptm)
         # print("avg diff value of optimized of cam %d: "% t_idx, diff_optm)
-        if diff_notoptm > 400 and diff_optm < 200:
+        if diff_notoptm > 500 and diff_optm < 200:
             outlier.append(t_idx)
         else:
             inlier.append(t_idx)
