@@ -51,7 +51,7 @@ import modules.common.transforms as tf
 from natsort import natsorted
 
 
-flag_check_vert_marker_pair = False
+flag_check_vert_marker_pair = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
@@ -320,6 +320,7 @@ class loadDataset():
 
         obj_mesh_path_list = []
         # interactable obj has different parts num
+
         if int(self.obj_id) == 20 or int(self.obj_id) == 21:
             target_mesh_class = self.obj_class
             obj_mesh_path = os.path.join(self.obj_template_dir, target_mesh_class) + '.obj'
@@ -341,10 +342,13 @@ class loadDataset():
         self.obj_mesh_data['faces'] = {}
 
         for i, obj_mesh_path in enumerate(obj_mesh_path_list):
+
+            obj_file = obj_mesh_path.split('/')[-1][:-4]
+
             try:
                 verts, faces, _ = load_obj(obj_mesh_path)
-                self.obj_mesh_data['verts'][i] = verts
-                self.obj_mesh_data['faces'][i] = faces.verts_idx
+                self.obj_mesh_data['verts'][obj_file] = verts
+                self.obj_mesh_data['faces'][obj_file] = faces.verts_idx
             except:
                 print("no obj mesh data : %s" % obj_mesh_path)
 
@@ -442,6 +446,7 @@ class loadDataset():
 
     def updateObjdata(self, idx, save_idx, grasp_id):
         if str(idx) in self.obj_data_all:
+            
             self.marker_sampled[str(save_idx)] = self.obj_data_all[str(idx)]
 
             marker_data = np.copy(self.obj_data_all[str(idx)])
@@ -488,127 +493,174 @@ class loadDataset():
 
     def fit_markerToObj(self, marker_pose, obj_class, obj_mesh, grasp_id):
         ## except if marker pose is nan
-        vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
+        
+        #vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
 
-        ## exceptional cases
-        if int(obj_class.split('_')[0]) == 29:
-            vertIDpermarker = vertIDpermarker[0]
-            ## no open phone after 230912
-            # if grasp_id == 12:
-            #     vertIDpermarker = vertIDpermarker[0]
-            # else:
-            #     vertIDpermarker = vertIDpermarker[1]
+        #obj_class = '20_smartphone'
 
-        pair_len = len(vertIDpermarker)
+        vertIDpermarker_split = CFG_vertspermarker_interaction[str(CFG_DATE)]['obj_class'][str(obj_class)]
 
-        target_marker_num = marker_pose.shape[0]
-        valid_marker = []
-        valid_idx = []
-        for i in range(target_marker_num):
-            if i == pair_len:
-                break
-            value = marker_pose[i, :]
-            if not any(np.isnan(value)):
-                valid_marker.append(value)
-                valid_idx.append(i)
+        dict_vertIDpermarker = {}
+        parts = []
+        pair_len = 0
+        marker_pose_dict = {}
 
-        marker_pose = np.asarray(valid_marker)
+        if vertIDpermarker_split == [] :
+            
+            dict_vertIDpermarker[str(obj_class)] = CFG_vertspermarker_interaction[str(CFG_DATE)]['pair'][str(obj_class)]
+            parts.append(str(obj_class))
+            pair_len += len(dict_vertIDpermarker[str(obj_class)])
+            marker_pose_dict[str(obj_class)] = marker_pose
 
-        output_marker_pose = np.copy(marker_pose)
-        # generate initial obj pose (4, 4)
-        obj_init_pose = generate_pose([0,0,0],[0,0,0])
+        else :
 
-        obj_verts = obj_mesh['verts']
-        verts_init = np.squeeze(np.array(obj_verts))
-        verts_init = verts_init[vertIDpermarker, :] * 10.0
+            for split in vertIDpermarker_split :
+ 
+                mocapIndex_lst = CFG_vertspermarker_interaction[str(CFG_DATE)]['split'][split]
+                pair_lst_info = str(obj_class) + '_' + split.split('_')[1]
+                vertexPair_lst = CFG_vertspermarker_interaction[str(CFG_DATE)]['pair'][pair_lst_info]
 
-        verts_init = verts_init[valid_idx, :]
+                dict_vertIDpermarker[pair_lst_info] = vertexPair_lst
+                marker_pose_dict[pair_lst_info] = marker_pose[mocapIndex_lst]
 
-        # if obj_class in CFG_OBJECT_SCALE.keys():
-        #     verts_init /= 10.0
-        #     verts_init *= CFG_OBJECT_SCALE[obj_class]
-        # scale factor 10, is .obj file has cm scale?
+                parts.append(pair_lst_info)
+                pair_len += len(dict_vertIDpermarker[pair_lst_info])
+        
+        # print(dict_vertIDpermarker) #{0: 334, 1: 3, 2: 753, 3: 406, 4: 3, 5: 2}
+        # print(split_idx) # 3
+        # self.obj_mesh_data['verts'][obj_file] = verts
+        # self.obj_mesh_data['faces'][obj_file] = faces.verts_idx
 
-        # verts_pose = apply_transform(obj_init_pose, verts_init) * 100.0
-
-        #verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
-        #marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
-
-        ## calculate scale of initial mesh
-        scale = 1.0
-        if obj_class in CFG_OBJECT_SCALE:
-            mean = np.mean(verts_init, 0)
-            k = verts_init.shape[0]
-            expanded_mean = np.broadcast_to(mean, verts_init.shape)
-            sub = verts_init - expanded_mean
-            sub_squeeze = sub.flatten()
-            s1 = np.sqrt(np.sum(np.square(sub_squeeze)) / k)
-
-            ## calculate scale of marker mesh
-
-            mean = np.mean(marker_pose, 0)
-            k = marker_pose.shape[0]
-            expanded_mean = np.broadcast_to(mean, marker_pose.shape)
-            sub = marker_pose - expanded_mean
-            sub_squeeze = sub.flatten()
-            s2 = np.sqrt(np.sum(np.square(sub_squeeze)) / k)
-
-            scale = s2 / s1
-
-            verts_init = verts_init * scale
-
-        if obj_class in CFG_OBJECT_SCALE_SPECIFIC.keys():
-            verts_init = verts_init * CFG_OBJECT_SCALE_SPECIFIC[obj_class]
-
-        if verts_init.shape[0] == 3 and obj_class in CFG_OBJECT_4th_POINT:
-            newpoints_verts_init = np.expand_dims((verts_init[1] + verts_init[2] - verts_init[0]), axis=0)
-            newpoints_marker_pose = np.expand_dims((marker_pose[1] + marker_pose[2] - marker_pose[0]), axis=0)
-            verts_init = np.concatenate((verts_init, newpoints_verts_init), axis=0)
-            marker_pose = np.concatenate((marker_pose, newpoints_marker_pose), axis=0)
-
-        R, t = tf.solve_rigid_tf_np(verts_init, marker_pose)
-
-        #R = R[0]
-        #t = t[0]
-        pose_calc = np.eye(4)
-        pose_calc[:3, :3] = R[:3, :3]
-        pose_calc[0, 3] = t[0]
-        pose_calc[1, 3] = t[1]
-        pose_calc[2, 3] = t[2]
-
-        # verts_debug = np.squeeze(verts_pose)
-        verts_debug = apply_transform(pose_calc, verts_init)# * 100.0
-        marker_debug = np.squeeze(marker_pose)
+        # ## exceptional cases
+        # if int(obj_class.split('_')[0]) == 29:
+        #     vertIDpermarker = vertIDpermarker[0]
+        #     ## no open phone after 230912
+        #     # if grasp_id == 12:
+        #     #     vertIDpermarker = vertIDpermarker[0]
+        #     # else:
+        #     #     vertIDpermarker = vertIDpermarker[1]
 
 
-        err = np.sum(abs(verts_debug - marker_debug), axis=1)
-        err = np.average(err)
+        valid_idx_dict = {}
 
-        ### debug
-        if flag_check_vert_marker_pair:
-            projection = self.extrinsics[self.camID].reshape(3, 4)
-            marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
-                                                 projection[:, 3:], self.intrinsics[self.camID],
-                                                 self.distCoeffs[self.camID])
-            marker_reproj = np.squeeze(marker_reproj)
-            projection = self.extrinsics[self.camID].reshape(3, 4)
-            vert_reproj, _ = cv2.projectPoints(verts_debug, projection[:, :3],
-                                               projection[:, 3:], self.intrinsics[self.camID],
-                                               self.distCoeffs[self.camID])
-            vert_reproj = np.squeeze(vert_reproj)
-            image = self.debug
-            for k in range(marker_debug.shape[0]):
-                point = marker_reproj[k, :]
-                point_ = vert_reproj[k, :]
-                image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
-                image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
-                cv2.imshow(f"debug marker to cam {self.camID}", image)
-                #cv2.imwrite(f"/scratch/nia/HOnnotate_OXR/debug/{k}.png", image)
-                cv2.waitKey(0)
+        marker_read_count = 0
 
-            assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
+        for idx, part in enumerate(parts) :
 
-        return pose_calc, scale, output_marker_pose, valid_idx
+            target_marker_num = marker_pose_dict[part].shape[0]
+            valid_marker = []
+            valid_idx = []
+
+            for i in range(target_marker_num):
+
+                if marker_read_count == pair_len :
+                    break
+                marker_read_count += 1
+
+                value = marker_pose_dict[part][i, :]
+                if not any(np.isnan(value)):
+                    valid_marker.append(value)
+                    valid_idx.append(i)
+
+            marker_pose_dict[part] = np.asarray(valid_marker)
+            valid_idx_dict[part] = valid_idx
+
+        output_marker_pose = np.copy(marker_pose_dict)
+
+        for idx, part in enumerate(parts) :
+
+            obj_verts  = obj_mesh['verts'][part]
+            verts_init = np.squeeze(np.array(obj_verts))
+            verts_init = verts_init[dict_vertIDpermarker[part], :] * 10.0
+            verts_init = verts_init[valid_idx_dict[part], :]
+
+
+            # if obj_class in CFG_OBJECT_SCALE.keys():
+            #     verts_init /= 10.0
+            #     verts_init *= CFG_OBJECT_SCALE[obj_class]
+            # scale factor 10, is .obj file has cm scale?
+
+            # verts_pose = apply_transform(obj_init_pose, verts_init) * 100.0
+
+            #verts_pose = torch.FloatTensor(verts_pose).unsqueeze(0)
+            #marker_pose = torch.FloatTensor(marker_pose).unsqueeze(0)
+
+            ## calculate scale of initial mesh
+            scale = 1.0
+
+            # if obj_class in CFG_OBJECT_SCALE:
+            #     mean = np.mean(verts_init, 0)
+            #     k = verts_init.shape[0]
+            #     expanded_mean = np.broadcast_to(mean, verts_init.shape)
+            #     sub = verts_init - expanded_mean
+            #     sub_squeeze = sub.flatten()
+            #     s1 = np.sqrt(np.sum(np.square(sub_squeeze)) / k)
+
+            #     ## calculate scale of marker mesh
+
+            #     mean = np.mean(marker_pose, 0)
+            #     k = marker_pose.shape[0]
+            #     expanded_mean = np.broadcast_to(mean, marker_pose.shape)
+            #     sub = marker_pose - expanded_mean
+            #     sub_squeeze = sub.flatten()
+            #     s2 = np.sqrt(np.sum(np.square(sub_squeeze)) / k)
+
+            #     scale = s2 / s1
+
+            #     verts_init = verts_init * scale
+
+            # if obj_class in CFG_OBJECT_SCALE_SPECIFIC.keys():
+            #     verts_init = verts_init * CFG_OBJECT_SCALE_SPECIFIC[obj_class]
+
+            # if verts_init.shape[0] == 3 and obj_class in CFG_OBJECT_4th_POINT:
+            #     newpoints_verts_init = np.expand_dims((verts_init[1] + verts_init[2] - verts_init[0]), axis=0)
+            #     newpoints_marker_pose = np.expand_dims((marker_pose[1] + marker_pose[2] - marker_pose[0]), axis=0)
+            #     verts_init = np.concatenate((verts_init, newpoints_verts_init), axis=0)
+            #     marker_pose = np.concatenate((marker_pose, newpoints_marker_pose), axis=0)
+
+            R, t = tf.solve_rigid_tf_np(verts_init, marker_pose_dict[part])
+
+            #R = R[0]
+            #t = t[0]
+            pose_calc = np.eye(4)
+            pose_calc[:3, :3] = R[:3, :3]
+            pose_calc[0, 3] = t[0]
+            pose_calc[1, 3] = t[1]
+            pose_calc[2, 3] = t[2]
+
+            # verts_debug = np.squeeze(verts_pose)
+            verts_debug = apply_transform(pose_calc, verts_init)# * 100.0
+            marker_debug = np.squeeze(marker_pose_dict[part])
+
+
+            err = np.sum(abs(verts_debug - marker_debug), axis=1)
+            err = np.average(err)
+
+            ### debug
+            if flag_check_vert_marker_pair:
+                projection = self.extrinsics[self.camID].reshape(3, 4)
+                marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
+                                                    projection[:, 3:], self.intrinsics[self.camID],
+                                                    self.distCoeffs[self.camID])
+                marker_reproj = np.squeeze(marker_reproj)
+                projection = self.extrinsics[self.camID].reshape(3, 4)
+                vert_reproj, _ = cv2.projectPoints(verts_debug, projection[:, :3],
+                                                projection[:, 3:], self.intrinsics[self.camID],
+                                                self.distCoeffs[self.camID])
+                vert_reproj = np.squeeze(vert_reproj)
+                image = self.debug.copy()
+                for k in range(marker_debug.shape[0]):
+                    point = marker_reproj[k, :]
+                    point_ = vert_reproj[k, :]
+                    image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
+                    image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
+                    #cv2.imshow(f"debug marker to cam {self.camID}", image)
+                    cv2.imwrite(f"/scratch/nia/minjay/HOnnotate_OXR/debug/{part}.png", image)
+                    #cv2.waitKey(0)
+
+                assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
+
+        return pose_calc, scale, output_marker_pose, valid_idx_dict
 
     def saveObjdata(self):
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker.pkl'), 'wb') as f:
@@ -1032,6 +1084,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 else:
                     db.postProcessNone(save_idx)
             ### object data only on master cam
+
             dbs[0].updateObjdata(idx, save_idx, int(dbs[0].grasp_id))
 
             progress.update()
@@ -1058,7 +1111,7 @@ def main(argv):
     assert os.path.exists(os.path.join(baseDir, FLAGS.db)), "no {YYMMDD} directory. check."
     assert os.path.exists(os.path.join(baseDir, FLAGS.cam_db)), "no{YYMMDD}_cam directory. check."
     assert os.path.exists(os.path.join(baseDir, FLAGS.db + '_obj')), "no {YYMMDD}_obj directory. check."
-    assert os.path.exists(os.path.join(baseDir, 'obj_scanned_models')), "no dataset/obj_scanned_models directory. check."
+    assert os.path.exists(os.path.join(baseDir, 'obj_scanned_models/interaction')), "no dataset/obj_scanned_models/interaction directory. check."
     assert os.path.exists(
         os.path.join(os.getcwd(), 'modules/deepLabV3plus/checkpoints')), "no segmentation checkpoint folder. check."
 
@@ -1092,11 +1145,13 @@ def main(argv):
 
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+
             dbs = []
             for camID in camIDset:
                 db = loadDataset(FLAGS.db, seqName, trialName)
                 db.init_cam(camID)
                 dbs.append(db)
+
                 # total_count += len(db)
                 # tasks.append((preprocess_single_cam, (db,)))
 
