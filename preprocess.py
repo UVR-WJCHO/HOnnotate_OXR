@@ -939,7 +939,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.90, min_tracking_confidence=FLAGS.mp_value)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.70, min_tracking_confidence=FLAGS.mp_value)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
