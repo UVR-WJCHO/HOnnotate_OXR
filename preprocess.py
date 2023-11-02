@@ -1069,6 +1069,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                         db.postProcessNone(save_idx)
             else:
                 print("0 or 1 mp results, skip")
+                db.postProcessNone(save_idx)
 
             # object data only on master cam
             dbs[0].updateObjdata(idx, save_idx, int(dbs[0].grasp_id))
