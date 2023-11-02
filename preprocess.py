@@ -1315,7 +1315,6 @@ def main(argv):
             print("seq : %s" % seqName)
             seqDir = os.path.join(rootDir, seqName)
             for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
-
                 db = loadDataset(FLAGS.db, seqName, trialName)
                 if db.quit:
                     continue
@@ -1338,6 +1337,9 @@ def main(argv):
                         rgb = cv2.imread(rgbPath)
                         image_name = image[:-4]
                         deepSegmentation(image_name, rgb, deepSegMaskDir, deepSegVisDir, opts)
+
+                del db
+                torch.cuda.empty_cache()
 
     print("end segmentation - deeplab_v3")
 
