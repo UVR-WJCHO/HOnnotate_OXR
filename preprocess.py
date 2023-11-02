@@ -872,10 +872,18 @@ class loadDataset():
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
 
-    def postProcessOutlier(self, idx, procImgSet, processed_kpts):
-        vis = paint_kpts(None, procImgSet[0], processed_kpts)
+    def postProcessOutlier(self, idx, procImgSet, processed_kpts, visibility):
+        vis = paint_kpts(None, procImgSet[0], processed_kpts, visibility)
         imgName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         cv2.imwrite(os.path.join(self.debug_vis_outlier, imgName), vis)
+
+        meta_info = {'bb': None, 'img2bb': None,
+                     'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt': None, 'visibility': None}
+
+        metaName = str(self.camID) + '_' + format(idx, '04') + '.pkl'
+        jsonPath = os.path.join(self.metaDir, metaName)
+        with open(jsonPath, 'wb') as f:
+            pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
 
     def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
@@ -1046,7 +1054,8 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                         else:
                             bb, img2bb, bb2img, procImgSet, kps = output
                             procKps = db.translateKpts(np.copy(kps), img2bb)
-                            db.postProcessOutlier(save_idx, procImgSet, procKps)
+                            visibility = db.computeVisibility(procKps)
+                            db.postProcessOutlier(save_idx, procImgSet, procKps, visibility)
                     else:
                         db.postProcessNone(save_idx)
             elif failure == 2:
@@ -1160,34 +1169,64 @@ def optimize_kps(model, optimizer, Ks_list, ext_list, kps_list, n=100):
 def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict):
     outlier = []
     inlier = []
+
+    diff_notoptm_list = []
+    diff_optm_list = []
+    t_idx_list = []
     for t_idx, v_joint in refined_joint_dict.items():
         kps_diff = {}
         for v_idx, Ks, Ms in zip(valid_Ks_dict.keys(), valid_Ks_dict.values(), valid_Ms_dict.values()):
             joints_cam = torch.unsqueeze(mano3DToCam3D(v_joint, torch.FloatTensor(Ms)), 0)
             pred_kpts2d = projectPoints(joints_cam, torch.FloatTensor(Ks))
             pred_kpts2d = np.squeeze(pred_kpts2d.detach().numpy())
-            diff = (valid_kps_dict[v_idx][:, :2] - pred_kpts2d) ** 2
+            mp_kpts2d = valid_kps_dict[v_idx][:, :2]
+
+            # wrist_gap = mp_kpts2d[0, :] - pred_kpts2d[0, :]
+            # pred_kpts2d += wrist_gap
+
+            diff = (mp_kpts2d - pred_kpts2d) ** 2
             kps_diff[v_idx] = diff.mean()
 
         # t_idx : 최적화 과정에서 제외한 cam
         # v_idx, kps_diff : t_idx를 제외하고 최적화한 자세를 v_idx의 mp result와 비교하였을 떄의 diff.
 
         diff_notoptm = kps_diff[t_idx]
+        diff_notoptm_list.append(diff_notoptm)
+
         diff_optm = 0
         for idx in valid_Ks_dict.keys():
             if idx != t_idx:
                 diff_optm += kps_diff[idx]
         diff_optm /= (len(valid_Ks_dict.keys()) - 1)
+        diff_optm_list.append(diff_optm)
+        t_idx_list.append(t_idx)
 
         # print("diff value of notoptimized of cam %d: "% t_idx, diff_notoptm)
         # print("avg diff value of optimized of cam %d: "% t_idx, diff_optm)
-        if diff_notoptm > 500 and diff_optm < 200:
-            outlier.append(t_idx)
-        else:
-            inlier.append(t_idx)
 
-        if diff_notoptm > 1000 and diff_optm > 1000:
-            print("both wrong in here")
+
+    # if all 'not considered view''s error is higher than 700, set all to outlier
+    if all(i >= 700 for i in diff_notoptm_list):
+        for t_idx in refined_joint_dict.keys():
+            outlier.append(t_idx)
+    # consider only single error case,
+    # if one view has highest error, > 300
+    # and the error without that view is < 100
+    # set it to outlier
+    else:
+        max_i = np.argmax(diff_notoptm_list)
+        min_i = np.argmin(diff_optm_list)
+        for t_idx in t_idx_list:
+            if t_idx == max_i:
+                diff_notoptm = diff_notoptm_list[t_idx]
+                # diff_optm = diff_optm_list[t_idx]
+                if diff_notoptm > 400 and max_i == min_i:
+                    outlier.append(t_idx)
+                else:
+                    inlier.append(t_idx)
+            else:
+                inlier.append(t_idx)
+
     return outlier, inlier
 
 
