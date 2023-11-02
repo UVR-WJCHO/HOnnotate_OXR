@@ -40,7 +40,7 @@ flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
-
+flags.DEFINE_string('obj_db', 'obj_scanned_models', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
 # flags.DEFINE_string('seq_list', '230905_S02_obj_03_grasp_3', 'target sequence name')
@@ -345,7 +345,7 @@ def main(argv):
     assert os.path.exists(os.path.join(baseDir, FLAGS.cam_db)), "no{YYMMDD}_cam directory. check."
     assert os.path.exists(os.path.join(baseDir, FLAGS.db + '_obj')), "no {YYMMDD}_obj directory. check."
     assert os.path.exists(
-        os.path.join(baseDir, 'obj_scanned_models')), "no dataset/obj_scanned_models directory. check."
+        os.path.join(baseDir, FLAGS.obj_db)), "no dataset/obj_scanned_models directory. check."
     assert os.path.exists(
         os.path.join(os.getcwd(), 'modules/deepLabV3plus/checkpoints')), "no segmentation checkpoint folder. check."
 
@@ -402,7 +402,7 @@ def main(argv):
 
             ## Initialize object dataloader & model
             if CFG_WITH_OBJ:
-                obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter)
+                obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter, FLAGS.obj_db)
                 if obj_dataloader.quit:
                     print("unvalid obj pose, skip trial")
                     obj_unvalid_trials.append(target_seq + '_' + trialName)

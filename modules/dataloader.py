@@ -329,7 +329,7 @@ class DataLoader:
 
 
 class ObjectLoader:
-    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, mas_param):
+    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, mas_param, obj_db):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # base_path : os.path.join(os.getcwd(), 'dataset')
         # data_date : 230822
@@ -352,7 +352,7 @@ class ObjectLoader:
         self.obj_class = str(obj_idx) + '_' + obj_name
 
         target_mesh_class = self.obj_class
-        obj_mesh_path = os.path.join(base_path, 'obj_scanned_models', target_mesh_class)
+        obj_mesh_path = os.path.join(base_path, obj_db, target_mesh_class)
         ### set exceptional cases (foldable phone : grasp 12 / grasp 16,19)
         if int(obj_idx) == 29:
             if self.grasp_idx == 12:
