@@ -1058,7 +1058,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                             db.postProcessOutlier(save_idx, procImgSet, procKps, visibility)
                     else:
                         db.postProcessNone(save_idx)
-            elif failure == 2:
+            else:
                 for db, images, output in zip(dbs, images_list, output_list):
                     if output is not None:
                         bb, img2bb, bb2img, procImgSet, kps = output
@@ -1067,9 +1067,6 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                         db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
                     else:
                         db.postProcessNone(save_idx)
-            else:
-                print("0 or 1 mp results, skip")
-                db.postProcessNone(save_idx)
 
             # object data only on master cam
             dbs[0].updateObjdata(idx, save_idx, int(dbs[0].grasp_id))
