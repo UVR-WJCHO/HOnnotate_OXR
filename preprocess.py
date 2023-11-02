@@ -61,7 +61,7 @@ flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
 
-flags.DEFINE_string('obj_db', 'obj_scanned_models_~230908', 'target obj_scanned_models folder')   ## name ,default, help
+flags.DEFINE_string('obj_db', 'obj_scanned_models', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
