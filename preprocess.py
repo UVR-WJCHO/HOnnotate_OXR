@@ -1205,7 +1205,7 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
         # print("avg diff value of optimized of cam %d: "% t_idx, diff_optm)
 
 
-    # if all 'not considered view''s error is higher than 700, set all to outlier
+    # if all 'not considered view''s error is higher than 800, set all to outlier
     if all(i >= 800 for i in diff_notoptm_list):
         for t_idx in refined_joint_dict.keys():
             outlier.append(t_idx)
@@ -1220,7 +1220,7 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
             if t_idx == max_i:
                 diff_notoptm = diff_notoptm_list[t_idx]
                 # diff_optm = diff_optm_list[t_idx]
-                if diff_notoptm > 400 and max_i == min_i:
+                if diff_notoptm > 500 and max_i == min_i:
                     outlier.append(t_idx)
                 else:
                     inlier.append(t_idx)
