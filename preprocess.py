@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 from skimage.io import imread, imshow
 from skimage.color import rgb2gray, rgb2hsv
 from skimage.filters import threshold_otsu
-
+import shutil
 
 from utils.uvd_transform import *
 
@@ -182,7 +182,25 @@ class loadDataset():
         self.segfgDir = os.path.join(self.dbDir, 'segmentation_fg')
         self.deepSegDir = os.path.join(self.dbDir, 'segmentation_deep')
 
+        ## use if needed
+        # if os.path.exists(os.path.join(self.dbDir, 'visualizeMP')):
+        #     shutil.rmtree(os.path.join(self.dbDir, 'visualizeMP'))
+        # if os.path.exists(os.path.join(self.dbDir, 'visualizeMP_outlier')):
+        #     shutil.rmtree(os.path.join(self.dbDir, 'visualizeMP_outlier'))
+
         for camID in camIDset:
+            ## use if needed
+            # if os.path.exists(os.path.join(self.dbDir, 'rgb_crop', camID)):
+            #     shutil.rmtree(os.path.join(self.dbDir, 'rgb_crop', camID))
+            # if os.path.exists(os.path.join(self.dbDir, 'depth_crop', camID)):
+            #     shutil.rmtree(os.path.join(self.dbDir, 'depth_crop', camID))
+            # if os.path.exists(os.path.join(self.dbDir, 'meta', camID)):
+            #     shutil.rmtree(os.path.join(self.dbDir, 'meta', camID))
+            # if os.path.exists(os.path.join(self.dbDir, 'segmentation', camID)):
+            #     shutil.rmtree(os.path.join(self.dbDir, 'segmentation', camID))
+            # if os.path.exists(os.path.join(self.dbDir, 'segmentation_deep', camID)):
+            #     shutil.rmtree(os.path.join(self.dbDir, 'segmentation_deep', camID))
+
             os.makedirs(os.path.join(self.dbDir, 'rgb_crop', camID), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'depth_crop', camID), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'meta', camID), exist_ok=True)
