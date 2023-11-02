@@ -1206,7 +1206,7 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
 
 
     # if all 'not considered view''s error is higher than 700, set all to outlier
-    if all(i >= 700 for i in diff_notoptm_list):
+    if all(i >= 800 for i in diff_notoptm_list):
         for t_idx in refined_joint_dict.keys():
             outlier.append(t_idx)
     # consider only single error case,
