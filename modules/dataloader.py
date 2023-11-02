@@ -305,15 +305,16 @@ class DataLoader:
             # seg_hand[seg_hand==0] = 10
             # seg_obj[seg_obj == 0] = 10
             return rgb, depth_hand, depth_obj, seg_hand, seg_obj, rgb_raw, depth_raw
-    
+
     def get_meta(self, idx):
-        meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)
+        meta_path = os.path.join(self.meta_base_path, self.cam, self.cam + '_%04d.pkl' % idx)
 
         if not os.path.exists(meta_path):
-            return None
-        
-        with open(meta_path, 'rb') as f:
-            meta = pickle.load(f)
+            meta = {'bb': None, 'img2bb': None,
+                    'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt': None, 'visibility': None}
+        else:
+            with open(meta_path, 'rb') as f:
+                meta = pickle.load(f)
 
         return meta
 
