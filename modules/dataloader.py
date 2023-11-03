@@ -355,11 +355,11 @@ class ObjectLoader:
         target_mesh_class = self.obj_class
         obj_mesh_path = os.path.join(base_path, obj_db, target_mesh_class)
         ### set exceptional cases (foldable phone : grasp 12 / grasp 16,19)
-        if int(obj_idx) == 29:
-            if self.grasp_idx == 12:
-                target_mesh_class = '29_foldable_phone'
-            else:
-                target_mesh_class = '29_foldable_phone_2'
+        # if int(obj_idx) == 29:
+        #     if self.grasp_idx == 12:
+        #         target_mesh_class = '29_foldable_phone'
+        #     else:
+        #         target_mesh_class = '29_foldable_phone_2'
 
         self.obj_mesh_name = target_mesh_class + '.obj'
         obj_mesh_path = os.path.join(obj_mesh_path, self.obj_mesh_name)
