@@ -59,7 +59,7 @@ flag_check_vert_marker_pair = False
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
+flags.DEFINE_float('mp_value', 0.85, 'target cam db Name')
 
 flags.DEFINE_string('obj_db', 'obj_scanned_models', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
@@ -939,7 +939,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.70, min_tracking_confidence=FLAGS.mp_value)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.50, min_tracking_confidence=FLAGS.mp_value)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
