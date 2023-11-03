@@ -211,7 +211,7 @@ class loadDataset():
         self.init_bbox["mas"] = [400, 60, 1120, 960]
         self.init_bbox["sub1"] = [360, 0, 1120, 960]
         self.init_bbox["sub2"] = [640, 180, 640, 720]
-        self.init_bbox["sub3"] = [680, 180, 960, 720]
+        self.init_bbox["sub3"] = [580, 80, 1160, 920]
 
 
         self.prev_bbox = None
