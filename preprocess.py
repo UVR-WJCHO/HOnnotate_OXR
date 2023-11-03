@@ -1219,7 +1219,7 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
             if t_idx == max_i:
                 diff_notoptm = diff_notoptm_list[t_idx]
                 # diff_optm = diff_optm_list[t_idx]
-                if diff_notoptm > 450 and max_i == min_i:
+                if diff_notoptm > 500 and max_i == min_i:
                     outlier.append(t_idx)
                 else:
                     inlier.append(t_idx)
