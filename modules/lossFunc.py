@@ -95,10 +95,11 @@ class MultiViewLossFunc(nn.Module):
         self.vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
 
         if int(obj_class.split('_')[0]) == 29:
-            if grasp_idx == 12:
-                self.vertIDpermarker = self.vertIDpermarker[0]
-            else:
-                self.vertIDpermarker = self.vertIDpermarker[1]
+            self.vertIDpermarker = self.vertIDpermarker[0]
+            # if grasp_idx == 12:
+            #     self.vertIDpermarker = self.vertIDpermarker[0]
+            # else:
+            #     self.vertIDpermarker = self.vertIDpermarker[1]
 
         self.marker_valid_idx = marker_valid_idx
         if obj_marker_cam_pose != None:
