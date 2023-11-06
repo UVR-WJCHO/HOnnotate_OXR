@@ -34,8 +34,8 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '231007', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '231007_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '231009', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231009_cam', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
@@ -526,7 +526,6 @@ def main(argv):
                 ### visualization results of frame
                 loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
                                         save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
-
                 loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
 
                 ### save annotation per frame as json format

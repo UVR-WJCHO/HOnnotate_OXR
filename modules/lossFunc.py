@@ -503,6 +503,9 @@ class MultiViewLossFunc(nn.Module):
             depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
             seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
 
+            both_depth = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
+            both_depth[both_depth == 10] = 0
+
             hand_depth = np.squeeze(pred_rendered_hand_only['depth'][0].cpu().detach().numpy())
             obj_depth = np.squeeze(pred_rendered_obj_only['depth'][0].cpu().detach().numpy())
             hand_depth[hand_depth == 10] = 0
@@ -522,6 +525,8 @@ class MultiViewLossFunc(nn.Module):
             obj_seg_masked = obj_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
             hand_depth = hand_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
             obj_depth = obj_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+
+            both_depth = both_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
             uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
             gt_kpts2d = (self.img2bb @ uv1.T).T
@@ -588,39 +593,62 @@ class MultiViewLossFunc(nn.Module):
             gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
 
             gt_depth_hand[gt_depth_hand==10] = 0
-            gt_depth_hand *= 100.
-            hand_depth /= 10.
+            gt_depth_hand *= 1000.
 
             # cv2.imshow("gt_depth_hand", np.array(gt_depth_hand / 100 * 255, dtype=np.uint8))
-            # cv2.imshow("hand_depth", np.array(hand_depth / 100 * 255, dtype=np.uint8))
+            # cv2.imshow("both_depth", np.array(both_depth / 100 * 255, dtype=np.uint8))
             # cv2.waitKey(0)
 
-            for i in range(21):
-                kpts2d = pred_kpts2d[i, :]
+            all_diff = np.abs(gt_depth_hand - both_depth) * hand_seg_masked
 
-                y = np.clip(int(kpts2d[1]), 0, 479)
-                x = np.clip(int(kpts2d[0]), 0, 639)
-                if gt_seg_hand[y, x] == 0:
-                    continue
-                gt_hand_d = gt_depth_hand[y, x]
-                pred_hand_d = hand_depth[y, x]
-                diff = abs(gt_hand_d - pred_hand_d)
-                if gt_hand_d == 0 or pred_hand_d == 0 or diff > 100:
-                    FN += 1
-                if diff < 20:
-                    TP += 1
-                else:
-                    FP += 1
+            all_FN = np.copy(all_diff)
+            all_FN = all_FN[np.isin(all_diff, gt_depth_hand)]      #all_diff[all_diff==gt_depth_hand]
+            all_FN[all_FN>0] = 1
+            all_FN = all_FN.sum()
+            all_diff[all_diff > 50] = 0     # consider as unlabelled(FN)/noise if error is larger than 5cm
 
-            if TP < 1:
-                mesh_depth_precision_score = 0
-                mesh_depth_recall_score = 0
-                mesh_depth_f1_score = 0
-            else:
-                mesh_depth_precision_score = TP / (TP + FP)
-                mesh_depth_recall_score = TP / (TP + FN)
-                mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
-                                            (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
+            # count # of diff > 20
+            all_FP = np.copy(all_diff)
+            all_FP[all_FP<=20] = 0
+            all_FP[all_FP > 20] = 1
+            all_FP = all_FP.sum()
+
+            # count only diff < 20 value
+            all_diff[all_diff == 0] = 100
+            all_diff[all_diff <= 20] = 1
+            all_diff[all_diff > 20] = 0
+            all_TP = all_diff.sum()
+
+            mesh_depth_precision_score = all_TP / (all_TP + all_FP)
+            mesh_depth_recall_score = all_TP / (all_TP + all_FN)
+            mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
+                                       (mesh_depth_precision_score + mesh_depth_recall_score))
+
+            # for i in range(21):
+            #     kpts2d = pred_kpts2d[i, :]
+            #     y = np.clip(int(kpts2d[1]), 0, 479)
+            #     x = np.clip(int(kpts2d[0]), 0, 639)
+            #     if gt_seg_hand[y, x] == 0:
+            #         continue
+            #     gt_hand_d = gt_depth_hand[y, x]
+            #     pred_hand_d = both_depth[y, x]
+            #     diff = abs(gt_hand_d - pred_hand_d)
+            #     if gt_hand_d == 0 or pred_hand_d == 0 or diff > 100:
+            #         FN += 1
+            #     if diff < 20:
+            #         TP += 1
+            #     else:
+            #         FP += 1
+            # if TP < 1:
+            #     mesh_depth_precision_score = 0
+            #     mesh_depth_recall_score = 0
+            #     mesh_depth_f1_score = 0
+            # else:
+            #     mesh_depth_precision_score = TP / (TP + FP)
+            #     mesh_depth_recall_score = TP / (TP + FN)
+            #     mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
+            #                                 (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
+
             depth_precision[camID] = mesh_depth_precision_score
             depth_recall[camID] = mesh_depth_recall_score
             depth_f1[camID] = mesh_depth_f1_score
