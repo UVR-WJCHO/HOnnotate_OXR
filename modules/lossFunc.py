@@ -156,6 +156,10 @@ class MultiViewLossFunc(nn.Module):
             self.gt_tip2d = None
 
 
+    def set_gt_raw_depth(self, camIdx, frame):
+        _, self.gt_depth_raw, _, _ = self.dataloaders[camIdx].load_raw_image(frame)
+
+
     def set_main_cam(self, main_cam_idx=0):
         # main_cam_params = self.dataloaders[main_cam_idx].cam_parameter
 
@@ -491,6 +495,8 @@ class MultiViewLossFunc(nn.Module):
         for camIdx in camIdxSet:
             camID = CFG_CAMID_SET[camIdx]
             self.set_gt(camIdx, frame)
+            self.set_gt_raw_depth(camIdx, frame)
+
             joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
             verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms[camIdx]), 0)
             verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
@@ -590,19 +596,23 @@ class MultiViewLossFunc(nn.Module):
             #pred_kpts2d
             # obj_depth, hand_depth
             # self.gt_depth, self.gt_depth_obj
-            gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
+            # gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
+            gt_depth_all = self.gt_depth_raw[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
-            gt_depth_hand[gt_depth_hand==10] = 0
-            gt_depth_hand *= 1000.
+            all_seg_mask = hand_seg_masked + obj_seg_masked
+            all_seg_mask[all_seg_mask == 2] = 1
+            gt_depth_all *= all_seg_mask
 
-            # cv2.imshow("gt_depth_hand", np.array(gt_depth_hand / 100 * 255, dtype=np.uint8))
+            # gt_depth_hand[gt_depth_hand==10] = 0
+            # gt_depth_hand *= 1000.
+            # cv2.imshow("gt_depth_all", np.array(gt_depth_all / 100 * 255, dtype=np.uint8))
             # cv2.imshow("both_depth", np.array(both_depth / 100 * 255, dtype=np.uint8))
             # cv2.waitKey(0)
 
-            all_diff = np.abs(gt_depth_hand - both_depth) * hand_seg_masked
+            all_diff = np.abs(gt_depth_all - both_depth)
 
             all_FN = np.copy(all_diff)
-            all_FN = all_FN[np.isin(all_diff, gt_depth_hand)]      #all_diff[all_diff==gt_depth_hand]
+            all_FN = all_FN[np.isin(all_diff, gt_depth_all)]
             all_FN[all_FN>0] = 1
             all_FN = all_FN.sum()
             all_diff[all_diff > 50] = 0     # consider as unlabelled(FN)/noise if error is larger than 5cm
