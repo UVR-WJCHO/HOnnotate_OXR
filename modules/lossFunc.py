@@ -473,20 +473,20 @@ class MultiViewLossFunc(nn.Module):
 
         for df in self.dfs.values():
             df.index.name = "frame"
-    
+
     def evaluation(self, pred, pred_obj, camIdxSet, frame):
         print("Evaluation")
-        kpts_precision = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
-        kpts_recall = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
-        kpts_f1 = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        kpts_precision = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
+        kpts_recall = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
+        kpts_f1 = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
 
-        mesh_precision = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
-        mesh_recall = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
-        mesh_f1 = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        mesh_precision = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
+        mesh_recall = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
+        mesh_f1 = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
 
-        depth_precision = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
-        depth_recall = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
-        depth_f1 = {"mas":0., "sub1":0., "sub2":0., "sub3":0.}
+        depth_precision = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
+        depth_recall = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
+        depth_f1 = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
 
         for camIdx in camIdxSet:
             camID = CFG_CAMID_SET[camIdx]
@@ -496,12 +496,15 @@ class MultiViewLossFunc(nn.Module):
             verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
 
             pred_rendered = self.cam_renderer[camIdx].render_meshes([verts_cam, verts_cam_obj],
-                                                            [pred['faces'], pred_obj['faces']], flag_rgb=True)
-            pred_rendered_hand_only = self.cam_renderer[camIdx].render(verts_cam,pred['faces'], flag_rgb=True)
+                                                                    [pred['faces'], pred_obj['faces']], flag_rgb=True)
+            pred_rendered_hand_only = self.cam_renderer[camIdx].render(verts_cam, pred['faces'], flag_rgb=True)
             pred_rendered_obj_only = self.cam_renderer[camIdx].render(verts_cam_obj, pred_obj['faces'], flag_rgb=True)
-            
+
             depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
             seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
+
+            both_depth = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
+            both_depth[both_depth == 10] = 0
 
             hand_depth = np.squeeze(pred_rendered_hand_only['depth'][0].cpu().detach().numpy())
             obj_depth = np.squeeze(pred_rendered_obj_only['depth'][0].cpu().detach().numpy())
@@ -523,15 +526,17 @@ class MultiViewLossFunc(nn.Module):
             hand_depth = hand_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
             obj_depth = obj_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
+            both_depth = both_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+
             uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
             gt_kpts2d = (self.img2bb @ uv1.T).T
             uv1 = np.concatenate((pred_kpts2d, np.ones_like(pred_kpts2d[:, :1])), 1)
             pred_kpts2d = (self.img2bb @ uv1.T).T
 
-            #1. 3D keypoints F1-Score
-            TP = 1e-7 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
-            FP = 1e-7 #각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
-            FN = 1e-7 #참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
+            # 1. 3D keypoints F1-Score
+            TP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
+            FP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
+            FN = 1e-7  # 참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
             for idx, gt_kpt in enumerate(gt_kpts2d):
                 pred_kpt = pred_kpts2d[idx]
                 if (pred_kpt == None).any():
@@ -545,82 +550,105 @@ class MultiViewLossFunc(nn.Module):
             keypoint_precision_score = TP / (TP + FP)
             keypoint_recall_score = TP / (TP + FN)
             keypoint_f1_score = 2 * (keypoint_precision_score * keypoint_recall_score /
-                                            (keypoint_precision_score + keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
+                                     (keypoint_precision_score + keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
             kpts_precision[camID] = keypoint_precision_score
             kpts_recall[camID] = keypoint_recall_score
             kpts_f1[camID] = keypoint_f1_score
 
-            #2. mesh pose F1-Score
-            TP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스(background, object, hand)가 참값(실제 RGB- segmentation map)의 클래스와 일치
-            FP = 0 #렌더링된 이미지의 각 픽셀의 segmentation 클래스가 참값의 클래스와 불일치
-            FN = 0 #참값이 존재하지만 키포인트 좌표의 segmentation class가 존재하지 않는 경우(미태깅) ??
+            # 2. mesh pose F1-Score
+            TP = 0  # 렌더링된 이미지의 각 픽셀의 segmentation 클래스(background, object, hand)가 참값(실제 RGB- segmentation map)의 클래스와 일치
+            FP = 0  # 렌더링된 이미지의 각 픽셀의 segmentation 클래스가 참값의 클래스와 불일치
+            FN = 0  # 참값이 존재하지만 키포인트 좌표의 segmentation class가 존재하지 않는 경우(미태깅) ??
             gt_seg_hand = np.squeeze((self.gt_seg[0].cpu().detach().numpy()))
             gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy()))
 
             TP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked == gt_seg_hand, 0)) + \
-                    np.sum(np.where(obj_seg_masked > 0, obj_seg_masked == gt_seg_obj, 0))
-            FP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked != gt_seg_hand, 0)) +\
-                    np.sum(np.where(obj_seg_masked > 0, obj_seg_masked != gt_seg_obj, 0))
+                 np.sum(np.where(obj_seg_masked > 0, obj_seg_masked == gt_seg_obj, 0))
+            FP = np.sum(np.where(hand_seg_masked > 0, hand_seg_masked != gt_seg_hand, 0)) + \
+                 np.sum(np.where(obj_seg_masked > 0, obj_seg_masked != gt_seg_obj, 0))
             # seg_masked_FN = (gt_seg_hand > 0) * (hand_seg_masked == 0) \
             #                 + (gt_seg_obj > 0) * (obj_seg_masked == 0)
 
             if TP == 0:
                 TP = 1e-7
-            FN = 1e-7 #np.sum(seg_masked_FN)
+            FN = 1e-7  # np.sum(seg_masked_FN)
 
-            mesh_seg_precision_score = TP/(TP+FP)
+            mesh_seg_precision_score = TP / (TP + FP)
             mesh_seg_recall_score = TP / (TP + FN)
             mesh_seg_f1_score = 2 * (mesh_seg_precision_score * mesh_seg_recall_score /
-                                        (mesh_seg_precision_score + mesh_seg_recall_score)) #2*TP/(2*TP+FP+FN)
-            
+                                     (mesh_seg_precision_score + mesh_seg_recall_score))  # 2*TP/(2*TP+FP+FN)
+
             mesh_precision[camID] = mesh_seg_precision_score
             mesh_recall[camID] = mesh_seg_recall_score
             mesh_f1[camID] = mesh_seg_f1_score
 
-            #3. hand depth accuracy
-            TP = 1e-7 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
-            FP = 1e-7 #각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이상
-            FN = 1e-7 #참값이 존재하지만 키포인트 좌표의 깊이값이 존재하지 않는 경우(미태깅)
+            # 3. hand depth accuracy
+            TP = 1e-7  # 각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이내
+            FP = 1e-7  # 각 키포인트의 렌더링된 깊이값이 참값(실제 깊이영상)의 깊이값과 20mm 이상
+            FN = 1e-7  # 참값이 존재하지만 키포인트 좌표의 깊이값이 존재하지 않는 경우(미태깅)
 
-            #pred_kpts2d
+            # pred_kpts2d
             # obj_depth, hand_depth
             # self.gt_depth, self.gt_depth_obj
             gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
 
-            gt_depth_hand[gt_depth_hand==10] = 0
-            gt_depth_hand *= 100.
-            hand_depth /= 10.
+            gt_depth_hand[gt_depth_hand == 10] = 0
+            gt_depth_hand *= 1000.
 
             # cv2.imshow("gt_depth_hand", np.array(gt_depth_hand / 100 * 255, dtype=np.uint8))
-            # cv2.imshow("hand_depth", np.array(hand_depth / 100 * 255, dtype=np.uint8))
+            # cv2.imshow("both_depth", np.array(both_depth / 100 * 255, dtype=np.uint8))
             # cv2.waitKey(0)
 
-            for i in range(21):
-                kpts2d = pred_kpts2d[i, :]
+            all_diff = np.abs(gt_depth_hand - both_depth) * hand_seg_masked
 
-                y = np.clip(int(kpts2d[1]), 0, 479)
-                x = np.clip(int(kpts2d[0]), 0, 639)
-                if gt_seg_hand[y, x] == 0:
-                    continue
-                gt_hand_d = gt_depth_hand[y, x]
-                pred_hand_d = hand_depth[y, x]
-                diff = abs(gt_hand_d - pred_hand_d)
-                if gt_hand_d == 0 or pred_hand_d == 0 or diff > 100:
-                    FN += 1
-                if diff < 20:
-                    TP += 1
-                else:
-                    FP += 1
+            all_FN = np.copy(all_diff)
+            all_FN = all_FN[np.isin(all_diff, gt_depth_hand)]  # all_diff[all_diff==gt_depth_hand]
+            all_FN[all_FN > 0] = 1
+            all_FN = all_FN.sum()
+            all_diff[all_diff > 50] = 0  # consider as unlabelled(FN)/noise if error is larger than 5cm
 
-            if TP < 1:
-                mesh_depth_precision_score = 0
-                mesh_depth_recall_score = 0
-                mesh_depth_f1_score = 0
-            else:
-                mesh_depth_precision_score = TP / (TP + FP)
-                mesh_depth_recall_score = TP / (TP + FN)
-                mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
-                                            (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
+            # count # of diff > 20
+            all_FP = np.copy(all_diff)
+            all_FP[all_FP <= 20] = 0
+            all_FP[all_FP > 20] = 1
+            all_FP = all_FP.sum()
+
+            # count only diff < 20 value
+            all_diff[all_diff == 0] = 100
+            all_diff[all_diff <= 20] = 1
+            all_diff[all_diff > 20] = 0
+            all_TP = all_diff.sum()
+
+            mesh_depth_precision_score = all_TP / (all_TP + all_FP)
+            mesh_depth_recall_score = all_TP / (all_TP + all_FN)
+            mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
+                                       (mesh_depth_precision_score + mesh_depth_recall_score))
+
+            # for i in range(21):
+            #     kpts2d = pred_kpts2d[i, :]
+            #     y = np.clip(int(kpts2d[1]), 0, 479)
+            #     x = np.clip(int(kpts2d[0]), 0, 639)
+            #     if gt_seg_hand[y, x] == 0:
+            #         continue
+            #     gt_hand_d = gt_depth_hand[y, x]
+            #     pred_hand_d = both_depth[y, x]
+            #     diff = abs(gt_hand_d - pred_hand_d)
+            #     if gt_hand_d == 0 or pred_hand_d == 0 or diff > 100:
+            #         FN += 1
+            #     if diff < 20:
+            #         TP += 1
+            #     else:
+            #         FP += 1
+            # if TP < 1:
+            #     mesh_depth_precision_score = 0
+            #     mesh_depth_recall_score = 0
+            #     mesh_depth_f1_score = 0
+            # else:
+            #     mesh_depth_precision_score = TP / (TP + FP)
+            #     mesh_depth_recall_score = TP / (TP + FN)
+            #     mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
+            #                                 (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
+
             depth_precision[camID] = mesh_depth_precision_score
             depth_recall[camID] = mesh_depth_recall_score
             depth_f1[camID] = mesh_depth_f1_score
@@ -637,34 +665,42 @@ class MultiViewLossFunc(nn.Module):
             # print("mesh depth recall score : ", mesh_depth_recall_score)
             # print("mesh depth F1 score : ", mesh_depth_f1_score)
 
-
-        kpts_precision_avg = sum(kpts_precision.values())/len(camIdxSet)
-        kpts_recall_avg = sum(kpts_recall.values())/len(camIdxSet)
-        kpts_f1_avg = sum(kpts_f1.values())/len(camIdxSet)
+        kpts_precision_avg = sum(kpts_precision.values()) / len(camIdxSet)
+        kpts_recall_avg = sum(kpts_recall.values()) / len(camIdxSet)
+        kpts_f1_avg = sum(kpts_f1.values()) / len(camIdxSet)
         self.total_metrics[0] += kpts_precision_avg
         self.total_metrics[1] += kpts_recall_avg
         self.total_metrics[2] += kpts_f1_avg
-        self.dfs['kpts_precision'].loc[frame] = [kpts_precision['mas'], kpts_precision['sub1'], kpts_precision['sub2'], kpts_precision['sub3'], kpts_precision_avg]
-        self.dfs['kpts_recall'].loc[frame] = [kpts_recall['mas'], kpts_recall['sub1'], kpts_recall['sub2'], kpts_recall['sub3'], kpts_recall_avg]
-        self.dfs['kpts_f1'].loc[frame] = [kpts_f1['mas'], kpts_f1['sub1'], kpts_f1['sub2'], kpts_f1['sub3'], kpts_f1_avg]
-        mesh_precision_avg = sum(mesh_precision.values())/len(camIdxSet)
-        mesh_recall_avg = sum(mesh_recall.values())/len(camIdxSet)
-        mesh_f1_avg = sum(mesh_f1.values())/len(camIdxSet)
+        self.dfs['kpts_precision'].loc[frame] = [kpts_precision['mas'], kpts_precision['sub1'], kpts_precision['sub2'],
+                                                 kpts_precision['sub3'], kpts_precision_avg]
+        self.dfs['kpts_recall'].loc[frame] = [kpts_recall['mas'], kpts_recall['sub1'], kpts_recall['sub2'],
+                                              kpts_recall['sub3'], kpts_recall_avg]
+        self.dfs['kpts_f1'].loc[frame] = [kpts_f1['mas'], kpts_f1['sub1'], kpts_f1['sub2'], kpts_f1['sub3'],
+                                          kpts_f1_avg]
+        mesh_precision_avg = sum(mesh_precision.values()) / len(camIdxSet)
+        mesh_recall_avg = sum(mesh_recall.values()) / len(camIdxSet)
+        mesh_f1_avg = sum(mesh_f1.values()) / len(camIdxSet)
         self.total_metrics[3] += mesh_precision_avg
         self.total_metrics[4] += mesh_recall_avg
         self.total_metrics[5] += mesh_f1_avg
-        self.dfs['mesh_precision'].loc[frame] = [mesh_precision['mas'], mesh_precision['sub1'], mesh_precision['sub2'], mesh_precision['sub3'], mesh_precision_avg]
-        self.dfs['mesh_recall'].loc[frame] = [mesh_recall['mas'], mesh_recall['sub1'], mesh_recall['sub2'], mesh_recall['sub3'], mesh_recall_avg]
-        self.dfs['mesh_f1'].loc[frame] = [mesh_f1['mas'], mesh_f1['sub1'], mesh_f1['sub2'], mesh_f1['sub3'], mesh_f1_avg]
-        depth_precision_avg = sum(depth_precision.values())/len(camIdxSet)
-        depth_recall_avg = sum(depth_recall.values())/len(camIdxSet)
-        depth_f1_avg = sum(depth_f1.values())/len(camIdxSet)
+        self.dfs['mesh_precision'].loc[frame] = [mesh_precision['mas'], mesh_precision['sub1'], mesh_precision['sub2'],
+                                                 mesh_precision['sub3'], mesh_precision_avg]
+        self.dfs['mesh_recall'].loc[frame] = [mesh_recall['mas'], mesh_recall['sub1'], mesh_recall['sub2'],
+                                              mesh_recall['sub3'], mesh_recall_avg]
+        self.dfs['mesh_f1'].loc[frame] = [mesh_f1['mas'], mesh_f1['sub1'], mesh_f1['sub2'], mesh_f1['sub3'],
+                                          mesh_f1_avg]
+        depth_precision_avg = sum(depth_precision.values()) / len(camIdxSet)
+        depth_recall_avg = sum(depth_recall.values()) / len(camIdxSet)
+        depth_f1_avg = sum(depth_f1.values()) / len(camIdxSet)
         self.total_metrics[6] += depth_precision_avg
         self.total_metrics[7] += depth_recall_avg
         self.total_metrics[8] += depth_f1_avg
-        self.dfs['depth_precision'].loc[frame] = [depth_precision['mas'], depth_precision['sub1'], depth_precision['sub2'], depth_precision['sub3'], depth_precision_avg]
-        self.dfs['depth_recall'].loc[frame] = [depth_recall['mas'], depth_recall['sub1'], depth_recall['sub2'], depth_recall['sub3'], depth_recall_avg]
-        self.dfs['depth_f1'].loc[frame] = [depth_f1['mas'], depth_f1['sub1'], depth_f1['sub2'], depth_f1['sub3'], depth_f1_avg]
+        self.dfs['depth_precision'].loc[frame] = [depth_precision['mas'], depth_precision['sub1'],
+                                                  depth_precision['sub2'], depth_precision['sub3'], depth_precision_avg]
+        self.dfs['depth_recall'].loc[frame] = [depth_recall['mas'], depth_recall['sub1'], depth_recall['sub2'],
+                                               depth_recall['sub3'], depth_recall_avg]
+        self.dfs['depth_f1'].loc[frame] = [depth_f1['mas'], depth_f1['sub1'], depth_f1['sub2'], depth_f1['sub3'],
+                                           depth_f1_avg]
 
 
     def save_evaluation(self, save_path, save_num):
