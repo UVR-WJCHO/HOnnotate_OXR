@@ -230,8 +230,9 @@ class DataLoader:
 
 
     def load_raw_image(self, index):
-        _, _, seg, seg_obj, rgb_raw, depth_raw = self.get_img(index)
-        return rgb_raw, depth_raw, seg, seg_obj
+        _, _, _, seg_hand, seg_obj, rgb_raw, depth_raw = self.get_img(index)
+        return rgb_raw, depth_raw, seg_hand, seg_obj
+
 
     def load_cam_parameters(self):
         _, dist_coeffs, extrinsics, _ = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
