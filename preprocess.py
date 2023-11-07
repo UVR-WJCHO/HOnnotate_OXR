@@ -59,7 +59,7 @@ flag_check_vert_marker_pair = False
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_float('mp_value', 0.5, 'target cam db Name')
+flags.DEFINE_float('mp_value', 0.65, 'target cam db Name')
 
 flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
