@@ -446,6 +446,8 @@ def main(argv):
                 #     valid_cam_list = ['mas', 'sub2', 'sub3']
 
                 for camIdx, camID in enumerate(valid_cam_list):
+                    if dataloader_set[camIdx][frame] is None:
+                        continue
                     if 'bb' in dataloader_set[camIdx][frame].keys():
                         detected_cams.append(camIdx)
                 if len(detected_cams) < 2:
