@@ -947,11 +947,16 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
 
         save_idx = 0
         init_joint = None
+
+        skip_num = 3
+        if len(dbs[0]) < 185:
+            skip_num = 2
+
         for idx in range(len(dbs[0])):
             # if idx < 69:
             #     continue
 
-            if idx % 3 != 0:
+            if idx % skip_num != 0:
                 progress.update()
                 global_tqdm.update()
                 continue
