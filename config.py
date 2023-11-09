@@ -230,6 +230,37 @@ CFG_CONTACT_DIST_VIS = 10
 CFG_PALM_IDX = [0, 5, 9, 13]
 CFG_TIP_IDX = {'thumb':4, 'index':8, 'middle':12, 'ring':16, 'pinky':20}
 
+CFG_OBJECT_SCALE_FIXED = [1.,
+1.,
+1.,
+1.,
+0.8296698468,
+1.,
+1.,
+1.,
+1.,
+1.,
+0.1035083229,
+1.,
+0.6706711338,
+1.,
+1.,
+0.43,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.,
+1.]
+
 
 
 class GRASPType(IntEnum):
