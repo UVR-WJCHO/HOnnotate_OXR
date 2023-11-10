@@ -964,7 +964,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         skip_num = 2
 
         for idx in range(len(dbs[0])):
-            # if idx < 69:
+            # if idx > 10:
             #     continue
 
             if idx % skip_num != 0:
