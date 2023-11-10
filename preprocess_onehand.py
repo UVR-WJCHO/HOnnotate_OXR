@@ -57,8 +57,8 @@ flag_check_vert_marker_pair = False
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '230911', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '230911_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '230905', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '230905_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.55, 'target cam db Name')
 
 flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
@@ -703,22 +703,11 @@ class loadDataset():
         rgb_init = np.copy(rgb)
         rgb_init = rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
 
-        # cv2.imshow("bbox ", rgb_init)
-        # cv2.waitKey(0)
         # run mediapipe
         results = mp_hand.process(cv2.cvtColor(rgb_init, cv2.COLOR_BGR2RGB))
 
-        if results.multi_hand_landmarks:
-            if len(results.multi_hand_landmarks) == 1:
-                hand_landmark = results.multi_hand_landmarks[0]
-            else:
-                for i in range(len(results.multi_hand_landmarks)):
-                    hand_side = results.multi_handedness[i].classification[0].label
-                    if hand_side == 'Left':
-                        hand_landmark = results.multi_hand_landmarks[i]
-                    else:
-                        return None
-
+        if results.multi_hand_landmarks and len(results.multi_hand_landmarks[0].landmark) == 21:
+            hand_landmark = results.multi_hand_landmarks[0]
             idx_to_coordinates = {}
             # wristDepth = depth[
             #     int(hand_landmark.landmark[0].y * image_rows), int(hand_landmark.landmark[0].x * image_cols)]
@@ -950,7 +939,7 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
         mp_hand_list = []
         for i in range(len(dbs)):
-            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=2, min_detection_confidence=0.50, min_tracking_confidence=FLAGS.mp_value)
+            mp_hand = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.50, min_tracking_confidence=FLAGS.mp_value)
             mp_hand_list.append(mp_hand)
 
         for db in dbs:
@@ -959,9 +948,9 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
         save_idx = 0
         init_joint = None
 
-        # skip_num = 3
-        # if len(dbs[0]) < 200:
-        skip_num = 2
+        skip_num = 3
+        if len(dbs[0]) < 240:
+            skip_num = 2
 
         for idx in range(len(dbs[0])):
             # if idx < 69:
