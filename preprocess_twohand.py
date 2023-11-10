@@ -61,7 +61,7 @@ flags.DEFINE_string('db', '230911', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230911_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.55, 'target cam db Name')
 
-flags.DEFINE_string('obj_db', 'obj_scanned_models_230909~230913', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
+flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
@@ -709,12 +709,15 @@ class loadDataset():
         results = mp_hand.process(cv2.cvtColor(rgb_init, cv2.COLOR_BGR2RGB))
 
         if results.multi_hand_landmarks:
-            for i in range(len(results.multi_hand_landmarks)):
-                hand_side = results.multi_handedness[i].classification[0].label
-                if hand_side == 'Left':
-                    hand_landmark = results.multi_hand_landmarks[i]
-                else:
-                    return None
+            if len(results.multi_hand_landmarks) == 1:
+                hand_landmark = results.multi_hand_landmarks[0]
+            else:
+                for i in range(len(results.multi_hand_landmarks)):
+                    hand_side = results.multi_handedness[i].classification[0].label
+                    if hand_side == 'Left':
+                        hand_landmark = results.multi_hand_landmarks[i]
+                    else:
+                        return None
 
             idx_to_coordinates = {}
             # wristDepth = depth[

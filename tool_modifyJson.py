@@ -110,6 +110,8 @@ def modify_annotation(targetDir, seq, trialName):
             anno['Mesh'][0]['object_mat'] = obj_mat.tolist()
 
             ## image-file_name list 두개인지 체크
+            
+            ## contact 라벨 구조 위치 확인
 
 
             ### Addition on Meta data ###
