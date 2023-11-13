@@ -246,10 +246,10 @@ def modify_annotation(targetDir, seq, trialName):
             anno['images']['file_name'] = [os.path.join("rgb", str(camID), str(camID) + '_' + str(frame) + '.jpg'), os.path.join("depth", str(camID), str(camID) + '_' + str(frame) + '.png')]
 
             ## contact 라벨 구조 위치 확인
-            contact = anno['Mesh'][0]['contact']
-            anno['contact'] = contact
-            del anno['Mesh'][0]['contact']
-
+            if 'contact' in anno['Mesh'][0]:
+                contact = anno['Mesh'][0]['contact']
+                anno['contact'] = contact
+                del anno['Mesh'][0]['contact']
 
             ### save modified annotation
             with open(anno_path, 'w', encoding='cp949') as file:
