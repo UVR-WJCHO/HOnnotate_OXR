@@ -162,13 +162,25 @@ def load_annotation(targetDir, seq, trialName):
         ###################################### OBJECT ######################################
 
         obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat'])).to(device)
-        ## will be updated on json
-        # obj_mat[:3, -1] *= 0.1
 
         obj_points = obj_verts_template_h @ obj_mat.T
         # Convert back to Cartesian coordinates
         obj_verts_world = obj_points[:, :3] / obj_points[:, 3:]
         obj_verts_world = obj_verts_world.view(1, -1, 3)
+
+        # for i in range(4):
+        #     # origin
+        #     Ms = Ms_list[i]
+        #     verts_cam_obj = torch.unsqueeze(mano3DToCam3D(obj_verts_world, Ms), 0)
+        #
+        #     # new
+        #     debug = obj_verts_template_h @ obj_mat.T @ Ms.T
+        #     print(".")
+        #
+        #     obj_mat_cam = (obj_mat.T @ Ms.T).T
+        #     debug_1 = obj_verts_template_h @ obj_mat_cam.T
+        #     print(".")
+
 
         ###################################### EVALUATION ######################################
         kpts_precision = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
@@ -199,7 +211,7 @@ def load_annotation(targetDir, seq, trialName):
             joints_cam = torch.unsqueeze(torch.Tensor(mano3DToCam3D(hand_joints, Ms)), axis=0)
             verts_cam = torch.unsqueeze(mano3DToCam3D(hand_verts, Ms), 0)
             verts_cam_obj = torch.unsqueeze(mano3DToCam3D(obj_verts_world, Ms), 0)
-
+            # (same) verts_cam_obj = torch.unsqueeze(obj_verts_world @ obj_mat_cam.T, 0)
 
             ## mesh rendering
             pred_rendered = renderer_set[camIdx].render_meshes([verts_cam, verts_cam_obj],
