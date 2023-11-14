@@ -13,13 +13,12 @@ from manopth.manolayer import ManoLayer
 from tqdm import tqdm
 from config import *
 
-
 """
 config.py
 tool_modifyJson.py
 subject_info.xlsx
 dataset
---- test_result
+--- {YYMMDD}
 ------ 230923_S34_obj_01_grasp_19
 --------- trial_0
 ------------ annotation
@@ -32,11 +31,21 @@ dataset
 ------------ rgb
 ------------ visualization
 
---- test_object_data_all
+--- object_data_all
 ------ 230923_obj
 --------- 230923_S34_obj_01
 ------------ 230923_S34_obj_01_grasp_13_00.txt
 
+
+--- {YYMMDD}_tip
+------ 230923_S34_obj_01_grasp_19
+--------- trial_0
+------------ mas
+--------------- mas_0.json
+--------------- mas_1.json
+------------ sub1
+--------------- sub1_0.json
+--------------- sub1_1.json
 
 """
 
@@ -109,8 +118,11 @@ def modify_annotation(targetDir, seq, trialName):
     depth_base_path = os.path.join(targetDir, seq, trialName, 'depth')
     rgb_base_path = os.path.join(targetDir, seq, trialName, 'rgb')
     vis_base_path = os.path.join(targetDir, seq, trialName, 'visualization')
-
     anno_list = os.listdir(os.path.join(anno_base_path, 'mas'))
+
+    ### update log with 2D tip ###
+    tip_db_dir = os.path.join(baseDir, db+'_tip', seq, trialName)
+    log_base_path = os.path.join(targetDir, seq, trialName, 'log')
 
     device = 'cuda'
     mano_path = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
@@ -132,6 +144,12 @@ def modify_annotation(targetDir, seq, trialName):
         Ks_list.append(Ks)
         Ms_list.append(Ms)
 
+    dfs = {}
+    dfs['tip_precision'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+    dfs['tip_recall'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+    dfs['tip_f1'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
+    total_metrics = [0.] * 3
+    eval_num = 0
 
     for anno_name in tqdm(anno_list):
         frame = int(anno_name[5:9])
@@ -185,12 +203,17 @@ def modify_annotation(targetDir, seq, trialName):
 
         scale = np.average(dist_mano / dist_anno)
 
+        # for tip GT evaluation
+        kpts_precision = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
+        kpts_recall = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
+        kpts_f1 = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
 
         for camIdx, anno_path in enumerate(anno_path_list):
+            camID = camIDset[camIdx]
+
             ### load current annotation(include updated meta info.)
             with open(anno_path, 'r', encoding='cp949') as file:
                 anno = json.load(file)
-
 
             ## 피험자 정보 적용
             data_for_id = get_data_by_id(subjects_df, subject_id)
@@ -242,7 +265,6 @@ def modify_annotation(targetDir, seq, trialName):
 
 
             ## image-file_name list 두개인지 체크(덮어씌우기)
-            camID = camIDset[camIdx]
             anno['images']['file_name'] = [os.path.join("rgb", str(camID), str(camID) + '_' + str(frame) + '.jpg'), os.path.join("depth", str(camID), str(camID) + '_' + str(frame) + '.png')]
 
             ## contact 라벨 구조 위치 확인
@@ -254,6 +276,81 @@ def modify_annotation(targetDir, seq, trialName):
             ### save modified annotation
             with open(anno_path, 'w', encoding='cp949') as file:
                 json.dump(anno, file, indent='\t', ensure_ascii=False)
+
+
+            ### generate new log data with 2D tip ###
+            # manual 2D tip GT
+            tip_data_dir = os.path.join(tip_db_dir, camID)
+            tip_data_name = str(camID) + '_' + str(frame) + '.json'
+            tip_data_path = os.path.join(tip_data_dir, tip_data_name)
+
+            # calculate 2D tip error only if tip GT exists
+            if os.path.exists(tip_data_path):
+                with open(tip_data_path, "r") as data:
+                    tip_data = json.load(data)['annotations'][0]
+                tip_kpts = {}
+                for tip in tip_data:
+                    tip_name = tip['label']
+                    tip_2d = [tip['x'], tip['y']]
+                    tip_kpts[tip_name] = np.round(tip_2d, 2)
+
+                tip2d_np = []
+                tip2d_idx = []
+                for key in tip_kpts.keys():
+                    tip2d_np.append(tip_kpts[key])
+                    tip2d_idx.append(CFG_TIP_IDX[key])
+
+                # our dataset
+                proj_2Dkpts = np.squeeze(np.asarray(keypts_cam))
+                proj_2Dkpts = proj_2Dkpts[tip2d_idx, :]
+
+                # calculate 2D keypoints F1-Score for each view
+                TP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
+                FP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
+                FN = 1e-7  # 참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
+                for idx, gt_kpt in enumerate(tip2d_np):
+                    pred_kpt = proj_2Dkpts[idx]
+                    if (pred_kpt == None).any():
+                        FN += 1
+                    dist = np.linalg.norm(gt_kpt - pred_kpt)
+                    if dist < 50:
+                        TP += 1
+                    elif dist >= 50:
+                        FP += 1
+
+                keypoint_precision_score = TP / (TP + FP)
+                keypoint_recall_score = TP / (TP + FN)
+                keypoint_f1_score = 2 * (keypoint_precision_score * keypoint_recall_score /
+                                         (keypoint_precision_score + keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
+                kpts_precision[camID] = keypoint_precision_score
+                kpts_recall[camID] = keypoint_recall_score
+                kpts_f1[camID] = keypoint_f1_score
+
+        kpts_precision_avg = sum(kpts_precision.values()) / len(cam_list)
+        kpts_recall_avg = sum(kpts_recall.values()) / len(cam_list)
+        kpts_f1_avg = sum(kpts_f1.values()) / len(cam_list)
+
+        total_metrics[0] += kpts_precision_avg
+        total_metrics[1] += kpts_recall_avg
+        total_metrics[2] += kpts_f1_avg
+        dfs['tip_precision'].loc[frame] = [kpts_precision['mas'], kpts_precision['sub1'], kpts_precision['sub2'],
+                                                 kpts_precision['sub3'], kpts_precision_avg]
+        dfs['tip_recall'].loc[frame] = [kpts_recall['mas'], kpts_recall['sub1'], kpts_recall['sub2'],
+                                              kpts_recall['sub3'], kpts_recall_avg]
+        dfs['tip_f1'].loc[frame] = [kpts_f1['mas'], kpts_f1['sub1'], kpts_f1['sub2'], kpts_f1['sub3'],
+                                          kpts_f1_avg]
+
+        eval_num += 1
+
+    ## save tipGT keypoint error
+    csv_files = ['tip_precision', 'tip_recall', 'tip_f1']
+    for idx, file in enumerate(csv_files):
+        with open(os.path.join(log_base_path, file + '.csv'), "w", encoding='utf-8') as f:
+            ws = csv.writer(f)
+            ws.writerow(['total_avg', total_metrics[idx] / eval_num])
+            ws.writerow(['frame', 'mas', 'sub1', 'sub2', 'sub3', 'avg'])
+        df = dfs[file]
+        df.to_csv(os.path.join(log_base_path, file + '.csv'), mode='a', index=True, header=False)
 
 
 def main():

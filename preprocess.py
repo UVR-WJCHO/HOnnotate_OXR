@@ -217,7 +217,7 @@ class loadDataset():
         self.prev_bbox = None
         self.wrist_px = None
 
-        self.tip_db_dir = self.dbDir_result = os.path.join(baseDir, db+'_tip', seq, trial)
+        self.tip_db_dir = os.path.join(baseDir, db+'_tip', seq, trial)
 
         intrinsics, dist_coeffs, extrinsics, err = LoadCameraParams(os.path.join(camResultDir, "cameraParams.json"))
         self.intrinsics = intrinsics
