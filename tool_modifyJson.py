@@ -139,10 +139,10 @@ def modify_annotation(targetDir, seq, trialName):
     obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % int(grasp_id)) + '_' + str("%02d" % int(trial_num))
     marker_cam_data_name = obj_data_name + '_marker.pkl'
     marker_cam_data_path = os.path.join(obj_pose_dir, marker_cam_data_name)
-    """
+
     with open(marker_cam_data_path, 'rb') as f:
         marker_cam_pose = pickle.load(f)
-    """
+
     anno_base_path = os.path.join(targetDir, seq, trialName, 'annotation')
     depth_base_path = os.path.join(targetDir, seq, trialName, 'depth')
     rgb_base_path = os.path.join(targetDir, seq, trialName, 'rgb')
@@ -274,11 +274,11 @@ def modify_annotation(targetDir, seq, trialName):
 
 
             ## object marker 데이터 추가
-            """
+
             anno['object']['marker_count'] = marker_cam_pose['marker_num']
             anno['object']['markers_data'] = marker_cam_pose[str(frame)].tolist()
             anno['object']['pose_data'] = anno['Mesh'][0]['object_mat']
-            """
+
             ## calibration error 적용
             anno['calibration']['error'] = float(calib_error)
 
@@ -332,10 +332,10 @@ def modify_annotation(targetDir, seq, trialName):
                 del anno['Mesh'][0]['contact']
 
             ### save modified annotation
-            """
+
             with open(anno_path, 'w', encoding='cp949') as file:
                 json.dump(anno, file, indent='\t', ensure_ascii=False)
-            """
+
 
             ### generate new log data with 2D tip ###
             # manual 2D tip GT
@@ -344,7 +344,7 @@ def modify_annotation(targetDir, seq, trialName):
             tip_data_path = os.path.join(tip_data_dir, tip_data_name)
 
             # calculate 2D tip error only if tip GT exists
-            """
+
             if os.path.exists(tip_data_path):
                 with open(tip_data_path, "r") as data:
                     tip_data = json.load(data)['annotations'][0]
@@ -385,7 +385,7 @@ def modify_annotation(targetDir, seq, trialName):
                 kpts_precision[camID] = keypoint_precision_score
                 kpts_recall[camID] = keypoint_recall_score
                 kpts_f1[camID] = keypoint_f1_score
-            """
+
 
         ## blur face (sub2, sub3)
         cam_list_for_blur = ['sub2', 'sub3']
