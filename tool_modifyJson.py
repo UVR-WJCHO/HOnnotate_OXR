@@ -12,6 +12,9 @@ import pandas as pd
 from manopth.manolayer import ManoLayer
 from tqdm import tqdm
 from config import *
+import cv2
+from utils.lossUtils import *
+
 
 """
 config.py
@@ -91,6 +94,31 @@ def get_data_by_id(df, id_value):
     else:
         return "No data found for the given ID."
 
+
+def extractBbox(proj_kpts2D, image_rows=1080, image_cols=1920, w_margin=300, h_margin=150):
+        # consider fixed size bbox
+        x_min = min(proj_kpts2D[:, 0])
+        x_max = max(proj_kpts2D[:, 0])
+        y_min = min(proj_kpts2D[:, 1])
+        y_max = max(proj_kpts2D[:, 1])
+
+        x_min = max(0, x_min - w_margin)
+        y_min = max(0, y_min - h_margin)
+
+        if (x_max + w_margin) > image_cols:
+            x_max = image_cols
+        else:
+            x_max = x_max + w_margin
+
+        if (y_max + h_margin) > image_rows:
+            y_max = image_rows
+        else:
+            y_max = y_max + h_margin
+
+        bbox = [x_min, y_min, x_max, y_max]
+        return bbox
+
+
 # targetDir = 'dataset/FLAGS.db'
 # seq = '230923_S34_obj_01_grasp_13'
 # trialName = 'trial_0'
@@ -111,9 +139,10 @@ def modify_annotation(targetDir, seq, trialName):
     obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % int(grasp_id)) + '_' + str("%02d" % int(trial_num))
     marker_cam_data_name = obj_data_name + '_marker.pkl'
     marker_cam_data_path = os.path.join(obj_pose_dir, marker_cam_data_name)
+    """
     with open(marker_cam_data_path, 'rb') as f:
         marker_cam_pose = pickle.load(f)
-
+    """
     anno_base_path = os.path.join(targetDir, seq, trialName, 'annotation')
     depth_base_path = os.path.join(targetDir, seq, trialName, 'depth')
     rgb_base_path = os.path.join(targetDir, seq, trialName, 'rgb')
@@ -140,7 +169,10 @@ def modify_annotation(targetDir, seq, trialName):
         Ks = np.asarray(str(anno['calibration']['intrinsic']).split(','), dtype=float)
         Ks = torch.FloatTensor([[Ks[0], 0, Ks[2]], [0, Ks[1], Ks[3]], [0, 0, 1]])
         Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
-        Ms = torch.Tensor(np.reshape(Ms, (3, 4)))
+        Ms = np.reshape(Ms, (3, 4))
+        Ms[:, -1] = Ms[:, -1] / 10.0
+        Ms = torch.Tensor(Ms)
+
         Ks_list.append(Ks)
         Ms_list.append(Ms)
 
@@ -150,6 +182,12 @@ def modify_annotation(targetDir, seq, trialName):
     dfs['tip_f1'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
     total_metrics = [0.] * 3
     eval_num = 0
+
+    ## parameter for face blur
+    init_bbox = {}
+    init_bbox["sub2"] = [1200, 0, 700, 250]
+    init_bbox["sub3"] = [450, 0, 600, 250]    # 키 185
+    # init_bbox["sub3"] = [450, 0, 600, 350]  # 키 135
 
     for anno_name in tqdm(anno_list):
         frame = int(anno_name[5:9])
@@ -163,6 +201,7 @@ def modify_annotation(targetDir, seq, trialName):
         with open(anno_path, 'r', encoding='cp949') as file:
             anno = json.load(file)
 
+        ## if annotation is not processed, delete
         if isinstance(anno['annotations'][0]['data'], str):
             print("unprocess json : %s, remove json" % anno_name)
             for camID in cam_list:
@@ -203,11 +242,12 @@ def modify_annotation(targetDir, seq, trialName):
 
         scale = np.average(dist_mano / dist_anno)
 
-        # for tip GT evaluation
         kpts_precision = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
         kpts_recall = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
         kpts_f1 = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
 
+        bbox_list = []
+        ## modify json, eval 2Dtip error
         for camIdx, anno_path in enumerate(anno_path_list):
             camID = camIDset[camIdx]
 
@@ -232,11 +272,13 @@ def modify_annotation(targetDir, seq, trialName):
             anno['actor']['height'] = height
             anno['actor']['handsize'] = size
 
+
             ## object marker 데이터 추가
+            """
             anno['object']['marker_count'] = marker_cam_pose['marker_num']
             anno['object']['markers_data'] = marker_cam_pose[str(frame)].tolist()
             anno['object']['pose_data'] = anno['Mesh'][0]['object_mat']
-
+            """
             ## calibration error 적용
             anno['calibration']['error'] = float(calib_error)
 
@@ -245,6 +287,10 @@ def modify_annotation(targetDir, seq, trialName):
             obj_mat[:3, -1] *= 0.1
             anno['Mesh'][0]['object_mat'] = obj_mat.tolist()
 
+            Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
+            Ms = np.reshape(Ms, (3, 4))
+            Ms[:, -1] = Ms[:, -1] / 10.0
+            anno['calibration']['extrinsic'] = Ms.tolist()
 
             ### Addition on Meta data ###
             anno['hand'] = {}
@@ -254,8 +300,20 @@ def modify_annotation(targetDir, seq, trialName):
             joints = torch.FloatTensor(anno['annotations'][0]['data']).reshape(21, 3)
             joints_cam = torch.unsqueeze(mano3DToCam3D(joints, Ms_list[camIdx]), 0)
             keypts_cam = projectPoints(joints_cam, Ks_list[camIdx])
+
             anno['hand']["3D_pose_per_cam"] = np.squeeze(np.asarray(joints_cam)).tolist()
             anno['hand']["projected_2D_pose_per_cam"] = np.squeeze(np.asarray(keypts_cam)).tolist()
+
+            keypts_cam = np.squeeze(keypts_cam.detach().numpy())
+            ## debug
+            # rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
+            # rgb = cv2.imread(rgb_path)
+            # rgb_2d_pred = paint_kpts(None, rgb, keypts_cam)
+            # cv2.imshow("check 2d", rgb_2d_pred)
+            # cv2.waitKey(0)
+
+            bbox = extractBbox(keypts_cam)
+            bbox_list.append(bbox)
 
             obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat']))
             obj_mat_cam = obj_mat.T @ Ms_list[camIdx].T
@@ -274,9 +332,10 @@ def modify_annotation(targetDir, seq, trialName):
                 del anno['Mesh'][0]['contact']
 
             ### save modified annotation
+            """
             with open(anno_path, 'w', encoding='cp949') as file:
                 json.dump(anno, file, indent='\t', ensure_ascii=False)
-
+            """
 
             ### generate new log data with 2D tip ###
             # manual 2D tip GT
@@ -285,6 +344,7 @@ def modify_annotation(targetDir, seq, trialName):
             tip_data_path = os.path.join(tip_data_dir, tip_data_name)
 
             # calculate 2D tip error only if tip GT exists
+            """
             if os.path.exists(tip_data_path):
                 with open(tip_data_path, "r") as data:
                     tip_data = json.load(data)['annotations'][0]
@@ -325,6 +385,37 @@ def modify_annotation(targetDir, seq, trialName):
                 kpts_precision[camID] = keypoint_precision_score
                 kpts_recall[camID] = keypoint_recall_score
                 kpts_f1[camID] = keypoint_f1_score
+            """
+
+        ## blur face (sub2, sub3)
+        cam_list_for_blur = ['sub2', 'sub3']
+        for camIdx, camID in enumerate(camIDset):
+            if camID == 'mas' or camID == 'sub1':
+                continue
+            rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
+            rgb_init = cv2.imread(rgb_path)
+
+            # blur manual region
+            bbox = init_bbox[camID].copy()
+            if camID == 'sub3':
+                # max height : 185 cm
+                height_gap = (185 - float(height)) * 2
+                bbox[3] = bbox[3] + height_gap
+
+            rgb_roi = rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+            blurred_roi = cv2.GaussianBlur(rgb_roi, ksize=(0, 0), sigmaX=10, sigmaY=0)
+            # non-blur hand region
+            bbox_hand = bbox_list[camIdx]
+            rgb_roi_hand = rgb_init[int(bbox_hand[1]):int(bbox_hand[3]), int(bbox_hand[0]):int(bbox_hand[2])].copy()
+
+            # blur first, then non-blur hand region
+            rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])] = blurred_roi
+            rgb_init[int(bbox_hand[1]):int(bbox_hand[3]), int(bbox_hand[0]):int(bbox_hand[2])] = rgb_roi_hand
+
+            # cv2.imshow("a ", rgb_init)
+            # cv2.waitKey(0)
+            cv2.imwrite(rgb_path, rgb_init)
+
 
         kpts_precision_avg = sum(kpts_precision.values()) / len(cam_list)
         kpts_recall_avg = sum(kpts_recall.values()) / len(cam_list)

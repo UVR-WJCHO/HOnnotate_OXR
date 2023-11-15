@@ -91,7 +91,12 @@ def load_annotation(targetDir, seq, trialName):
         Ks = np.asarray(str(anno['calibration']['intrinsic']).split(','), dtype=float)
         Ks = torch.FloatTensor([[Ks[0], 0, Ks[2]], [0, Ks[1], Ks[3]], [0, 0, 1]]).to(device)
         Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
-        Ms = torch.Tensor(np.reshape(Ms, (3, 4))).to(device)
+        Ms = np.reshape(Ms, (3, 4))
+        ## will be processed in postprocess
+        # Ms[:, -1] = Ms[:, -1] / 10.0
+        Ms = torch.Tensor(Ms).to(device)
+
+
         Ks_list.append(Ks)
         Ms_list.append(Ms)
     default_M = np.eye(4)[:3]
@@ -162,7 +167,8 @@ def load_annotation(targetDir, seq, trialName):
         ###################################### OBJECT ######################################
 
         obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat'])).to(device)
-
+        ## will be processed in postprocess
+        # obj_mat[:3, -1] *= 0.1
         obj_points = obj_verts_template_h @ obj_mat.T
         # Convert back to Cartesian coordinates
         obj_verts_world = obj_points[:, :3] / obj_points[:, 3:]
