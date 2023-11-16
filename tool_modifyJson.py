@@ -14,6 +14,7 @@ from tqdm import tqdm
 from config import *
 import cv2
 from utils.lossUtils import *
+import csv
 
 
 """
@@ -57,6 +58,7 @@ dataset
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', 'test_result', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('obj_db', 'test_obj_data_all', 'obj db Name')   ## name ,default, help
+flags.DEFINE_string('tip_db', 'test_result_tip', 'tip db Name')   ## name ,default, help
 
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 FLAGS(sys.argv)
@@ -150,7 +152,7 @@ def modify_annotation(targetDir, seq, trialName):
     anno_list = os.listdir(os.path.join(anno_base_path, 'mas'))
 
     ### update log with 2D tip ###
-    tip_db_dir = os.path.join(baseDir, db+'_tip', seq, trialName)
+    tip_db_dir = os.path.join(baseDir, FLAGS.tip_db, seq, trialName)
     log_base_path = os.path.join(targetDir, seq, trialName, 'log')
 
     device = 'cuda'
@@ -344,7 +346,6 @@ def modify_annotation(targetDir, seq, trialName):
             tip_data_path = os.path.join(tip_data_dir, tip_data_name)
 
             # calculate 2D tip error only if tip GT exists
-
             if os.path.exists(tip_data_path):
                 with open(tip_data_path, "r") as data:
                     tip_data = json.load(data)['annotations'][0]
@@ -386,9 +387,23 @@ def modify_annotation(targetDir, seq, trialName):
                 kpts_recall[camID] = keypoint_recall_score
                 kpts_f1[camID] = keypoint_f1_score
 
+        kpts_precision_avg = sum(kpts_precision.values()) / len(cam_list)
+        kpts_recall_avg = sum(kpts_recall.values()) / len(cam_list)
+        kpts_f1_avg = sum(kpts_f1.values()) / len(cam_list)
+
+        if kpts_precision_avg != 0:
+            total_metrics[0] += kpts_precision_avg
+            total_metrics[1] += kpts_recall_avg
+            total_metrics[2] += kpts_f1_avg
+            dfs['tip_precision'].loc[frame] = [kpts_precision['mas'], kpts_precision['sub1'], kpts_precision['sub2'],
+                                                kpts_precision['sub3'], kpts_precision_avg]
+            dfs['tip_recall'].loc[frame] = [kpts_recall['mas'], kpts_recall['sub1'], kpts_recall['sub2'],
+                                             kpts_recall['sub3'], kpts_recall_avg]
+            dfs['tip_f1'].loc[frame] = [kpts_f1['mas'], kpts_f1['sub1'], kpts_f1['sub2'], kpts_f1['sub3'],
+                                         kpts_f1_avg]
+            eval_num += 1
 
         ## blur face (sub2, sub3)
-        cam_list_for_blur = ['sub2', 'sub3']
         for camIdx, camID in enumerate(camIDset):
             if camID == 'mas' or camID == 'sub1':
                 continue
@@ -417,31 +432,18 @@ def modify_annotation(targetDir, seq, trialName):
             cv2.imwrite(rgb_path, rgb_init)
 
 
-        kpts_precision_avg = sum(kpts_precision.values()) / len(cam_list)
-        kpts_recall_avg = sum(kpts_recall.values()) / len(cam_list)
-        kpts_f1_avg = sum(kpts_f1.values()) / len(cam_list)
-
-        total_metrics[0] += kpts_precision_avg
-        total_metrics[1] += kpts_recall_avg
-        total_metrics[2] += kpts_f1_avg
-        dfs['tip_precision'].loc[frame] = [kpts_precision['mas'], kpts_precision['sub1'], kpts_precision['sub2'],
-                                                 kpts_precision['sub3'], kpts_precision_avg]
-        dfs['tip_recall'].loc[frame] = [kpts_recall['mas'], kpts_recall['sub1'], kpts_recall['sub2'],
-                                              kpts_recall['sub3'], kpts_recall_avg]
-        dfs['tip_f1'].loc[frame] = [kpts_f1['mas'], kpts_f1['sub1'], kpts_f1['sub2'], kpts_f1['sub3'],
-                                          kpts_f1_avg]
-
-        eval_num += 1
-
-    ## save tipGT keypoint error
+    ## save tipGT keypoint error (remove original mediapipe kpts error file, check it.
     csv_files = ['tip_precision', 'tip_recall', 'tip_f1']
-    for idx, file in enumerate(csv_files):
-        with open(os.path.join(log_base_path, file + '.csv'), "w", encoding='utf-8') as f:
-            ws = csv.writer(f)
-            ws.writerow(['total_avg', total_metrics[idx] / eval_num])
-            ws.writerow(['frame', 'mas', 'sub1', 'sub2', 'sub3', 'avg'])
-        df = dfs[file]
-        df.to_csv(os.path.join(log_base_path, file + '.csv'), mode='a', index=True, header=False)
+    if eval_num != 0:
+        for idx, file in enumerate(csv_files):
+            with open(os.path.join(log_base_path, file + '.csv'), "w", encoding='utf-8') as f:
+                ws = csv.writer(f)
+                ws.writerow(['total_avg', total_metrics[idx] / eval_num])
+                ws.writerow(['frame', 'mas', 'sub1', 'sub2', 'sub3', 'avg'])
+            df = dfs[file]
+            df.to_csv(os.path.join(log_base_path, file + '.csv'), mode='a', index=True, header=False)
+    else:
+        print("no 2D tip data, skip generating csv file for tip F1-score")
 
 
 def main():
