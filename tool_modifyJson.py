@@ -70,6 +70,8 @@ baseDir = os.path.join(os.getcwd(), 'dataset')
 subjects_df = pd.read_excel('./subject_info.xlsx', header=0)
 # print(subjects_df)
 
+missing_subject_id = [8, 48, 49]
+
 
 def mano3DToCam3D(xyz3D, ext):
     device = xyz3D.device
@@ -173,8 +175,11 @@ def modify_annotation(targetDir, seq, trialName,data_len, tqdm_func, global_tqdm
             with open(anno_path, 'r', encoding='cp949') as file:
                 anno = json.load(file)
 
-            Ks = np.asarray(str(anno['calibration']['intrinsic']).split(','), dtype=float)
-            Ks = torch.FloatTensor([[Ks[0], 0, Ks[2]], [0, Ks[1], Ks[3]], [0, 0, 1]])
+            if isinstance(anno['calibration']['intrinsic'], str):
+                Ks = np.asarray(str(anno['calibration']['intrinsic']).split(','), dtype=float)
+                Ks = torch.FloatTensor([[Ks[0], 0, Ks[2]], [0, Ks[1], Ks[3]], [0, 0, 1]])
+            else:
+                Ks = torch.FloatTensor(np.squeeze(np.asarray(anno['calibration']['intrinsic'])))
             Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
             Ms = np.reshape(Ms, (3, 4))
             Ms[:, -1] = Ms[:, -1] / 10.0
@@ -262,87 +267,114 @@ def modify_annotation(targetDir, seq, trialName,data_len, tqdm_func, global_tqdm
                 with open(anno_path, 'r', encoding='cp949') as file:
                     anno = json.load(file)
 
-                ## 피험자 정보 적용
-                data_for_id = get_data_by_id(subjects_df, subject_id)
+                ## if current annotation is postprocessed, pass
+                if not isinstance(anno['calibration']['intrinsic'], list):
+                    ## 피험자 정보 적용
+                    data_for_id = get_data_by_id(subjects_df, subject_id)
 
-                age = str(data_for_id['나이대'])
-                sex_str = data_for_id['성별']
-                if sex_str == '남':
-                    sex = "M"
+                    age = str(data_for_id['나이대'])
+                    sex_str = data_for_id['성별']
+                    if sex_str == '남':
+                        sex = "M"
+                    else:
+                        sex = "F"
+                    height = float(data_for_id['키'])
+                    size = float(data_for_id['손크기'])
+
+                    actor_id = int(subject_id)
+                    if actor_id in [101, 102, 103]:
+                        idx = [101, 102, 103].index(actor_id)
+                        actor_id = missing_subject_id[idx]
+
+                    anno['actor']['id'] = 'S'+str(actor_id)
+                    anno['actor']['age'] = age
+                    anno['actor']['sex'] = sex
+                    anno['actor']['height'] = height
+                    anno['actor']['handsize'] = size
+
+
+                    ## object marker 데이터 추가
+
+                    anno['object']['marker_count'] = int(marker_cam_pose['marker_num'])
+                    anno['object']['markers_data'] = marker_cam_pose[str(frame)].tolist()
+                    anno['object']['pose_data'] = anno['Mesh'][0]['object_mat']
+
+                    ## calibration error 적용
+                    anno['calibration']['error'] = float(calib_error)
+
+                    ## 데이터 scale 통일
+                    obj_mat = np.asarray(anno['Mesh'][0]['object_mat'])
+                    obj_mat[:3, -1] *= 0.1
+                    anno['Mesh'][0]['object_mat'] = obj_mat.tolist()
+
+                    Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
+                    Ms = np.reshape(Ms, (3, 4))
+                    anno['calibration']['extrinsic'] = Ms.tolist()
+
+                    ### Addition on Meta data ###
+                    anno['hand'] = {}
+                    anno['hand']['mano_scale'] = scale
+                    anno['hand']['mano_xyz_root'] = xyz_root.tolist()
+
+                    joints = torch.FloatTensor(anno['annotations'][0]['data']).reshape(21, 3)
+                    joints_cam = torch.unsqueeze(mano3DToCam3D(joints, Ms_list[camIdx]), 0)
+                    keypts_cam = projectPoints(joints_cam, Ks_list[camIdx])
+
+                    anno['hand']["3D_pose_per_cam"] = np.squeeze(np.asarray(joints_cam)).tolist()
+                    anno['hand']["projected_2D_pose_per_cam"] = np.squeeze(np.asarray(keypts_cam)).tolist()
+
+                    keypts_cam = np.squeeze(keypts_cam.detach().numpy())
+                    ## debug
+                    # rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
+                    # rgb = cv2.imread(rgb_path)
+                    # rgb_2d_pred = paint_kpts(None, rgb, keypts_cam)
+                    # cv2.imshow("check 2d", rgb_2d_pred)
+                    # cv2.waitKey(0)
+
+                    bbox = extractBbox(keypts_cam)
+                    bbox_list.append(bbox)
+
+                    obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat']))
+                    obj_mat_cam = obj_mat.T @ Ms_list[camIdx].T
+                    obj_mat_cam = np.squeeze(np.asarray(obj_mat_cam.T)).tolist()
+                    obj_mat_cam.append([0.0, 0.0, 0.0, 1.0])
+                    anno['object']["6D_pose_per_cam"] = obj_mat_cam
+
+
+                    ## image-file_name list 두개인지 체크(덮어씌우기)
+                    anno['images']['file_name'] = [os.path.join("rgb", str(camID), str(camID) + '_' + str(frame) + '.jpg'), os.path.join("depth", str(camID), str(camID) + '_' + str(frame) + '.png')]
+
+                    ## contact 라벨 구조 위치 확인
+                    if 'contact' in anno['Mesh'][0]:
+                        contact = anno['Mesh'][0]['contact']
+                        anno['contact'] = contact
+                        del anno['Mesh'][0]['contact']
+
+                    ## 기타 json 구조 수정(231117 피드백)
+                    anno['kinect_camera']['id'] = int(anno['kinect_camera']['id'])
+                    anno['kinect_camera']['height'] = int(anno['kinect_camera']['height'])
+                    anno['kinect_camera']['width'] = int(anno['kinect_camera']['width'])
+
+                    anno['infrared_camera'][0]['id'] = int(anno['infrared_camera'][0]['id'])
+                    anno['infrared_camera'][0]['height'] = int(anno['infrared_camera'][0]['height'])
+                    anno['infrared_camera'][0]['width'] = int(anno['infrared_camera'][0]['width'])
+                    anno['infrared_camera'][0]['frame'] = int(anno['infrared_camera'][0]['frame'])
+                    anno['infrared_camera'][0]['resolution'] = float(anno['infrared_camera'][0]['resolution'])
+
+                    Ks = np.asarray(str(anno['calibration']['intrinsic']).split(','), dtype=float)
+                    Ks = np.array([[Ks[0], 0, Ks[2]], [0, Ks[1], Ks[3]], [0, 0, 1]])
+                    anno['calibration']['intrinsic'] = Ks.tolist()
+
+                    anno['annotations'][0]['class_id'] = int(anno['annotations'][0]['class_id'])
+                    anno['Mesh'][0]['class_id'] = int(anno['Mesh'][0]['class_id'])
+
+                    ### save modified annotation
+                    with open(anno_path, 'w', encoding='cp949') as file:
+                        json.dump(anno, file, indent='\t', ensure_ascii=False)
                 else:
-                    sex = "F"
-                height = str(data_for_id['키'])
-                size = str(data_for_id['손크기'])
-
-                anno['actor']['id'] = age
-                anno['actor']['sex'] = sex
-                anno['actor']['height'] = height
-                anno['actor']['handsize'] = size
-
-
-                ## object marker 데이터 추가
-
-                anno['object']['marker_count'] = marker_cam_pose['marker_num']
-                anno['object']['markers_data'] = marker_cam_pose[str(frame)].tolist()
-                anno['object']['pose_data'] = anno['Mesh'][0]['object_mat']
-
-                ## calibration error 적용
-                anno['calibration']['error'] = float(calib_error)
-
-                ## 데이터 scale 통일
-                obj_mat = np.asarray(anno['Mesh'][0]['object_mat'])
-                obj_mat[:3, -1] *= 0.1
-                anno['Mesh'][0]['object_mat'] = obj_mat.tolist()
-
-                Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
-                Ms = np.reshape(Ms, (3, 4))
-                Ms[:, -1] = Ms[:, -1] / 10.0
-                anno['calibration']['extrinsic'] = Ms.tolist()
-
-                ### Addition on Meta data ###
-                anno['hand'] = {}
-                anno['hand']['mano_scale'] = scale
-                anno['hand']['mano_xyz_root'] = xyz_root.tolist()
-
-                joints = torch.FloatTensor(anno['annotations'][0]['data']).reshape(21, 3)
-                joints_cam = torch.unsqueeze(mano3DToCam3D(joints, Ms_list[camIdx]), 0)
-                keypts_cam = projectPoints(joints_cam, Ks_list[camIdx])
-
-                anno['hand']["3D_pose_per_cam"] = np.squeeze(np.asarray(joints_cam)).tolist()
-                anno['hand']["projected_2D_pose_per_cam"] = np.squeeze(np.asarray(keypts_cam)).tolist()
-
-                keypts_cam = np.squeeze(keypts_cam.detach().numpy())
-                ## debug
-                # rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
-                # rgb = cv2.imread(rgb_path)
-                # rgb_2d_pred = paint_kpts(None, rgb, keypts_cam)
-                # cv2.imshow("check 2d", rgb_2d_pred)
-                # cv2.waitKey(0)
-
-                bbox = extractBbox(keypts_cam)
-                bbox_list.append(bbox)
-
-                obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat']))
-                obj_mat_cam = obj_mat.T @ Ms_list[camIdx].T
-                obj_mat_cam = np.squeeze(np.asarray(obj_mat_cam.T)).tolist()
-                obj_mat_cam.append([0.0, 0.0, 0.0, 1.0])
-                anno['object']["6D_pose_per_cam"] = obj_mat_cam
-
-
-                ## image-file_name list 두개인지 체크(덮어씌우기)
-                anno['images']['file_name'] = [os.path.join("rgb", str(camID), str(camID) + '_' + str(frame) + '.jpg'), os.path.join("depth", str(camID), str(camID) + '_' + str(frame) + '.png')]
-
-                ## contact 라벨 구조 위치 확인
-                if 'contact' in anno['Mesh'][0]:
-                    contact = anno['Mesh'][0]['contact']
-                    anno['contact'] = contact
-                    del anno['Mesh'][0]['contact']
-
-                ### save modified annotation
-
-                with open(anno_path, 'w', encoding='cp949') as file:
-                    json.dump(anno, file, indent='\t', ensure_ascii=False)
-
+                    keypts_cam = np.squeeze(np.asarray(anno['hand']["projected_2D_pose_per_cam"]))
+                    bbox = extractBbox(keypts_cam)
+                    bbox_list.append(bbox)
 
                 ### generate new log data with 2D tip ###
                 # manual 2D tip GT
@@ -419,7 +451,9 @@ def modify_annotation(targetDir, seq, trialName,data_len, tqdm_func, global_tqdm
                 bbox = init_bbox[camID].copy()
                 if camID == 'sub3':
                     # max height : 185 cm
-                    height_gap = (185 - float(height)) * 2
+                    data_for_id = get_data_by_id(subjects_df, subject_id)
+                    height = float(data_for_id['키'])
+                    height_gap = (185 - height) * 2
                     bbox[3] = bbox[3] + height_gap
 
                 rgb_roi = rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
@@ -489,5 +523,7 @@ def main():
     print("total process time : %s min" % (str(proc_time)))
 
 
+
 if __name__ == '__main__':
     main()
+    print("end")
