@@ -20,38 +20,39 @@ from manopth.manolayer import ManoLayer
 from utils.lossUtils import *
 
 """
+[실행]
+> python tool_modifyJson.py --db {  } --tip_db {   }
+
+[필요 데이터]
+> dataset/{FLAGS.db} : 해당 폴더 하위에 모든 시퀀스 폴더 구성 (tip, obj 데이터와의 구분을 위해 필요함)
+> dataset/{FLAGS.tip_db} : 해당 폴더 하위에 수집된 tip 데이터 시퀀스 폴더 구성 (전부 없어도됨. 있는 것만 tip error 생성됨)
+> dataset/object_data_all : 드랍박스에서 모든 물체 자세 정리한 데이터 받아서 구성(카이스트 공유 예정)
+
+[디렉토리 구조 예시]
+
 config.py
 tool_modifyJson.py
 subject_info.xlsx
 dataset
---- {YYMMDD}
+--- {FLAGS.db}
 ------ 230923_S34_obj_01_grasp_19
 --------- trial_0
 ------------ annotation
 ------------ depth
 ------------ rgb
 ------------ visualization
---------- trial_1
------------- annotation
------------- depth
------------- rgb
------------- visualization
 
---- object_data_all
------- 230923_obj
---------- 230923_S34_obj_01
------------- 230923_S34_obj_01_grasp_13_00.txt
-
-
---- {YYMMDD}_tip
+--- {FLAGS.tip_db}
 ------ 230923_S34_obj_01_grasp_19
 --------- trial_0
 ------------ mas
 --------------- mas_0.json
 --------------- mas_1.json
------------- sub1
---------------- sub1_0.json
---------------- sub1_1.json
+
+--- object_data_all(드랍박스 링크로 공유 예정)
+------ 230923_obj
+--------- 230923_S34_obj_01
+------------ 230923_S34_obj_01_grasp_13_00.txt
 
 """
 
@@ -59,7 +60,7 @@ dataset
 ### FLAGS ###
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', 'test_result', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('obj_db', 'test_obj_data_all', 'obj db Name')   ## name ,default, help
+flags.DEFINE_string('obj_db', 'obj_data_all', 'obj db Name')   ## name ,default, help
 flags.DEFINE_string('tip_db', 'test_result_tip', 'tip db Name')   ## name ,default, help
 
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
