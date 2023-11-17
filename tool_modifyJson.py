@@ -71,7 +71,7 @@ baseDir = os.path.join(os.getcwd(), 'dataset')
 subjects_df = pd.read_excel('./subject_info.xlsx', header=0)
 # print(subjects_df)
 
-missing_subject_id = [8, 48, 49]
+missing_subject_id = [48, 49]
 
 
 def mano3DToCam3D(xyz3D, ext):
@@ -283,8 +283,8 @@ def modify_annotation(targetDir, seq, trialName,data_len, tqdm_func, global_tqdm
                     size = float(data_for_id['손크기'])
 
                     actor_id = int(subject_id)
-                    if actor_id in [101, 102, 103]:
-                        idx = [101, 102, 103].index(actor_id)
+                    if actor_id in [101, 102]:
+                        idx = [101, 102].index(actor_id)
                         actor_id = missing_subject_id[idx]
 
                     anno['actor']['id'] = 'S'+str(actor_id)
