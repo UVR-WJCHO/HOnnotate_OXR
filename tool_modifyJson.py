@@ -60,7 +60,7 @@ dataset
 ### FLAGS ###
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', 'test_result', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('obj_db', 'obj_data_all', 'obj db Name')   ## name ,default, help
+flags.DEFINE_string('obj_db', 'object_data_all', 'obj db Name')   ## name ,default, help
 flags.DEFINE_string('tip_db', 'test_result_tip', 'tip db Name')   ## name ,default, help
 
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -199,8 +199,6 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
         marker_cam_pose = {}
         marker_cam_pose['marker_num'] = obj_data['marker_num']
         for idx in range(output_num):
-            if idx % skip_num != 0:
-                continue
             marker_cam_pose[str(idx)] = obj_data[str(idx*skip_num)]
 
 
@@ -243,8 +241,8 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
 
         ## parameter for face blur
         init_bbox = {}
-        init_bbox["sub2"] = [1200, 0, 700, 250]
-        init_bbox["sub3"] = [450, 0, 600, 250]    # 키 185
+        init_bbox["sub2"] = [1200, 0, 700, 200]
+        init_bbox["sub3"] = [450, 0, 600, 200]    # 키 185
         # init_bbox["sub3"] = [450, 0, 600, 350]  # 키 135
 
         for anno_name in anno_list:
@@ -261,7 +259,7 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
 
             ## if annotation is not processed, delete
             if isinstance(anno['annotations'][0]['data'], str):
-                print("unprocess json : %s, remove json" % anno_name)
+                # print("unprocess json : %s, remove json" % anno_name)
                 for camID in cam_list:
                     anno_path = os.path.join(anno_base_path, camID, anno_name)
                     depth_path = os.path.join(depth_base_path, camID, camID+'_' + str(frame)+'.png')
@@ -537,39 +535,43 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
 
 def error_callback(result):
     print("Error!")
+    pass
 
 def done_callback(result):
     # print("Done. Result: ", result)
-    return
+    pass
 
 
 def main():
-    t1 = time.time()
-    process_count = 4
-    tasks = []
-    total_count = 0
+    try:
+        t1 = time.time()
+        process_count = 4
+        tasks = []
+        total_count = 0
 
-    rootDir = os.path.join(baseDir, FLAGS.db)
-    seq_list = natsorted(os.listdir(rootDir))
+        rootDir = os.path.join(baseDir, FLAGS.db)
+        seq_list = natsorted(os.listdir(rootDir))
 
-    for seqIdx, seqName in enumerate(seq_list):
-        seqDir = os.path.join(rootDir, seqName)
+        for seqIdx, seqName in enumerate(seq_list):
+            seqDir = os.path.join(rootDir, seqName)
 
-        for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
-            data_len = len(os.listdir(os.path.join(rootDir, seqName, trialName, 'annotation', 'mas')))
-            total_count += data_len
-            tasks.append((modify_annotation, (rootDir, seqName, trialName, data_len, )))
+            for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
+                data_len = len(os.listdir(os.path.join(rootDir, seqName, trialName, 'annotation', 'mas')))
+                total_count += data_len
+                tasks.append((modify_annotation, (rootDir, seqName, trialName, data_len,)))
 
-    pool = TqdmMultiProcessPool(process_count)
-    with tqdm.tqdm(total=total_count) as global_tqdm:
-        pool.map(global_tqdm, tasks, error_callback, done_callback)
+        pool = TqdmMultiProcessPool(process_count)
+        with tqdm.tqdm(total=total_count) as global_tqdm:
+            pool.map(global_tqdm, tasks, error_callback, done_callback)
 
-    print("---------------end postprocess ---------------")
-    proc_time = round((time.time() - t1) / 60., 2)
-    print("total process time : %s min" % (str(proc_time)))
+
+        print("---------------end postprocess ---------------")
+        proc_time = round((time.time() - t1) / 60., 2)
+        print("total process time : %s min" % (str(proc_time)))
+    except KeyboardInterrupt:
+        pass
 
 
 
 if __name__ == '__main__':
     main()
-    print("end")
