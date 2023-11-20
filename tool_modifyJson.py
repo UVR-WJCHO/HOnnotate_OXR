@@ -129,7 +129,7 @@ def extractBbox(proj_kpts2D, image_rows=1080, image_cols=1920, w_margin=300, h_m
 # targetDir = 'dataset/FLAGS.db'
 # seq = '230923_S34_obj_01_grasp_13'
 # trialName = 'trial_0'
-def modify_annotation(targetDir, seq, trialName,data_len, tqdm_func, global_tqdm):
+def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqdm):
     with tqdm_func(total=data_len) as progress:
         progress.set_description(f"{seq} - {trialName}")
 
@@ -141,23 +141,68 @@ def modify_annotation(targetDir, seq, trialName,data_len, tqdm_func, global_tqdm
         trial_num = trialName.split('_')[1]
         cam_list = ['mas', 'sub1', 'sub2', 'sub3']
 
-        calib_error = CAM_calibration_error[int(db)]
-        calib_error = "{:.4f}".format(calib_error)
-
-        obj_dir_name = "_".join(seq.split('_')[:-2])
-        obj_pose_dir = os.path.join(baseDir, FLAGS.obj_db, db + '_obj', obj_dir_name)
-        obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % int(grasp_id)) + '_' + str("%02d" % int(trial_num))
-        marker_cam_data_name = obj_data_name + '_marker.pkl'
-        marker_cam_data_path = os.path.join(obj_pose_dir, marker_cam_data_name)
-
-        with open(marker_cam_data_path, 'rb') as f:
-            marker_cam_pose = pickle.load(f)
 
         anno_base_path = os.path.join(targetDir, seq, trialName, 'annotation')
         depth_base_path = os.path.join(targetDir, seq, trialName, 'depth')
         rgb_base_path = os.path.join(targetDir, seq, trialName, 'rgb')
         vis_base_path = os.path.join(targetDir, seq, trialName, 'visualization')
         anno_list = os.listdir(os.path.join(anno_base_path, 'mas'))
+
+        output_num = len(anno_list)
+
+        calib_error = CAM_calibration_error[int(db)]
+        calib_error = "{:.4f}".format(calib_error)
+
+        obj_dir_name = "_".join(seq.split('_')[:-2])
+        obj_pose_dir = os.path.join(baseDir, FLAGS.obj_db, db + '_obj', obj_dir_name)
+        obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % int(grasp_id)) + '_' + str("%02d" % int(trial_num))
+
+
+
+        # marker_cam_data_name = obj_data_name + '_marker.pkl'
+        # marker_cam_data_path = os.path.join(obj_pose_dir, marker_cam_data_name)
+        #
+        # with open(marker_cam_data_path, 'rb') as f:
+        #     marker_cam_pose = pickle.load(f)
+
+        obj_pose_data = os.path.join(obj_pose_dir, obj_data_name + '.txt')
+
+        obj_data = {}
+        with open(obj_pose_data, "r") as f:
+            line = f.readline().strip().split(' ')
+            _ = f.readline()
+            marker_num = int(float(line[0]))
+
+            obj_data['marker_num'] = marker_num
+            frame = 0
+            while True:
+                line = f.readline().strip()
+                if not line:
+                    break
+                line = line.split(' ')
+                line = [value for value in line if value != '']
+                marker_pose = np.zeros((marker_num, 3))
+                for i in range(marker_num):
+                    marker_pose[i, 0] = float(line[i * 3 + 1])
+                    marker_pose[i, 1] = float(line[i * 3 + 2])
+                    marker_pose[i, 2] = float(line[i * 3 + 3])
+                obj_data[str(frame)] = marker_pose
+                frame += 1
+
+        origin_num = len(obj_data) - 1  # 78 * 3 or 78* 2
+        # output_num 78
+        if output_num * 2 <= origin_num:
+            skip_num = 2
+        if output_num * 3 <= origin_num:
+            skip_num = 3
+
+        marker_cam_pose = {}
+        marker_cam_pose['marker_num'] = obj_data['marker_num']
+        for idx in range(output_num):
+            if idx % skip_num != 0:
+                continue
+            marker_cam_pose[str(idx)] = obj_data[str(idx*skip_num)]
+
 
         ### update log with 2D tip ###
         tip_db_dir = os.path.join(baseDir, FLAGS.tip_db, seq, trialName)
