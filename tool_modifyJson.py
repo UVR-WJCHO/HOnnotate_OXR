@@ -59,16 +59,19 @@ dataset
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', 'test_result', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '20231121', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db_source', 'source_data', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db_output', 'label_data', 'target db Name')   ## name ,default, help
+
 flags.DEFINE_string('obj_db', 'object_data_all', 'obj db Name')   ## name ,default, help
-flags.DEFINE_string('tip_db', 'test_result_tip', 'tip db Name')   ## name ,default, help
 
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 FLAGS(sys.argv)
 
-baseDir = os.path.join(os.getcwd(), 'dataset')
+baseDir = os.path.join(os.getcwd(), 'data', 'NIA_output', 'HAND_GESTURE')
 
-subjects_df = pd.read_excel('./subject_info.xlsx', header=0)
+subjectDir = os.path.join(baseDir, FLAGS.db, 'subject_info.xlsx')
+subjects_df = pd.read_excel(subjectDir, header=0)
 # print(subjects_df)
 
 missing_subject_id = [48, 49]
@@ -129,7 +132,7 @@ def extractBbox(proj_kpts2D, image_rows=1080, image_cols=1920, w_margin=300, h_m
 # targetDir = 'dataset/FLAGS.db'
 # seq = '230923_S34_obj_01_grasp_13'
 # trialName = 'trial_0'
-def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqdm):
+def modify_annotation(targetDir, outputDir, seq, trialName, data_len, tqdm_func, global_tqdm):
     with tqdm_func(total=data_len) as progress:
         progress.set_description(f"{seq} - {trialName}")
 
@@ -141,20 +144,26 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
         trial_num = trialName.split('_')[1]
         cam_list = ['mas', 'sub1', 'sub2', 'sub3']
 
+        anno_base_path = os.path.join(outputDir, seq, trialName, 'annotation')
+        vis_base_path = os.path.join(outputDir, seq, trialName, 'visualization')
+        log_base_path = os.path.join(outputDir, seq, trialName, 'log')
 
-        anno_base_path = os.path.join(targetDir, seq, trialName, 'annotation')
         depth_base_path = os.path.join(targetDir, seq, trialName, 'depth')
         rgb_base_path = os.path.join(targetDir, seq, trialName, 'rgb')
-        vis_base_path = os.path.join(targetDir, seq, trialName, 'visualization')
-        anno_list = os.listdir(os.path.join(anno_base_path, 'mas'))
 
-        output_num = len(anno_list)
+
+        anno_list_mas = os.listdir(os.path.join(anno_base_path, 'mas'))
+        anno_list_sub1 = os.listdir(os.path.join(anno_base_path, 'sub1'))
+        anno_list_sub2 = os.listdir(os.path.join(anno_base_path, 'sub2'))
+        anno_list_sub3 = os.listdir(os.path.join(anno_base_path, 'sub3'))
+
+        anno_list_4cam = [anno_list_mas, anno_list_sub1, anno_list_sub2, anno_list_sub3]
 
         calib_error = CAM_calibration_error[int(db)]
         calib_error = "{:.4f}".format(calib_error)
 
         obj_dir_name = "_".join(seq.split('_')[:-2])
-        obj_pose_dir = os.path.join(baseDir, FLAGS.obj_db, db + '_obj', obj_dir_name)
+        obj_pose_dir = os.path.join(baseDir, FLAGS.db, FLAGS.obj_db, db + '_obj', obj_dir_name)
         obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % int(grasp_id)) + '_' + str("%02d" % int(trial_num))
 
 
@@ -190,11 +199,13 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
                 frame += 1
 
         origin_num = len(obj_data) - 1  # 78 * 3 or 78* 2
+        output_num = int(origin_num / 2)
         # output_num 78
-        if output_num * 2 <= origin_num:
-            skip_num = 2
-        if output_num * 3 <= origin_num:
-            skip_num = 3
+        skip_num = 2
+        # if output_num * 2 <= origin_num:
+        #     skip_num = 2
+        # if output_num * 3 <= origin_num:
+        #     skip_num = 3
 
         marker_cam_pose = {}
         marker_cam_pose['marker_num'] = obj_data['marker_num']
@@ -203,8 +214,7 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
 
 
         ### update log with 2D tip ###
-        tip_db_dir = os.path.join(baseDir, FLAGS.tip_db, seq, trialName)
-        log_base_path = os.path.join(targetDir, seq, trialName, 'log')
+        # tip_db_dir = os.path.join(baseDir, FLAGS.tip_db, seq, trialName)
 
         device = 'cuda'
         mano_path = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
@@ -214,9 +224,10 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
         ## load each camera parameters ##
         Ks_list = []
         Ms_list = []
-        for camID in cam_list:
-            anno_path = os.path.join(anno_base_path, camID, 'anno_0000.json')
-            with open(anno_path, 'r', encoding='cp949') as file:
+        for camIdx, camID in enumerate(cam_list):
+            anno_first = anno_list_4cam[camIdx][0]
+            anno_path = os.path.join(anno_base_path, camID, anno_first)
+            with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
                 anno = json.load(file)
 
             if isinstance(anno['calibration']['intrinsic'], str):
@@ -232,85 +243,71 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
             Ks_list.append(Ks)
             Ms_list.append(Ms)
 
-        dfs = {}
-        dfs['tip_precision'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
-        dfs['tip_recall'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
-        dfs['tip_f1'] = pd.DataFrame([], columns=['mas', 'sub1', 'sub2', 'sub3', 'avg'])
-        total_metrics = [0.] * 3
-        eval_num = 0
 
         ## parameter for face blur
         init_bbox = {}
-        init_bbox["sub2"] = [1200, 0, 700, 200]
-        init_bbox["sub3"] = [450, 0, 600, 200]    # 키 185
+        init_bbox["sub2"] = [1100, 0, 800, 200]
+        init_bbox["sub3"] = [250, 0, 800, 200]    # 키 185
         # init_bbox["sub3"] = [450, 0, 600, 350]  # 키 135
 
-        for anno_name in anno_list:
-            frame = int(anno_name[5:9])
+        anno_path = os.path.join(anno_base_path, 'mas', anno_list_4cam[0][0])
+        ## find mano scale, xyz_root ##
+        with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
+            anno = json.load(file)
 
-            anno_path_list = []
-            for camID in cam_list:
-                anno_path_list.append(os.path.join(anno_base_path, camID, anno_name))
+        hand_joints = anno['annotations'][0]['data']
+        hand_mano_rot = anno['Mesh'][0]['mano_trans']
+        hand_mano_pose = anno['Mesh'][0]['mano_pose']
+        hand_mano_shape = anno['Mesh'][0]['mano_betas']
 
-            ## find mano scale, xyz_root ##
-            anno_path = anno_path_list[0]
-            with open(anno_path, 'r', encoding='cp949') as file:
-                anno = json.load(file)
+        hand_mano_rot = torch.FloatTensor(np.asarray(hand_mano_rot)).to(device)
+        hand_mano_pose = torch.FloatTensor(np.asarray(hand_mano_pose)).to(device)
+        hand_mano_shape = torch.FloatTensor(np.asarray(hand_mano_shape)).to(device)
 
-            ## if annotation is not processed, delete
-            if isinstance(anno['annotations'][0]['data'], str):
-                # print("unprocess json : %s, remove json" % anno_name)
-                for camID in cam_list:
-                    anno_path = os.path.join(anno_base_path, camID, anno_name)
-                    depth_path = os.path.join(depth_base_path, camID, camID+'_' + str(frame)+'.png')
-                    rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
-                    vis_path = os.path.join(vis_base_path, camID, 'blend_pred_' + camID + '_' + str(frame) + '.png')
-                    if os.path.isfile(anno_path):
-                        os.remove(anno_path)
-                    if os.path.isfile(depth_path):
-                        os.remove(depth_path)
-                    if os.path.isfile(rgb_path):
-                        os.remove(rgb_path)
-                    if os.path.isfile(vis_path):
-                        os.remove(vis_path)
-                continue
+        mano_param = torch.cat([hand_mano_rot, hand_mano_pose], dim=1)
+        mano_verts, mano_joints = mano_layer(mano_param, hand_mano_shape)
+        mano_joints = np.squeeze(mano_joints.detach().cpu().numpy())
 
-            hand_joints = anno['annotations'][0]['data']
-            hand_mano_rot = anno['Mesh'][0]['mano_trans']
-            hand_mano_pose = anno['Mesh'][0]['mano_pose']
-            hand_mano_shape = anno['Mesh'][0]['mano_betas']
+        hand_joints = np.squeeze(np.asarray(hand_joints))
 
-            hand_mano_rot = torch.FloatTensor(np.asarray(hand_mano_rot)).to(device)
-            hand_mano_pose = torch.FloatTensor(np.asarray(hand_mano_pose)).to(device)
-            hand_mano_shape = torch.FloatTensor(np.asarray(hand_mano_shape)).to(device)
+        xyz_root = hand_joints[0, :]
 
-            mano_param = torch.cat([hand_mano_rot, hand_mano_pose], dim=1)
-            mano_verts, mano_joints = mano_layer(mano_param, hand_mano_shape)
-            mano_joints = np.squeeze(mano_joints.detach().cpu().numpy())
+        hand_joints_norm = hand_joints - xyz_root
+        dist_anno = hand_joints_norm[1, :] - hand_joints_norm[0, :]
+        dist_mano = mano_joints[1, :] - mano_joints[0, :]
 
-            hand_joints = np.squeeze(np.asarray(hand_joints))
+        scale = np.average(dist_mano / dist_anno)
 
-            xyz_root = hand_joints[0, :]
+        for camIdx, anno_list in enumerate(anno_list_4cam):
+            camID = camIDset[camIdx]
+            for anno_name in anno_list:
 
-            hand_joints_norm = hand_joints - xyz_root
-            dist_anno = hand_joints_norm[1, :] - hand_joints_norm[0, :]
-            dist_mano = mano_joints[1, :] - mano_joints[0, :]
+                frame = int(anno_name.split('_')[1][:-5])
 
-            scale = np.average(dist_mano / dist_anno)
-
-            kpts_precision = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
-            kpts_recall = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
-            kpts_f1 = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
-
-            bbox_list = []
-            ## modify json, eval 2Dtip error
-            for camIdx, anno_path in enumerate(anno_path_list):
-                camID = camIDset[camIdx]
-
-                ### load current annotation(include updated meta info.)
-                with open(anno_path, 'r', encoding='cp949') as file:
+                anno_path = os.path.join(anno_base_path, camID, anno_name)
+                with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
                     anno = json.load(file)
+                ## if annotation is not processed, delete
+                # if isinstance(anno['annotations'][0]['data'], str):
+                #     # print("unprocess json : %s, remove json" % anno_name)
+                #     for camID in cam_list:
+                #         anno_path = os.path.join(anno_base_path, camID, anno_name)
+                #         depth_path = os.path.join(depth_base_path, camID, camID + '_' + str(frame) + '.png')
+                #         rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
+                #         vis_path = os.path.join(vis_base_path, camID, 'blend_pred_' + camID + '_' + str(frame) + '.png')
+                #         if os.path.isfile(anno_path):
+                #             os.remove(anno_path)
+                #         if os.path.isfile(depth_path):
+                #             os.remove(depth_path)
+                #         if os.path.isfile(rgb_path):
+                #             os.remove(rgb_path)
+                #         if os.path.isfile(vis_path):
+                #             os.remove(vis_path)
+                #     continue
 
+                bbox_hand = None
+                ## modify json, eval 2Dtip error
+                ### load current annotation(include updated meta info.)
                 ## if current annotation is postprocessed, pass
                 if not isinstance(anno['calibration']['intrinsic'], list):
                     ## 피험자 정보 적용
@@ -375,8 +372,7 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
                     # cv2.imshow("check 2d", rgb_2d_pred)
                     # cv2.waitKey(0)
 
-                    bbox = extractBbox(keypts_cam)
-                    bbox_list.append(bbox)
+                    bbox_hand = extractBbox(keypts_cam)
 
                     obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat']))
                     obj_mat_cam = obj_mat.T @ Ms_list[camIdx].T
@@ -413,14 +409,14 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
                     anno['Mesh'][0]['class_id'] = int(anno['Mesh'][0]['class_id'])
 
                     ### save modified annotation
-                    with open(anno_path, 'w', encoding='cp949') as file:
+                    with open(anno_path, 'w', encoding='UTF-8 SIG') as file:
                         json.dump(anno, file, indent='\t', ensure_ascii=False)
                 else:
                     keypts_cam = np.squeeze(np.asarray(anno['hand']["projected_2D_pose_per_cam"]))
-                    bbox = extractBbox(keypts_cam)
-                    bbox_list.append(bbox)
+                    bbox_hand = extractBbox(keypts_cam)
 
                 ### generate new log data with 2D tip ###
+                """
                 # manual 2D tip GT
                 tip_data_dir = os.path.join(tip_db_dir, camID)
                 tip_data_name = str(camID) + '_' + str(frame) + '.json'
@@ -467,7 +463,8 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
                     kpts_precision[camID] = keypoint_precision_score
                     kpts_recall[camID] = keypoint_recall_score
                     kpts_f1[camID] = keypoint_f1_score
-
+                
+                
             kpts_precision_avg = sum(kpts_precision.values()) / len(cam_list)
             kpts_recall_avg = sum(kpts_recall.values()) / len(cam_list)
             kpts_f1_avg = sum(kpts_f1.values()) / len(cam_list)
@@ -483,54 +480,52 @@ def modify_annotation(targetDir, seq, trialName, data_len, tqdm_func, global_tqd
                 dfs['tip_f1'].loc[frame] = [kpts_f1['mas'], kpts_f1['sub1'], kpts_f1['sub2'], kpts_f1['sub3'],
                                              kpts_f1_avg]
                 eval_num += 1
+            """
 
-            ## blur face (sub2, sub3)
-            for camIdx, camID in enumerate(camIDset):
+                ## blur face (sub2, sub3)
                 if camID == 'mas' or camID == 'sub1':
-                    continue
-                rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
-                rgb_init = cv2.imread(rgb_path)
+                    progress.update()
+                    global_tqdm.update()
+                else:
+                    rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
+                    rgb_init = cv2.imread(rgb_path)
 
-                # blur manual region
-                bbox = init_bbox[camID].copy()
-                if camID == 'sub3':
-                    # max height : 185 cm
-                    data_for_id = get_data_by_id(subjects_df, subject_id)
-                    height = float(data_for_id['키'])
-                    height_gap = (185 - height) * 2
-                    bbox[3] = bbox[3] + height_gap
+                    # blur manual region
+                    bbox = init_bbox[camID].copy()
+                    if camID == 'sub3':
+                        # max height : 185 cm
+                        data_for_id = get_data_by_id(subjects_df, subject_id)
+                        height = float(data_for_id['키'])
+                        height_gap = (185 - height) * 2
+                        bbox[3] = bbox[3] + height_gap
 
-                rgb_roi = rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
-                blurred_roi = cv2.GaussianBlur(rgb_roi, ksize=(0, 0), sigmaX=10, sigmaY=0)
-                # non-blur hand region
-                bbox_hand = bbox_list[camIdx]
-                rgb_roi_hand = rgb_init[int(bbox_hand[1]):int(bbox_hand[3]), int(bbox_hand[0]):int(bbox_hand[2])].copy()
+                    rgb_roi = rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+                    blurred_roi = cv2.GaussianBlur(rgb_roi, ksize=(0, 0), sigmaX=10, sigmaY=0)
+                    # non-blur hand region
+                    rgb_roi_hand = rgb_init[int(bbox_hand[1]):int(bbox_hand[3]), int(bbox_hand[0]):int(bbox_hand[2])].copy()
 
-                # blur first, then non-blur hand region
-                rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])] = blurred_roi
-                rgb_init[int(bbox_hand[1]):int(bbox_hand[3]), int(bbox_hand[0]):int(bbox_hand[2])] = rgb_roi_hand
+                    # blur first, then non-blur hand region
+                    rgb_init[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])] = blurred_roi
+                    rgb_init[int(bbox_hand[1]):int(bbox_hand[3]), int(bbox_hand[0]):int(bbox_hand[2])] = rgb_roi_hand
 
-                # cv2.imshow("a ", rgb_init)
-                # cv2.waitKey(0)
-                cv2.imwrite(rgb_path, rgb_init)
+                    # cv2.imshow("a ", rgb_init)
+                    # cv2.waitKey(0)
+                    cv2.imwrite(rgb_path, rgb_init)
 
-            progress.update()
-            global_tqdm.update()
+                    del rgb_init
+                    del blurred_roi
+                    del rgb_roi_hand
 
-        ## save tipGT keypoint error (remove original mediapipe kpts error file, check it.
-        csv_files = ['tip_precision', 'tip_recall', 'tip_f1']
-        if eval_num != 0:
-            for idx, file in enumerate(csv_files):
-                with open(os.path.join(log_base_path, file + '.csv'), "w", encoding='utf-8') as f:
-                    ws = csv.writer(f)
-                    ws.writerow(['total_avg', total_metrics[idx] / eval_num])
-                    ws.writerow(['frame', 'mas', 'sub1', 'sub2', 'sub3', 'avg'])
-                df = dfs[file]
-                df.to_csv(os.path.join(log_base_path, file + '.csv'), mode='a', index=True, header=False)
-        else:
-            print("no 2D tip data, skip generating csv file for tip F1-score")
+                    progress.update()
+                    global_tqdm.update()
+
+        del hand_mano_rot
+        del hand_mano_pose
+        del hand_mano_shape
+        del mano_param
 
     return True
+
 
 
 def error_callback(result):
@@ -549,16 +544,25 @@ def main():
         tasks = []
         total_count = 0
 
-        rootDir = os.path.join(baseDir, FLAGS.db)
+        rootDir = os.path.join(baseDir, FLAGS.db, FLAGS.db_source)
+        outputDir = os.path.join(baseDir, FLAGS.db, FLAGS.db_output)
+
         seq_list = natsorted(os.listdir(rootDir))
 
         for seqIdx, seqName in enumerate(seq_list):
             seqDir = os.path.join(rootDir, seqName)
 
             for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
-                data_len = len(os.listdir(os.path.join(rootDir, seqName, trialName, 'annotation', 'mas')))
-                total_count += data_len
-                tasks.append((modify_annotation, (rootDir, seqName, trialName, data_len,)))
+                data_len_0 = len(os.listdir(os.path.join(outputDir, seqName, trialName, 'annotation', 'mas')))
+                total_count += data_len_0
+                data_len_1 = len(os.listdir(os.path.join(outputDir, seqName, trialName, 'annotation', 'sub1')))
+                total_count += data_len_1
+                data_len_2 = len(os.listdir(os.path.join(outputDir, seqName, trialName, 'annotation', 'sub2')))
+                total_count += data_len_2
+                data_len_3 = len(os.listdir(os.path.join(outputDir, seqName, trialName, 'annotation', 'sub3')))
+                total_count += data_len_3
+                data_len = data_len_0+data_len_1+data_len_2+data_len_3
+                tasks.append((modify_annotation, (rootDir, outputDir, seqName, trialName, data_len,)))
 
         pool = TqdmMultiProcessPool(process_count)
         with tqdm.tqdm(total=total_count) as global_tqdm:
