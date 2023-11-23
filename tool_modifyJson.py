@@ -207,6 +207,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
         # if output_num * 3 <= origin_num:
         #     skip_num = 3
 
+        default_marker_pose = [[1.3158170e+02,   1.8510995e+01,   2.0597690e+02],  [1.2638716e+02,   1.7263596e+02,   2.0630109e+02],   [1.1576410e+02,   1.7162572e+02,  -2.3475454e+00]]
         marker_cam_pose = {}
         marker_cam_pose['marker_num'] = obj_data['marker_num']
         for idx in range(output_num):
@@ -244,6 +245,10 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
             Ms_list.append(Ms)
 
 
+        ## log for error json
+        error_log = open("log_error_json_list.txt", "w")
+
+
         ## parameter for face blur
         init_bbox = {}
         init_bbox["sub2"] = [1100, 0, 800, 200]
@@ -253,7 +258,13 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
         anno_path = os.path.join(anno_base_path, new_cam_list[0], anno_list_4cam[0][0])
         ## find mano scale, xyz_root ##
         with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
-            anno = json.load(file)
+            try:
+                anno = json.load(file)
+            except:
+                error_log.write(anno_path + '\n')
+                print("wrong annotation file in first cam, first frame, break the process ...", anno_path)
+                error_log.close()
+                return None
 
         hand_joints = anno['annotations'][0]['data']
         hand_mano_rot = anno['Mesh'][0]['mano_trans']
@@ -286,7 +297,17 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
 
                 anno_path = os.path.join(anno_base_path, camID, anno_name)
                 with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
-                    anno = json.load(file)
+                    try:
+                        flag_error = False
+                        anno = json.load(file)
+                    except:
+                        error_log.write(anno_path + '\n')
+                        flag_error = True
+                        pass
+                    if flag_error:
+                        progress.update()
+                        global_tqdm.update()
+                        continue
                 ## if annotation is not processed, delete
                 # if isinstance(anno['annotations'][0]['data'], str):
                 #     # print("unprocess json : %s, remove json" % anno_name)
@@ -335,9 +356,11 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
 
 
                     ## object marker 데이터 추가
-
                     anno['object']['marker_count'] = int(marker_cam_pose['marker_num'])
-                    anno['object']['markers_data'] = marker_cam_pose[str(frame)].tolist()
+                    if str(frame) in marker_cam_pose:
+                        anno['object']['markers_data'] = marker_cam_pose[str(frame)].tolist()
+                    else:
+                        anno['object']['markers_data'] = default_marker_pose
                     anno['object']['pose_data'] = anno['Mesh'][0]['object_mat']
 
                     ## calibration error 적용
@@ -415,78 +438,8 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                     keypts_cam = np.squeeze(np.asarray(anno['hand']["projected_2D_pose_per_cam"]))
                     bbox_hand = extractBbox(keypts_cam)
 
-                ### generate new log data with 2D tip ###
-                """
-                # manual 2D tip GT
-                tip_data_dir = os.path.join(tip_db_dir, camID)
-                tip_data_name = str(camID) + '_' + str(frame) + '.json'
-                tip_data_path = os.path.join(tip_data_dir, tip_data_name)
-
-                # calculate 2D tip error only if tip GT exists
-                if os.path.exists(tip_data_path):
-                    with open(tip_data_path, "r") as data:
-                        tip_data = json.load(data)['annotations'][0]
-                    tip_kpts = {}
-                    for tip in tip_data:
-                        tip_name = tip['label']
-                        tip_2d = [tip['x'], tip['y']]
-                        tip_kpts[tip_name] = np.round(tip_2d, 2)
-
-                    tip2d_np = []
-                    tip2d_idx = []
-                    for key in tip_kpts.keys():
-                        tip2d_np.append(tip_kpts[key])
-                        tip2d_idx.append(CFG_TIP_IDX[key])
-
-                    # our dataset
-                    proj_2Dkpts = np.squeeze(np.asarray(keypts_cam))
-                    proj_2Dkpts = proj_2Dkpts[tip2d_idx, :]
-
-                    # calculate 2D keypoints F1-Score for each view
-                    TP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
-                    FP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
-                    FN = 1e-7  # 참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
-                    for idx, gt_kpt in enumerate(tip2d_np):
-                        pred_kpt = proj_2Dkpts[idx]
-                        if (pred_kpt == None).any():
-                            FN += 1
-                        dist = np.linalg.norm(gt_kpt - pred_kpt)
-                        if dist < 50:
-                            TP += 1
-                        elif dist >= 50:
-                            FP += 1
-
-                    keypoint_precision_score = TP / (TP + FP)
-                    keypoint_recall_score = TP / (TP + FN)
-                    keypoint_f1_score = 2 * (keypoint_precision_score * keypoint_recall_score /
-                                             (keypoint_precision_score + keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
-                    kpts_precision[camID] = keypoint_precision_score
-                    kpts_recall[camID] = keypoint_recall_score
-                    kpts_f1[camID] = keypoint_f1_score
-                
-                
-            kpts_precision_avg = sum(kpts_precision.values()) / len(cam_list)
-            kpts_recall_avg = sum(kpts_recall.values()) / len(cam_list)
-            kpts_f1_avg = sum(kpts_f1.values()) / len(cam_list)
-
-            if kpts_precision_avg != 0:
-                total_metrics[0] += kpts_precision_avg
-                total_metrics[1] += kpts_recall_avg
-                total_metrics[2] += kpts_f1_avg
-                dfs['tip_precision'].loc[frame] = [kpts_precision['mas'], kpts_precision['sub1'], kpts_precision['sub2'],
-                                                    kpts_precision['sub3'], kpts_precision_avg]
-                dfs['tip_recall'].loc[frame] = [kpts_recall['mas'], kpts_recall['sub1'], kpts_recall['sub2'],
-                                                 kpts_recall['sub3'], kpts_recall_avg]
-                dfs['tip_f1'].loc[frame] = [kpts_f1['mas'], kpts_f1['sub1'], kpts_f1['sub2'], kpts_f1['sub3'],
-                                             kpts_f1_avg]
-                eval_num += 1
-            """
-
                 ## blur face (sub2, sub3)
-                if camID == 'mas' or camID == 'sub1':
-                    progress.update()
-                    global_tqdm.update()
-                else:
+                if camID == 'sub2' or camID == 'sub3':
                     rgb_path = os.path.join(rgb_base_path, camID, camID + '_' + str(frame) + '.jpg')
                     rgb_init = cv2.imread(rgb_path)
 
@@ -516,13 +469,15 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                     del blurred_roi
                     del rgb_roi_hand
 
-                    progress.update()
-                    global_tqdm.update()
+                progress.update()
+                global_tqdm.update()
 
         del hand_mano_rot
         del hand_mano_pose
         del hand_mano_shape
         del mano_param
+
+        error_log.close()
 
     return True
 
@@ -540,7 +495,7 @@ def done_callback(result):
 def main():
     try:
         t1 = time.time()
-        process_count = 4
+        process_count = 1
         tasks = []
         total_count = 0
 
