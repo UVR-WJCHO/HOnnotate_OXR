@@ -132,7 +132,7 @@ def extractBbox(proj_kpts2D, image_rows=1080, image_cols=1920, w_margin=300, h_m
 # targetDir = 'dataset/FLAGS.db'
 # seq = '230923_S34_obj_01_grasp_13'
 # trialName = 'trial_0'
-def modify_annotation(targetDir, outputDir, seq, trialName, data_len, tqdm_func, global_tqdm):
+def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist, tqdm_func, global_tqdm):
     with tqdm_func(total=data_len) as progress:
         progress.set_description(f"{seq} - {trialName}")
 
@@ -151,13 +151,13 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, tqdm_func,
         depth_base_path = os.path.join(targetDir, seq, trialName, 'depth')
         rgb_base_path = os.path.join(targetDir, seq, trialName, 'rgb')
 
-
-        anno_list_mas = os.listdir(os.path.join(anno_base_path, 'mas'))
-        anno_list_sub1 = os.listdir(os.path.join(anno_base_path, 'sub1'))
-        anno_list_sub2 = os.listdir(os.path.join(anno_base_path, 'sub2'))
-        anno_list_sub3 = os.listdir(os.path.join(anno_base_path, 'sub3'))
-
-        anno_list_4cam = [anno_list_mas, anno_list_sub1, anno_list_sub2, anno_list_sub3]
+        anno_list_4cam = []
+        new_cam_list = []
+        for flag_ex, cam in zip(flag_exist, cam_list):
+            if flag_ex:
+                anno_list = os.listdir(os.path.join(anno_base_path, cam))
+                anno_list_4cam.append(anno_list)
+                new_cam_list.append(cam)
 
         calib_error = CAM_calibration_error[int(db)]
         calib_error = "{:.4f}".format(calib_error)
@@ -224,7 +224,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, tqdm_func,
         ## load each camera parameters ##
         Ks_list = []
         Ms_list = []
-        for camIdx, camID in enumerate(cam_list):
+        for camIdx, camID in enumerate(new_cam_list):
             anno_first = anno_list_4cam[camIdx][0]
             anno_path = os.path.join(anno_base_path, camID, anno_first)
             with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
@@ -250,7 +250,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, tqdm_func,
         init_bbox["sub3"] = [250, 0, 800, 200]    # 키 185
         # init_bbox["sub3"] = [450, 0, 600, 350]  # 키 135
 
-        anno_path = os.path.join(anno_base_path, 'mas', anno_list_4cam[0][0])
+        anno_path = os.path.join(anno_base_path, new_cam_list[0], anno_list_4cam[0][0])
         ## find mano scale, xyz_root ##
         with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
             anno = json.load(file)
@@ -279,7 +279,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, tqdm_func,
         scale = np.average(dist_mano / dist_anno)
 
         for camIdx, anno_list in enumerate(anno_list_4cam):
-            camID = camIDset[camIdx]
+            camID = new_cam_list[camIdx]
             for anno_name in anno_list:
 
                 frame = int(anno_name.split('_')[1][:-5])
@@ -553,16 +553,45 @@ def main():
             seqDir = os.path.join(rootDir, seqName)
 
             for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
-                data_len_0 = len(os.listdir(os.path.join(outputDir, seqName, trialName, 'annotation', 'mas')))
-                total_count += data_len_0
-                data_len_1 = len(os.listdir(os.path.join(outputDir, seqName, trialName, 'annotation', 'sub1')))
-                total_count += data_len_1
-                data_len_2 = len(os.listdir(os.path.join(outputDir, seqName, trialName, 'annotation', 'sub2')))
-                total_count += data_len_2
-                data_len_3 = len(os.listdir(os.path.join(outputDir, seqName, trialName, 'annotation', 'sub3')))
-                total_count += data_len_3
-                data_len = data_len_0+data_len_1+data_len_2+data_len_3
-                tasks.append((modify_annotation, (rootDir, outputDir, seqName, trialName, data_len,)))
+                data_len = 0
+                flag_exist = []
+                mas_path = os.path.join(outputDir, seqName, trialName, 'annotation', 'mas')
+                if os.path.exists(mas_path):
+                    data_len_0 = len(os.listdir(mas_path))
+                    total_count += data_len_0
+                    data_len += data_len_0
+                    flag_exist.append(True)
+                else:
+                    flag_exist.append(False)
+
+                sub1_path = os.path.join(outputDir, seqName, trialName, 'annotation', 'sub1')
+                if os.path.exists(sub1_path):
+                    data_len_1 = len(os.listdir(sub1_path))
+                    total_count += data_len_1
+                    data_len += data_len_1
+                    flag_exist.append(True)
+                else:
+                    flag_exist.append(False)
+
+                sub2_path = os.path.join(outputDir, seqName, trialName, 'annotation', 'sub2')
+                if os.path.exists(sub2_path):
+                    data_len_2 = len(os.listdir(sub2_path))
+                    total_count += data_len_2
+                    data_len += data_len_2
+                    flag_exist.append(True)
+                else:
+                    flag_exist.append(False)
+
+                sub3_path = os.path.join(outputDir, seqName, trialName, 'annotation', 'sub3')
+                if os.path.exists(sub3_path):
+                    data_len_3 = len(os.listdir(sub3_path))
+                    total_count += data_len_3
+                    data_len += data_len_3
+                    flag_exist.append(True)
+                else:
+                    flag_exist.append(False)
+
+                tasks.append((modify_annotation, (rootDir, outputDir, seqName, trialName, data_len,flag_exist,)))
 
         pool = TqdmMultiProcessPool(process_count)
         with tqdm.tqdm(total=total_count) as global_tqdm:
