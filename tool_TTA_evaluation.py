@@ -10,19 +10,20 @@ import pandas as pd
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', 'test_result', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '20231124', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db_output', 'label_data', 'target db Name')   ## name ,default, help
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 FLAGS(sys.argv)
 
-baseDir = os.path.join(os.getcwd(), 'dataset')
+baseDir = os.path.join(os.getcwd(), 'data', 'NIA_output', 'HAND_GESTURE')
 
 ## kpts_{} will be changed to tip_{}
 log_name_list = ['depth_f1',
                  'depth_precision',
                  'depth_recall',
-                 'kpts_f1',
-                 'kpts_precision',
-                 'kpts_recall',
+                 'tip_f1',
+                 'tip_precision',
+                 'tip_recall',
                  'mesh_f1',
                  'mesh_precision',
                  'mesh_recall']
@@ -44,7 +45,8 @@ def load_avg(targetDir, seq, trial):
 
 
 def main():
-    rootDir = os.path.join(baseDir, FLAGS.db)
+    rootDir = os.path.join(baseDir, FLAGS.db, FLAGS.db_output)
+
     seq_list = natsorted(os.listdir(rootDir))
 
     for seqIdx, seqName in enumerate(seq_list):
@@ -60,8 +62,13 @@ def main():
             average_dict[key] = None
     average_df = pd.DataFrame(list(average_dict.items()), columns=['Metric', 'Average'])
     output_name = FLAGS.db + '_evaluation_average.csv'
-    save_path = os.path.join(baseDir, output_name)
+    save_path = os.path.join(os.getcwd(), output_name)
     average_df.to_csv(save_path, index=False)
+
+    output_raw_name = FLAGS.db + '_evaluation_all.json'
+    save_path = os.path.join(os.getcwd(), output_raw_name)
+    with open(save_path, 'w', encoding='UTF-8 SIG') as file:
+        json.dump(log_dict, file, indent='\t', ensure_ascii=False)
 
 
 if __name__ == '__main__':

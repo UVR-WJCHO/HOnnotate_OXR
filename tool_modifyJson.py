@@ -495,7 +495,7 @@ def done_callback(result):
 def main():
     try:
         t1 = time.time()
-        process_count = 1
+        process_count = 4
         tasks = []
         total_count = 0
 
