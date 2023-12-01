@@ -227,9 +227,14 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                     global_tqdm.update()
                     progress.update()
 
-            kpts_precision_avg = kpts_precision[camID] / count
-            kpts_recall_avg = kpts_recall[camID] / count
-            kpts_f1_avg = kpts_f1[camID] / count
+            if count == 0:
+                kpts_precision_avg = 0
+                kpts_recall_avg =0
+                kpts_f1_avg = 0
+            else:
+                kpts_precision_avg = kpts_precision[camID] / count
+                kpts_recall_avg = kpts_recall[camID] / count
+                kpts_f1_avg = kpts_f1[camID] / count
 
             if kpts_precision_avg != 0:
                 total_metrics[0] += kpts_precision_avg
