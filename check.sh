@@ -1,0 +1,12 @@
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 0 --end 1
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 1 --end 2
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 2 --end 3
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 3 --end 4
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 4 --end 5
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 5 --end 6
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 6 --end 7
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 7 --end 8
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 8 --end 9
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 9 --end 10
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 10 --end 11
+python3 preprocess.py --db 231026 --cam_db 231026_cam --start 11 --end 12

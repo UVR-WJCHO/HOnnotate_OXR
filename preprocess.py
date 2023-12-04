@@ -25,6 +25,11 @@ from skimage.io import imread, imshow
 from skimage.color import rgb2gray, rgb2hsv
 from skimage.filters import threshold_otsu
 
+from pytorch3d.renderer import OpenGLPerspectiveCameras, RasterizationSettings, MeshRenderer, MeshRasterizer
+from pytorch3d.renderer import TexturesVertex
+from pytorch3d.structures import Meshes
+from pytorch3d.transforms import Rotate, Translate
+import random
 
 # others
 import cv2
@@ -521,6 +526,7 @@ class loadDataset():
                 vertexPair_lst = CFG_vertspermarker_interaction[str(CFG_DATE)]['pair'][pair_lst_info]
 
                 dict_vertIDpermarker[pair_lst_info] = vertexPair_lst
+
                 marker_pose_dict[pair_lst_info] = marker_pose[mocapIndex_lst]
 
                 parts.append(pair_lst_info)
@@ -570,7 +576,11 @@ class loadDataset():
         for idx, part in enumerate(parts) :
 
             obj_verts  = obj_mesh['verts'][part]
+
             verts_init = np.squeeze(np.array(obj_verts))
+
+            obj_vert_for_render = verts_init.copy() * 10.0
+
             verts_init = verts_init[dict_vertIDpermarker[part], :] * 10.0
             verts_init = verts_init[valid_idx_dict[part], :]
 
@@ -630,8 +640,29 @@ class loadDataset():
 
             # verts_debug = np.squeeze(verts_pose)
             verts_debug = apply_transform(pose_calc, verts_init)# * 100.0
+
             marker_debug = np.squeeze(marker_pose_dict[part])
 
+            repeat_id = 1
+            total_vert_num = obj_vert_for_render.shape[0]
+
+            while(True) :
+                if total_vert_num < repeat_id * 100 :
+
+                    obj_vert_for_render_tmp = obj_vert_for_render[ [i for i in range(100*(repeat_id-1),total_vert_num) ],:]
+                    mesh_debug = np.concatenate( (mesh_debug,apply_transform(pose_calc,  obj_vert_for_render_tmp)), axis=0)
+
+                    break
+
+                else :
+                    obj_vert_for_render_tmp = obj_vert_for_render[ [i for i in range(100*(repeat_id-1),100*repeat_id) ],:]
+
+                    if repeat_id == 1 :
+                        mesh_debug = apply_transform(pose_calc,  obj_vert_for_render_tmp)
+                    else :
+                        mesh_debug = np.concatenate( (mesh_debug,apply_transform(pose_calc,  obj_vert_for_render_tmp)), axis=0)
+
+                repeat_id += 1
 
             err = np.sum(abs(verts_debug - marker_debug), axis=1)
             err = np.average(err)
@@ -643,20 +674,41 @@ class loadDataset():
                                                     projection[:, 3:], self.intrinsics[self.camID],
                                                     self.distCoeffs[self.camID])
                 marker_reproj = np.squeeze(marker_reproj)
+
                 projection = self.extrinsics[self.camID].reshape(3, 4)
                 vert_reproj, _ = cv2.projectPoints(verts_debug, projection[:, :3],
                                                 projection[:, 3:], self.intrinsics[self.camID],
                                                 self.distCoeffs[self.camID])
-                vert_reproj = np.squeeze(vert_reproj)
+
+                projection = self.extrinsics[self.camID].reshape(3, 4)
+                vert_reproj2, _ = cv2.projectPoints(mesh_debug, projection[:, :3],
+                                                projection[:, 3:], self.intrinsics[self.camID],
+                                                self.distCoeffs[self.camID])
+
+                vert_reproj  = np.squeeze(vert_reproj)
+                vert_reproj2 = np.squeeze(vert_reproj2)
+
                 image = self.debug.copy()
+
+                # RENDERING OUTPUT
+
+
                 for k in range(marker_debug.shape[0]):
-                    point = marker_reproj[k, :]
+                    point =  marker_reproj[k, :]
                     point_ = vert_reproj[k, :]
                     image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
                     image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
                     #cv2.imshow(f"debug marker to cam {self.camID}", image)
                     cv2.imwrite(f"/scratch/nia/minjay/HOnnotate_OXR/debug/{part}.png", image)
                     #cv2.waitKey(0)
+
+                image = self.debug.copy()
+
+                for k in range(mesh_debug.shape[0]):
+                    point = vert_reproj2[k, :]
+                    image = cv2.circle(image, (int(point[0]), int(point[1])), 0, (255, 0, 0))
+
+                cv2.imwrite(f"/scratch/nia/minjay/HOnnotate_OXR/debug/{part}_render.png", image)
 
                 assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
@@ -1146,6 +1198,9 @@ def main(argv):
         seqDir = os.path.join(rootDir, seqName)
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
 
+            # if trialIdx == 0 :
+            #     continue
+            
             dbs = []
             for camID in camIDset:
                 db = loadDataset(FLAGS.db, seqName, trialName)
