@@ -19,47 +19,10 @@ from config import *
 from manopth.manolayer import ManoLayer
 from utils.lossUtils import *
 
-"""
-[실행]
-> python tool_modifyJson.py --db {  } --tip_db {   }
-
-[필요 데이터]
-> dataset/{FLAGS.db} : 해당 폴더 하위에 모든 시퀀스 폴더 구성 (tip, obj 데이터와의 구분을 위해 필요함)
-> dataset/{FLAGS.tip_db} : 해당 폴더 하위에 수집된 tip 데이터 시퀀스 폴더 구성 (전부 없어도됨. 있는 것만 tip error 생성됨)
-> dataset/object_data_all : 드랍박스에서 모든 물체 자세 정리한 데이터 받아서 구성(카이스트 공유 예정)
-
-[디렉토리 구조 예시]
-
-config.py
-tool_modifyJson.py
-subject_info.xlsx
-dataset
---- {FLAGS.db}
------- 230923_S34_obj_01_grasp_19
---------- trial_0
------------- annotation
------------- depth
------------- rgb
------------- visualization
-
---- {FLAGS.tip_db}
------- 230923_S34_obj_01_grasp_19
---------- trial_0
------------- mas
---------------- mas_0.json
---------------- mas_1.json
-
---- object_data_all(드랍박스 링크로 공유 예정)
------- 230923_obj
---------- 230923_S34_obj_01
------------- 230923_S34_obj_01_grasp_13_00.txt
-
-"""
-
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '20231124', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', '20231207', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('db_source', 'source_data', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('db_output', 'label_data', 'target db Name')   ## name ,default, help
 
@@ -76,7 +39,8 @@ baseDir = os.path.join(os.getcwd(), 'data', 'NIA_output', 'HAND_GESTURE')
 
 missing_subject_id = [48, 49]
 
-
+error_log = open("log_error_json_list_tip.txt", "w")
+error_tip_log = open("log_wrong_tip_list.txt", "w")
 
 # targetDir = 'dataset/FLAGS.db'
 # seq = '230923_S34_obj_01_grasp_13'
@@ -99,6 +63,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
 
         ### update log with 2D tip ###
         tip_db_dir = os.path.join(outputDir, seq, trialName, FLAGS.tip_db)
+        # vis_db_dir = os.path.join(outputDir, seq, trialName, 'rgb')
 
         anno_list_4cam = []
         new_cam_list = []
@@ -109,45 +74,40 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                 new_cam_list.append(cam)
 
         ## load each camera parameters ##
-        Ks_list = []
-        Ms_list = []
-        for camIdx, camID in enumerate(new_cam_list):
-            anno_first = anno_list_4cam[camIdx][0]
-            anno_path = os.path.join(anno_base_path, camID, anno_first)
-            with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
-                anno = json.load(file)
-
-            Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
-            Ms = np.reshape(Ms, (3, 4))
-            if isinstance(anno['calibration']['intrinsic'], str):
-                Ks = np.asarray(str(anno['calibration']['intrinsic']).split(','), dtype=float)
-                Ks = torch.FloatTensor([[Ks[0], 0, Ks[2]], [0, Ks[1], Ks[3]], [0, 0, 1]])
-                Ms[:, -1] = Ms[:, -1] / 10.0
-            else:
-                Ks = torch.FloatTensor(np.squeeze(np.asarray(anno['calibration']['intrinsic'])))
-
-            Ms = torch.Tensor(Ms)
-            Ks_list.append(Ks)
-            Ms_list.append(Ms)
+        # Ks_list = []
+        # Ms_list = []
+        # for camIdx, camID in enumerate(new_cam_list):
+        #     anno_first = anno_list_4cam[camIdx][0]
+        #     anno_path = os.path.join(anno_base_path, camID, anno_first)
+        #     with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
+        #         anno = json.load(file)
+        #
+        #     Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
+        #     Ms = np.reshape(Ms, (3, 4))
+        #     if isinstance(anno['calibration']['intrinsic'], str):
+        #         Ks = np.asarray(str(anno['calibration']['intrinsic']).split(','), dtype=float)
+        #         Ks = torch.FloatTensor([[Ks[0], 0, Ks[2]], [0, Ks[1], Ks[3]], [0, 0, 1]])
+        #         Ms[:, -1] = Ms[:, -1] / 10.0
+        #     else:
+        #         Ks = torch.FloatTensor(np.squeeze(np.asarray(anno['calibration']['intrinsic'])))
+        #
+        #     Ms = torch.Tensor(Ms)
+        #     Ks_list.append(Ks)
+        #     Ms_list.append(Ms)
 
         dfs = {}
         dfs['tip_precision'] = pd.DataFrame([], columns=['avg'])
         dfs['tip_recall'] = pd.DataFrame([], columns=['avg'])
         dfs['tip_f1'] = pd.DataFrame([], columns=['avg'])
         total_metrics = [0.] * 3
-        eval_num = 0
 
-        error_log = open("log_error_json_list_tip.txt", "w")
-
-        kpts_precision = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
-        kpts_recall = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
-        kpts_f1 = {"mas": 0., "sub1": 0., "sub2": 0., "sub3": 0.}
-
+        TP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
+        FP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
+        FN = 1e-7  # 참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
         for camIdx, anno_list in enumerate(anno_list_4cam):
             camID = new_cam_list[camIdx]
 
             for anno_name in anno_list:
-                count = 0
                 frame = int(anno_name.split('_')[1][:-5])
                 anno_path = os.path.join(anno_base_path, camID, anno_name)
 
@@ -171,9 +131,11 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
 
                     tip_kpts = {}
                     for tip in tip_data:
-                        tip_name = tip['label']
-                        tip_2d = [tip['x'], tip['y']]
-                        tip_kpts[tip_name] = np.round(tip_2d, 2)
+                        valid = tip['status']
+                        if valid:
+                            tip_name = tip['label']
+                            tip_2d = [tip['x'], tip['y']]
+                            tip_kpts[tip_name] = np.round(tip_2d, 2)
 
                     tip2d_np = []
                     tip2d_idx = []
@@ -201,9 +163,6 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                     proj_2Dkpts = proj_2Dkpts[tip2d_idx, :]
 
                     # calculate 2D keypoints F1-Score for each view
-                    TP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이내
-                    FP = 1e-7  # 각 키포인트의 픽셀 좌표가 참값의 픽셀 좌표와 유클리디안 거리 50px 이상
-                    FN = 1e-7  # 참값이 존재하지만 키포인트 좌표가 존재하지 않는 경우(미태깅)
                     for idx, gt_kpt in enumerate(tip2d_np):
                         pred_kpt = proj_2Dkpts[idx]
                         if (pred_kpt == None).any():
@@ -214,50 +173,28 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                         elif dist >= 50:
                             FP += 1
 
-                    keypoint_precision_score = TP / (TP + FP)
-                    keypoint_recall_score = TP / (TP + FN)
-                    keypoint_f1_score = 2 * (keypoint_precision_score * keypoint_recall_score /
-                                             (keypoint_precision_score + keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
-
-                    kpts_precision[camID] += keypoint_precision_score
-                    kpts_recall[camID] += keypoint_recall_score
-                    kpts_f1[camID] += keypoint_f1_score
-                    count += 1
-
                     global_tqdm.update()
                     progress.update()
 
-            if count == 0:
-                kpts_precision_avg = 0
-                kpts_recall_avg =0
-                kpts_f1_avg = 0
-            else:
-                kpts_precision_avg = kpts_precision[camID] / count
-                kpts_recall_avg = kpts_recall[camID] / count
-                kpts_f1_avg = kpts_f1[camID] / count
+        keypoint_precision_score = TP / (TP + FP)
+        keypoint_recall_score = TP / (TP + FN)
+        keypoint_f1_score = 2 * (keypoint_precision_score * keypoint_recall_score /
+                                 (keypoint_precision_score + keypoint_recall_score))  # 2*TP/(2*TP+FP+FN)
 
-            if kpts_precision_avg != 0:
-                total_metrics[0] += kpts_precision_avg
-                total_metrics[1] += kpts_recall_avg
-                total_metrics[2] += kpts_f1_avg
-                dfs['tip_precision'].loc[camID] = [kpts_precision_avg]
-                dfs['tip_recall'].loc[camID] = [kpts_recall_avg]
-                dfs['tip_f1'].loc[camID] = [kpts_f1_avg]
-                eval_num += 1
+        total_metrics[0] += keypoint_precision_score
+        total_metrics[1] += keypoint_recall_score
+        total_metrics[2] += keypoint_f1_score
 
-
-        ## save tipGT keypoint error (remove original mediapipe kpts error file, check it.
-        csv_files = ['tip_precision', 'tip_recall', 'tip_f1']
-        if eval_num != 0:
+        if keypoint_precision_score != 0.0 and keypoint_precision_score != 0.5:
+            ## save tipGT keypoint error (remove original mediapipe kpts error file, check it.
+            csv_files = ['tip_precision', 'tip_recall', 'tip_f1']
             for idx, file in enumerate(csv_files):
                 with open(os.path.join(log_base_path, file + '.csv'), "w", encoding='UTF-8 SIG') as f:
                     ws = csv.writer(f)
-                    ws.writerow(['total_avg', total_metrics[idx] / eval_num])
+                    ws.writerow(['total_avg', total_metrics[idx]])
                     ws.writerow(['camID', 'avg'])
                 df = dfs[file]
                 df.to_csv(os.path.join(log_base_path, file + '.csv'), mode='a', index=True, header=False)
-        else:
-            print("no 2D tip data, skip generating csv file for tip F1-score")
 
     return True
 
@@ -337,4 +274,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    error_log.close()
+    error_tip_log.close()
     print("end")

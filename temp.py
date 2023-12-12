@@ -2,23 +2,12 @@ import os
 import pickle
 from natsort import natsorted
 
+keypoint_precision_score = 0.9
+keypoint_recall_score = 0.3
 
+keypoint_f1_score = 2 * (keypoint_precision_score * keypoint_recall_score) / (keypoint_precision_score + keypoint_recall_score)
 
-rootDir = "C:/Projects/OXR_projects/HOnnotate_OXR/dataset/230922_obj"
-seq_list = natsorted(os.listdir(rootDir))
-for seqIdx, seqName in enumerate(seq_list):
-    if seqIdx < 4:
-        continue
-    if seqIdx == 34:
-        break
-    seqDir = os.path.join(rootDir, seqName)
-    files = os.listdir(seqDir)
-    files_scale = [file for file in files if file.endswith("obj_scale.pkl")]
+keypoint_f1_score_2 = 2 * (keypoint_precision_score * keypoint_recall_score / (keypoint_precision_score + keypoint_recall_score))
 
-    file_scale = files_scale[0]
-
-    scale_path = os.path.join(seqDir, file_scale)
-    with open(scale_path, 'rb') as f:
-        scale = pickle.load(f)
-
-    print(scale)
+print(keypoint_f1_score)
+print(keypoint_f1_score_2)

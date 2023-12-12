@@ -9,22 +9,6 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
-"""
-DATA STRUCTURE
-
-tool_TTA_evaluation_final.py
-data
-    NIA_output
-        HAND_GESTURE
-            {db}                    ## ex. 20231207
-                label_data
-                    230905_S01_obj_16_grasp_14
-                    230905_S01_obj_16_grasp_27
-                    ...
-                
-"""
-
-
 ### FLAGS ###
 FLAGS = flags.FLAGS
 flags.DEFINE_string('db', '20231207', 'target db Name')   ## name ,default, help
@@ -37,9 +21,19 @@ baseDir = os.path.join(os.getcwd(), 'data', 'NIA_output', 'HAND_GESTURE')
 ## kpts_{} will be changed to tip_{}
 log_names = ['depth', 'mesh', 'kpts']
 
-log_name_list_all = ['depth_f1', 'mesh_f1', 'kpts_f1']
+log_name_list_all = ['depth_f1',
+                 'depth_precision',
+                 'depth_recall',
+                 'mesh_f1',
+                 'mesh_precision',
+                 'mesh_recall',
+                 'kpts_f1',
+                 'kpts_precision',
+                 'kpts_recall']
 
-log_name_list_tip = ['tip_f1']
+log_name_list_tip = ['tip_f1',
+                 'tip_precision',
+                 'tip_recall']
 
 log_dict = {key: [] for key in log_name_list_all}
 log_dict_tip = {key: [] for key in log_name_list_tip}
@@ -48,31 +42,57 @@ def load_avg(targetDir, seq, trial, valid_dict):
     log_base_path = os.path.join(targetDir, seq, trial, 'log')
 
     for log_name in log_names:
+        # load each log data
         log_path_f1 = os.path.join(log_base_path, log_name + '_f1'+'.csv')
+        log_path_prec = os.path.join(log_base_path, log_name+'_precision' + '.csv')
+        log_path_recall = os.path.join(log_base_path, log_name+'_recall' + '.csv')
 
         if os.path.exists(log_path_f1):
             value_list_f1 = []
+            value_list_prec = []
+            value_list_recall = []
 
             log_df_f1 = pd.read_csv(log_path_f1, skiprows=2, skip_blank_lines=True)
+            log_df_prec = pd.read_csv(log_path_prec, skiprows=2, skip_blank_lines=True)
+            log_df_recall = pd.read_csv(log_path_recall, skiprows=2, skip_blank_lines=True)
             if 'frame' not in log_df_f1:
                 log_df_f1 = pd.read_csv(log_path_f1, skiprows=1, skip_blank_lines=True)
+            if 'frame' not in log_df_prec:
+                log_df_prec = pd.read_csv(log_path_prec, skiprows=1, skip_blank_lines=True)
+            if 'frame' not in log_df_recall:
+                log_df_recall = pd.read_csv(log_path_recall, skiprows=1, skip_blank_lines=True)
 
             log_frame_f1 = log_df_f1['frame']
+            log_frame_prec = log_df_prec['frame']
+            log_frame_recall = log_df_recall['frame']
 
             for key, values in valid_dict.items():
                 for value in values:
                     if value in log_frame_f1.values:
+                        # solve exceptional log csv structure
                         right_idx = log_frame_f1[log_frame_f1 == value].index[0]
+                        right_idx_prec = log_frame_prec[log_frame_prec == value].index[0]
+                        right_idx_recall = log_frame_recall[log_frame_recall == value].index[0]
 
                         valid_log_f1 = float(log_df_f1[key][right_idx])
+                        valid_log_prec = float(log_df_prec[key][right_idx_prec])
+                        valid_log_recall = float(log_df_recall[key][right_idx_recall])
 
+                        # count only nonzero log value
                         if isinstance(valid_log_f1, float) and valid_log_f1 > 0.001:
                             value_list_f1.append(float(valid_log_f1))
+                            value_list_prec.append(float(valid_log_prec))
+                            value_list_recall.append(float(valid_log_recall))
 
             if not len(value_list_f1) == 0:
                 avg_value_f1 = np.average(value_list_f1)
+                avg_value_prec = np.average(value_list_prec)
+                avg_value_recall = np.average(value_list_recall)
                 log_dict[log_name+'_f1'].append(avg_value_f1)
+                log_dict[log_name+'_precision'].append(avg_value_prec)
+                log_dict[log_name+'_recall'].append(avg_value_recall)
 
+    # load tip log data(average)
     for log_name in log_name_list_tip:
         log_path = os.path.join(log_base_path, log_name + '.csv')
         if os.path.exists(log_path):
