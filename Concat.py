@@ -1,9 +1,9 @@
 import os 
 
-directory_path_sub = '/scratch/nia/minjay/231026_obj_sub'
-directory_path = '/scratch/nia/minjay/231026_obj'
+directory_path_sub = 'E:/HOnnotate_OXR/dataset/231027_obj_sub'
+directory_path = 'E:/HOnnotate_OXR/dataset/231027_obj'
 
-result_path = '/scratch/nia/minjay/231026_obj'
+result_path = 'E:/HOnnotate_OXR/dataset/231027_obj'
 
 # List all files and directories in the specified directory
 ori = os.listdir(directory_path)

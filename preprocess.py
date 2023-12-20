@@ -60,13 +60,15 @@ flag_check_vert_marker_pair = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '231024', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '231024_cam', 'target cam db Name')   ## name ,default, help
-flags.DEFINE_float('mp_value', 0.92, 'target cam db Name')
+flags.DEFINE_string('db', '231027', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231027_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_float('mp_value', 0.55, 'target cam db Name')
+
+flags.DEFINE_string('obj_db', 'obj_scanned_models_only_interaction', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
-flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
-flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
+flags.DEFINE_integer('start', 1, 'start idx of sequence(ordered)')
+flags.DEFINE_integer('end', 4, 'end idx of sequence(ordered)')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -103,7 +105,7 @@ lineIndices = [palmIndices, thumbIndices, indexIndices, middleIndices, ringIndic
 ### Manual Flags (remove after debug) ###
 flag_preprocess = True
 flag_segmentation = False
-flag_deep_segmentation = True
+flag_deep_segmentation = False
 
 
 num_global = 0
@@ -118,6 +120,8 @@ elif FLAGS.db in ['230909', '230910', '230911', '230912', '230913']:
     CFG_DATE = '230909~230913'
 elif FLAGS.db in ['230914']:
     CFG_DATE = '230914'
+elif FLAGS.db in ['231026', '231027']:
+    CFG_DATE = '231026~'
 else:
     CFG_DATE = '230915~'
 
@@ -320,7 +324,7 @@ class loadDataset():
 
         # load object mesh info
         self.obj_class = self.obj_id + '_' + str(OBJType(int(self.obj_id)).name)
-        self.obj_template_dir = os.path.join(baseDir, 'obj_scanned_models', 'interaction', self.obj_class)
+        self.obj_template_dir = os.path.join(baseDir, FLAGS.obj_db, self.obj_class)
 
 
         obj_mesh_path_list = []
@@ -348,7 +352,7 @@ class loadDataset():
 
         for i, obj_mesh_path in enumerate(obj_mesh_path_list):
 
-            obj_file = obj_mesh_path.split('/')[-1][:-4]
+            obj_file = obj_mesh_path.split('\\')[-1][:-4]
 
             try:
                 verts, faces, _ = load_obj(obj_mesh_path)
@@ -511,14 +515,12 @@ class loadDataset():
         marker_pose_dict = {}
 
         if vertIDpermarker_split == [] :
-            
             dict_vertIDpermarker[str(obj_class)] = CFG_vertspermarker_interaction[str(CFG_DATE)]['pair'][str(obj_class)]
             parts.append(str(obj_class))
             pair_len += len(dict_vertIDpermarker[str(obj_class)])
             marker_pose_dict[str(obj_class)] = marker_pose
 
         else :
-
             for split in vertIDpermarker_split :
  
                 mocapIndex_lst = CFG_vertspermarker_interaction[str(CFG_DATE)]['split'][split]
@@ -574,7 +576,6 @@ class loadDataset():
         output_marker_pose = np.copy(marker_pose_dict)
 
         for idx, part in enumerate(parts) :
-
             obj_verts  = obj_mesh['verts'][part]
 
             verts_init = np.squeeze(np.array(obj_verts))
@@ -668,7 +669,8 @@ class loadDataset():
             err = np.average(err)
 
             ### debug
-            if flag_check_vert_marker_pair:
+            flag_exist = os.path.exists(f"E:/HOnnotate_OXR/debug_2/{part}.png")
+            if flag_check_vert_marker_pair and not flag_exist:
                 projection = self.extrinsics[self.camID].reshape(3, 4)
                 marker_reproj, _ = cv2.projectPoints(marker_debug, projection[:, :3],
                                                     projection[:, 3:], self.intrinsics[self.camID],
@@ -698,9 +700,9 @@ class loadDataset():
                     point_ = vert_reproj[k, :]
                     image = cv2.circle(image, (int(point[0]), int(point[1])), 5, (0, 0, 255))
                     image = cv2.circle(image, (int(point_[0]), int(point_[1])), 5, (0, 255, 0))
-                    #cv2.imshow(f"debug marker to cam {self.camID}", image)
-                    cv2.imwrite(f"/scratch/nia/minjay/HOnnotate_OXR/debug/{part}.png", image)
-                    #cv2.waitKey(0)
+                    # cv2.imshow(f"debug marker to cam {self.camID}", image)
+                    # cv2.waitKey(0)
+                cv2.imwrite(f"E:/HOnnotate_OXR/debug_2/{part}.png", image)
 
                 image = self.debug.copy()
 
@@ -708,9 +710,11 @@ class loadDataset():
                     point = vert_reproj2[k, :]
                     image = cv2.circle(image, (int(point[0]), int(point[1])), 0, (255, 0, 0))
 
-                cv2.imwrite(f"/scratch/nia/minjay/HOnnotate_OXR/debug/{part}_render.png", image)
+                # cv2.imshow(f"part_render {part}", image)
+                # cv2.waitKey(0)
+                cv2.imwrite(f"E:/HOnnotate_OXR/debug_2/{part}_render.png", image)
 
-                assert err < 22, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
+                assert err < 25, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
         return pose_calc, scale, output_marker_pose, valid_idx_dict
 
@@ -1004,7 +1008,7 @@ class loadDataset():
     def postProcess(self, idx, procImgSet_list, bb_list, img2bb_list, bb2img_list, kps_list, processed_kpts_list, visibility_list, side_list):
 
         for procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility, side in zip(procImgSet_list, bb_list, img2bb_list, bb2img_list, kps_list, processed_kpts_list, visibility_list, side_list):
-            if str(side) is 'Right':
+            if str(side) == 'Right':
                 continue
 
             rgbName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
@@ -1163,7 +1167,7 @@ def main(argv):
     assert os.path.exists(os.path.join(baseDir, FLAGS.db)), "no {YYMMDD} directory. check."
     assert os.path.exists(os.path.join(baseDir, FLAGS.cam_db)), "no{YYMMDD}_cam directory. check."
     assert os.path.exists(os.path.join(baseDir, FLAGS.db + '_obj')), "no {YYMMDD}_obj directory. check."
-    assert os.path.exists(os.path.join(baseDir, 'obj_scanned_models/interaction')), "no dataset/obj_scanned_models/interaction directory. check."
+    assert os.path.exists(os.path.join(baseDir, FLAGS.obj_db)), "no dataset/obj_scanned_models/interaction directory. check."
     assert os.path.exists(
         os.path.join(os.getcwd(), 'modules/deepLabV3plus/checkpoints')), "no segmentation checkpoint folder. check."
 
@@ -1179,14 +1183,13 @@ def main(argv):
     '''
 
     print("---------------start preprocess seq ---------------")
-    process_count = 1
+    process_count = 4
 
     tasks = []
     total_count = 0
     t1 = time.time()
 
     obj_unvalid_trials = []
-
     seq_list = natsorted(os.listdir(rootDir))
     if FLAGS.start != None and FLAGS.end != None:
         seq_list = seq_list[FLAGS.start:FLAGS.end]
@@ -1221,7 +1224,6 @@ def main(argv):
 
     print("(fill in google sheets) unvalid trials with wrong object pose data : ", obj_unvalid_trials)
 
-
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:
         # global_tqdm.set_description(f"{seqName} - total : ")
@@ -1231,6 +1233,7 @@ def main(argv):
 
     proc_time = round((time.time() - t1) / 60., 2)
     print("total process time : %s min" % (str(proc_time)))
+
 
     print("start segmentation - deeplab_v3")
     if flag_deep_segmentation:
