@@ -109,8 +109,8 @@ class HandModel(nn.Module):
         # self.pose_ = self.input_pose
         self.pose_ = self.compute_pose_all(self.input_pose_1, self.input_pose_2, self.input_pose_3)
 
-        mano_param = torch.cat([self.input_rot, self.pose_], dim=1)
 
+        mano_param = torch.cat([self.input_rot, self.pose_], dim=1)
         hand_verts, hand_joints = self.mano_layer(mano_param, self.shape_)
 
         xyz_root = torch.cat([self.xy_root, self.z_root], dim=-1)

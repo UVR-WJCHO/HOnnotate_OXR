@@ -95,10 +95,11 @@ class MultiViewLossFunc(nn.Module):
         self.vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
 
         if int(obj_class.split('_')[0]) == 29:
-            if grasp_idx == 12:
-                self.vertIDpermarker = self.vertIDpermarker[0]
-            else:
-                self.vertIDpermarker = self.vertIDpermarker[1]
+            self.vertIDpermarker = self.vertIDpermarker[0]
+            # if grasp_idx == 12:
+            #     self.vertIDpermarker = self.vertIDpermarker[0]
+            # else:
+            #     self.vertIDpermarker = self.vertIDpermarker[1]
 
         self.marker_valid_idx = marker_valid_idx
         if obj_marker_cam_pose != None:
@@ -153,6 +154,10 @@ class MultiViewLossFunc(nn.Module):
             self.valid_tip_idx = gt_sample['validtip']
         else:
             self.gt_tip2d = None
+
+
+    def set_gt_raw_depth(self, camIdx, frame):
+        _, self.gt_depth_raw, _, _ = self.dataloaders[camIdx].load_raw_image(frame)
 
 
     def set_main_cam(self, main_cam_idx=0):
@@ -451,7 +456,7 @@ class MultiViewLossFunc(nn.Module):
                 losses_single['temporal'] = loss_temporal * self.temp_weight
 
         if pred_obj is None:
-            return losses_cam, losses_single
+            return losses_cam, losses_single, None
         else:
             return losses_cam, losses_single, pred['contact']
     
@@ -490,6 +495,8 @@ class MultiViewLossFunc(nn.Module):
         for camIdx in camIdxSet:
             camID = CFG_CAMID_SET[camIdx]
             self.set_gt(camIdx, frame)
+            self.set_gt_raw_depth(camIdx, frame)
+
             joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
             verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms[camIdx]), 0)
             verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
@@ -501,6 +508,9 @@ class MultiViewLossFunc(nn.Module):
             
             depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
             seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy()).astype(np.uint8)
+
+            both_depth = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
+            both_depth[both_depth == 10] = 0
 
             hand_depth = np.squeeze(pred_rendered_hand_only['depth'][0].cpu().detach().numpy())
             obj_depth = np.squeeze(pred_rendered_obj_only['depth'][0].cpu().detach().numpy())
@@ -521,6 +531,8 @@ class MultiViewLossFunc(nn.Module):
             obj_seg_masked = obj_seg_masked[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
             hand_depth = hand_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
             obj_depth = obj_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+
+            both_depth = both_depth[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
             uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
             gt_kpts2d = (self.img2bb @ uv1.T).T
@@ -584,42 +596,69 @@ class MultiViewLossFunc(nn.Module):
             #pred_kpts2d
             # obj_depth, hand_depth
             # self.gt_depth, self.gt_depth_obj
-            gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
+            # gt_depth_hand = np.squeeze(self.gt_depth.cpu().numpy())
+            gt_depth_all = self.gt_depth_raw[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
-            gt_depth_hand[gt_depth_hand==10] = 0
-            gt_depth_hand *= 100.
-            hand_depth /= 10.
+            all_seg_mask = hand_seg_masked + obj_seg_masked
+            all_seg_mask[all_seg_mask == 2] = 1
+            gt_depth_all *= all_seg_mask
 
-            # cv2.imshow("gt_depth_hand", np.array(gt_depth_hand / 100 * 255, dtype=np.uint8))
-            # cv2.imshow("hand_depth", np.array(hand_depth / 100 * 255, dtype=np.uint8))
+            # gt_depth_hand[gt_depth_hand==10] = 0
+            # gt_depth_hand *= 1000.
+            # cv2.imshow("gt_depth_all", np.array(gt_depth_all / 100 * 255, dtype=np.uint8))
+            # cv2.imshow("both_depth", np.array(both_depth / 100 * 255, dtype=np.uint8))
             # cv2.waitKey(0)
 
-            for i in range(21):
-                kpts2d = pred_kpts2d[i, :]
+            all_diff = np.abs(gt_depth_all - both_depth)
 
-                y = np.clip(int(kpts2d[1]), 0, 479)
-                x = np.clip(int(kpts2d[0]), 0, 639)
-                if gt_seg_hand[y, x] == 0:
-                    continue
-                gt_hand_d = gt_depth_hand[y, x]
-                pred_hand_d = hand_depth[y, x]
-                diff = abs(gt_hand_d - pred_hand_d)
-                if gt_hand_d == 0 or pred_hand_d == 0 or diff > 100:
-                    FN += 1
-                if diff < 20:
-                    TP += 1
-                else:
-                    FP += 1
+            all_FN = np.copy(all_diff)
+            all_FN = all_FN[np.isin(all_diff, gt_depth_all)]
+            all_FN[all_FN>0] = 1
+            all_FN = all_FN.sum()
+            all_diff[all_diff > 50] = 0     # consider as unlabelled(FN)/noise if error is larger than 5cm
 
-            if TP < 1:
-                mesh_depth_precision_score = 0
-                mesh_depth_recall_score = 0
-                mesh_depth_f1_score = 0
-            else:
-                mesh_depth_precision_score = TP / (TP + FP)
-                mesh_depth_recall_score = TP / (TP + FN)
-                mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
-                                            (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
+            # count # of diff > 20
+            all_FP = np.copy(all_diff)
+            all_FP[all_FP<=20] = 0
+            all_FP[all_FP > 20] = 1
+            all_FP = all_FP.sum()
+
+            # count only diff < 20 value
+            all_diff[all_diff == 0] = 100
+            all_diff[all_diff <= 20] = 1
+            all_diff[all_diff > 20] = 0
+            all_TP = all_diff.sum()
+
+            mesh_depth_precision_score = all_TP / (all_TP + all_FP)
+            mesh_depth_recall_score = all_TP / (all_TP + all_FN)
+            mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
+                                       (mesh_depth_precision_score + mesh_depth_recall_score))
+
+            # for i in range(21):
+            #     kpts2d = pred_kpts2d[i, :]
+            #     y = np.clip(int(kpts2d[1]), 0, 479)
+            #     x = np.clip(int(kpts2d[0]), 0, 639)
+            #     if gt_seg_hand[y, x] == 0:
+            #         continue
+            #     gt_hand_d = gt_depth_hand[y, x]
+            #     pred_hand_d = both_depth[y, x]
+            #     diff = abs(gt_hand_d - pred_hand_d)
+            #     if gt_hand_d == 0 or pred_hand_d == 0 or diff > 100:
+            #         FN += 1
+            #     if diff < 20:
+            #         TP += 1
+            #     else:
+            #         FP += 1
+            # if TP < 1:
+            #     mesh_depth_precision_score = 0
+            #     mesh_depth_recall_score = 0
+            #     mesh_depth_f1_score = 0
+            # else:
+            #     mesh_depth_precision_score = TP / (TP + FP)
+            #     mesh_depth_recall_score = TP / (TP + FN)
+            #     mesh_depth_f1_score = 2 * (mesh_depth_precision_score * mesh_depth_recall_score /
+            #                                 (mesh_depth_precision_score + mesh_depth_recall_score))  # 2*TP/(2*TP+FP+FN)
+
             depth_precision[camID] = mesh_depth_precision_score
             depth_recall[camID] = mesh_depth_recall_score
             depth_f1[camID] = mesh_depth_f1_score
@@ -832,40 +871,229 @@ class MultiViewLossFunc(nn.Module):
                         obj.export(os.path.join(save_path_cam, f'mesh_obj_{camID}_{frame}.obj'))
 
                 # create contact map
-                hand_pcd = Pointclouds(points=verts_cam)
-                obj_mesh = Meshes(verts=verts_cam_obj.detach(),
-                                  faces=pred_obj['faces'])  # optimize only hand meshes
-                inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
-                # debug = inter_dist.clone().cpu().detach().numpy()
-                contact_mask = inter_dist < CFG_CONTACT_DIST_VIS
-                contact_map = torch.ones(778).cuda() * -1.
-                contact_map[contact_mask] = inter_dist[contact_mask]
+                if CFG_WITH_OBJ:
+                    hand_pcd = Pointclouds(points=verts_cam)
+                    obj_mesh = Meshes(verts=verts_cam_obj.detach(),
+                                      faces=pred_obj['faces'])  # optimize only hand meshes
+                    inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
+                    # debug = inter_dist.clone().cpu().detach().numpy()
+                    contact_mask = inter_dist < CFG_CONTACT_DIST_VIS
+                    contact_map = torch.ones(778).cuda() * -1.
+                    contact_map[contact_mask] = inter_dist[contact_mask]
 
-                pred['contact'] = contact_map.clone().detach()
+                    pred['contact'] = contact_map.clone().detach()
 
-                # vis contact map
-                if CFG_VIS_CONTACT:
-                    contact_idx = torch.where(contact_map > 0)
-                    if not contact_idx[0].nelement() == 0:
-                        max = contact_map[contact_idx].max()
-                        contact_map[contact_idx] = contact_map[contact_idx] / max
-                        contact_map[contact_idx] = 1 - contact_map[contact_idx]
-                    contact_map[contact_map == -1.] = 0.
+                    # vis contact map
+                    if CFG_VIS_CONTACT:
+                        contact_idx = torch.where(contact_map > 0)
+                        if not contact_idx[0].nelement() == 0:
+                            max = contact_map[contact_idx].max()
+                            contact_map[contact_idx] = contact_map[contact_idx] / max
+                            contact_map[contact_idx] = 1 - contact_map[contact_idx]
+                        contact_map[contact_map == -1.] = 0.
 
-                    save_path_contactmap = os.path.join(save_path, 'contactmap')
-                    os.makedirs(save_path_contactmap, exist_ok=True)
-                    pcd = o3d.geometry.PointCloud()
+                        save_path_contactmap = os.path.join(save_path, 'contactmap')
+                        os.makedirs(save_path_contactmap, exist_ok=True)
+                        pcd = o3d.geometry.PointCloud()
+                        hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
+                        pcd.points = o3d.utility.Vector3dVector(hand_verts.detach().cpu().numpy())
+                        colors = contact_map.unsqueeze(1).detach().cpu().numpy()
+                        colors = np.concatenate([colors, colors, 0.5-colors*0.5], axis=1)
+                        pcd.colors = o3d.utility.Vector3dVector(colors)
+                        o3d.io.write_point_cloud(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.ply"), pcd)
+
+                        vis = o3d.visualization.Visualizer()
+                        vis.create_window()
+                        vis.get_render_option().point_color_option = o3d.visualization.PointColorOption.Color
+                        vis.get_render_option().point_size = 15.0
+                        vis.add_geometry(pcd)
+                        vis.capture_screen_image(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.jpg"), do_render=True)
+                        vis.destroy_window()
+
+    def visualize_inter(self, pred, pred_obj_list, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
+        flag_bb_exist = False
+        for camIdx, camID in enumerate(CFG_CAMID_SET):
+            if 'bb' not in self.dataloaders[camIdx][frame].keys():
+                self.set_gt_nobb(camIdx, camID, frame)
+                flag_bb_exist = False
+            else:
+                # set gt to load original input
+                self.set_gt(camIdx, frame)
+                flag_bb_exist = True
+                # set camera status for projection
+
+            ## HAND ##
+            # project hand joint
+            joints_cam = torch.unsqueeze(mano3DToCam3D(pred['joints'], self.Ms[camIdx]), 0)
+            pred_kpts2d = projectPoints(joints_cam, self.Ks[camIdx])
+
+            verts_cam = torch.unsqueeze(mano3DToCam3D(pred['verts'], self.Ms[camIdx]), 0)
+
+            if not flag_obj:
+                pred_rendered = self.cam_renderer[camIdx].render(verts_cam, pred['faces'], flag_rgb=True)
+            else:
+                verts_list = []
+                faces_list = []
+                verts_list.append(verts_cam)
+                faces_list.append(pred['faces'])
+
+                for key in pred_obj_list:
+                    pred_obj = pred_obj_list[key]
+                    verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
+                    verts_list.append(verts_cam_obj)
+                    faces_list.append(pred_obj['faces'])
+
+                pred_rendered = self.cam_renderer[camIdx].render_meshes(verts_list, faces_list, flag_rgb=True)
+
+            ## VISUALIZE ##
+            rgb_mesh = np.squeeze((pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+            depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
+            seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy())
+            seg_mesh = np.array(np.ceil(seg_mesh / np.max(seg_mesh)), dtype=np.uint8)
+
+            pred_kpts2d = np.squeeze(pred_kpts2d.clone().cpu().detach().numpy())
+            if flag_bb_exist:
+                gt_kpts2d = np.squeeze(self.gt_kpts2d.clone().cpu().numpy())
+                # check if gt kpts is nan (not detected)
+                if np.isnan(gt_kpts2d).any():
+                    gt_kpts2d = np.zeros((21, 2))
+
+            rgb_2d_pred = paint_kpts(None, rgb_mesh, pred_kpts2d)
+            if flag_bb_exist:
+                rgb_2d_gt = paint_kpts(None, rgb_mesh, gt_kpts2d)
+
+            if flag_crop:
+                # show cropped size of input (480, 640)
+                rgb_input = np.squeeze(self.gt_rgb.clone().cpu().numpy()).astype(np.uint8)
+                depth_input = np.squeeze(self.gt_depth.clone().cpu().numpy())
+                seg_input = np.squeeze(self.gt_seg.clone().cpu().numpy())
+
+                # rendered image is original size (1080, 1920)
+                rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1]+self.bb[3], self.bb[0]:self.bb[0]+self.bb[2], :]
+                depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+
+                rgb_2d_pred = rgb_2d_pred[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2], :]
+                uv1 = np.concatenate((pred_kpts2d, np.ones_like(pred_kpts2d[:, :1])), 1)
+                pred_kpts2d = (self.img2bb @ uv1.T).T
+
+                if flag_bb_exist:
+                    rgb_2d_gt = rgb_2d_gt[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2], :]
+                    uv1 = np.concatenate((gt_kpts2d, np.ones_like(gt_kpts2d[:, :1])), 1)
+                    gt_kpts2d = (self.img2bb @ uv1.T).T
+            else:
+                # show original size of input (1080, 1920)
+                rgb_input, depth_input, seg_input, seg_obj = self.dataloaders[CFG_CAMID_SET.index(camID)].load_raw_image(frame)
+
+            seg_mask = np.copy(seg_mesh)
+            seg_mask[seg_mesh>0] = 1
+            rgb_2d_pred *= seg_mask[..., None]
+
+            img_blend_pred = cv2.addWeighted(rgb_input, 1.0, rgb_2d_pred, 0.4, 0)
+
+            if flag_bb_exist:
+                img_blend_gt = cv2.addWeighted(rgb_input, 0.5, rgb_2d_gt, 0.7, 0)
+                rgb_seg = (rgb_input * seg_input[..., None]).astype(np.uint8)
+                img_blend_pred_seg = cv2.addWeighted(rgb_seg, 0.5, rgb_2d_pred, 0.7, 0)
+
+            # create depth gap
+            depth_mesh[depth_mesh==10] = 0
+            depth_input[depth_input==10] = 0
+            depth_gap = np.clip(np.abs(depth_input - depth_mesh)* 1000, a_min=0.0, a_max=255.0).astype(np.uint8)
+            depth_gap[depth_mesh == 0] = 0
+
+            # create seg gap, gt required
+            if flag_bb_exist:
+                seg_a = seg_input - seg_mesh
+                seg_a[seg_a < 0] = 0
+                seg_b = seg_mesh - seg_input
+                seg_b[seg_b < 0] = 0
+                seg_gap = ((seg_a + seg_b) * 255.0).astype(np.uint8)
+
+            if not flag_crop:
+                # resize images to (360, 640)
+                img_blend_pred = cv2.resize(img_blend_pred, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+                depth_gap = cv2.resize(depth_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+                if flag_bb_exist:
+                    img_blend_gt = cv2.resize(img_blend_gt, dsize=(640,360), interpolation=cv2.INTER_LINEAR)
+                    seg_gap = cv2.resize(seg_gap, dsize=(640, 360), interpolation=cv2.INTER_LINEAR)
+                    img_blend_pred_seg = cv2.resize(img_blend_pred_seg, dsize=(640, 360),
+                                                    interpolation=cv2.INTER_LINEAR)
+
+            blend_gt_name = "blend_gt_" + camID + "_" + str(frame)
+            blend_pred_name = "blend_pred_" + camID + "_" + str(frame)
+            blend_pred_seg_name = "blend_pred_seg_" + camID + "_" + str(frame)
+            blend_depth_gap_name = "blend_depth_gap_" + camID + "_" + str(frame)
+            blend_seg_gap_name = "blend_seg_gap_" + camID + "_" + str(frame)
+
+            if save_path is None:
+                if not flag_headless:
+                    if flag_bb_exist:
+                        cv2.imshow(blend_gt_name, img_blend_gt)
+                    cv2.imshow(blend_pred_name, img_blend_pred)
+                    # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+                    # cv2.imshow(blend_depth_gap_name, depth_gap)
+                    # cv2.imshow(blend_seg_gap_name, seg_gap)
+                    cv2.waitKey(1)
+                else:
+                    if flag_bb_exist:
+                        cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
+                    cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
+                    cv2.imwrite(os.path.join("./for_headless_server", blend_depth_gap_name + '.png'), depth_gap)
+            else:
+                save_path_cam = os.path.join(save_path, camID)
+                os.makedirs(save_path_cam, exist_ok=True)
+                cv2.imwrite(os.path.join(save_path_cam, blend_pred_name + '.png'), img_blend_pred)
+                # cv2.imwrite(os.path.join(save_path_cam, blend_pred_seg_name + '.png'), img_blend_pred_seg)
+                # cv2.imwrite(os.path.join(save_path_cam, blend_depth_gap_name + '.png'), depth_gap)
+
+                # save meshes
+                if CFG_SAVE_MESH:
                     hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
-                    pcd.points = o3d.utility.Vector3dVector(hand_verts.detach().cpu().numpy())
-                    colors = contact_map.unsqueeze(1).detach().cpu().numpy()
-                    colors = np.concatenate([colors, colors, 0.5-colors*0.5], axis=1)
-                    pcd.colors = o3d.utility.Vector3dVector(colors)
-                    o3d.io.write_point_cloud(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.ply"), pcd)
+                    hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
+                    hand.export(os.path.join(save_path_cam, f'mesh_hand_{camID}_{frame}.obj'))
 
-                    vis = o3d.visualization.Visualizer()
-                    vis.create_window()
-                    vis.get_render_option().point_color_option = o3d.visualization.PointColorOption.Color
-                    vis.get_render_option().point_size = 15.0
-                    vis.add_geometry(pcd)
-                    vis.capture_screen_image(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.jpg"), do_render=True)
-                    vis.destroy_window()
+                    if flag_obj:
+                        obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
+                        obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
+                        obj.export(os.path.join(save_path_cam, f'mesh_obj_{camID}_{frame}.obj'))
+
+                # create contact map
+                if CFG_WITH_OBJ:
+                    hand_pcd = Pointclouds(points=verts_cam)
+                    obj_mesh = Meshes(verts=verts_cam_obj.detach(),
+                                      faces=pred_obj['faces'])  # optimize only hand meshes
+                    inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
+                    # debug = inter_dist.clone().cpu().detach().numpy()
+                    contact_mask = inter_dist < CFG_CONTACT_DIST_VIS
+                    contact_map = torch.ones(778).cuda() * -1.
+                    contact_map[contact_mask] = inter_dist[contact_mask]
+
+                    pred['contact'] = contact_map.clone().detach()
+
+                    # vis contact map
+                    if CFG_VIS_CONTACT:
+                        contact_idx = torch.where(contact_map > 0)
+                        if not contact_idx[0].nelement() == 0:
+                            max = contact_map[contact_idx].max()
+                            contact_map[contact_idx] = contact_map[contact_idx] / max
+                            contact_map[contact_idx] = 1 - contact_map[contact_idx]
+                        contact_map[contact_map == -1.] = 0.
+
+                        save_path_contactmap = os.path.join(save_path, 'contactmap')
+                        os.makedirs(save_path_contactmap, exist_ok=True)
+                        pcd = o3d.geometry.PointCloud()
+                        hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
+                        pcd.points = o3d.utility.Vector3dVector(hand_verts.detach().cpu().numpy())
+                        colors = contact_map.unsqueeze(1).detach().cpu().numpy()
+                        colors = np.concatenate([colors, colors, 0.5-colors*0.5], axis=1)
+                        pcd.colors = o3d.utility.Vector3dVector(colors)
+                        o3d.io.write_point_cloud(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.ply"), pcd)
+
+                        vis = o3d.visualization.Visualizer()
+                        vis.create_window()
+                        vis.get_render_option().point_color_option = o3d.visualization.PointColorOption.Color
+                        vis.get_render_option().point_size = 15.0
+                        vis.add_geometry(pcd)
+                        vis.capture_screen_image(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.jpg"), do_render=True)
+                        vis.destroy_window()

@@ -39,8 +39,14 @@ def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
         anno['Mesh'][0]['class_id'] = grasp_id
         anno['Mesh'][0]['class_name'] = GRASPType(int(grasp_id)).name
         anno['Mesh'][0]['object_name'] = OBJType(int(obj_id)).name
-        anno['Mesh'][0]['object_file'] = pred_obj[1]
-        anno['Mesh'][0]['object_mat'] = pred_obj[0]
+        obj_files = []
+        obj_mat = []
+        for key in pred_obj:
+            obj_files.append(pred_obj[key][1])
+            obj_mat.append(pred_obj[key][0])
+
+        anno['Mesh'][0]['object_file'] = obj_files
+        anno['Mesh'][0]['object_mat'] = obj_mat
         anno['Mesh'][0]['mano_side'] = side
         anno['Mesh'][0]['mano_trans'] = pred['rot'].tolist()
         anno['Mesh'][0]['mano_pose'] = pred['pose'].tolist()
@@ -48,14 +54,16 @@ def save_annotation(targetDir, trialName, frame, seq, pred, pred_obj, side):
 
         # post-process contact map
         contact_map = pred['contact']
-        contact_idx = torch.where(contact_map > 0)
-        if not contact_idx[0].nelement() == 0:
-            max = contact_map[contact_idx].max()
-            contact_map[contact_idx] = contact_map[contact_idx] / max
-            contact_map[contact_idx] = 1 - contact_map[contact_idx]
-        contact_map[contact_map == -1.] = 0.
+        if contact_map is not None:
+            contact_idx = torch.where(contact_map > 0)
+            if not contact_idx[0].nelement() == 0:
+                max = contact_map[contact_idx].max()
+                contact_map[contact_idx] = contact_map[contact_idx] / max
+                contact_map[contact_idx] = 1 - contact_map[contact_idx]
+            contact_map[contact_map == -1.] = 0.
+            contact_map = contact_map.tolist()
 
-        anno['Mesh'][0]['contact'] = contact_map.tolist()
+        anno['Mesh'][0]['contact'] = contact_map
 
         ### save full annotation
         with open(anno_path, 'w', encoding='cp949') as file:

@@ -60,15 +60,15 @@ flag_check_vert_marker_pair = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '231027', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '231027_cam', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '231024', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231024_cam_2', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.55, 'target cam db Name')
 
 flags.DEFINE_string('obj_db', 'obj_scanned_models_only_interaction', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
-flags.DEFINE_integer('start', 1, 'start idx of sequence(ordered)')
-flags.DEFINE_integer('end', 4, 'end idx of sequence(ordered)')
+flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
+flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
 flags.DEFINE_string('camID', 'mas', 'main target camera')
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -122,6 +122,8 @@ elif FLAGS.db in ['230914']:
     CFG_DATE = '230914'
 elif FLAGS.db in ['231026', '231027']:
     CFG_DATE = '231026~'
+elif FLAGS.db in ['231024', '231025']:
+    CFG_DATE = '231024~231025'
 else:
     CFG_DATE = '230915~'
 
@@ -550,7 +552,6 @@ class loadDataset():
 
 
         valid_idx_dict = {}
-
         marker_read_count = 0
 
         for idx, part in enumerate(parts) :
@@ -573,8 +574,7 @@ class loadDataset():
             marker_pose_dict[part] = np.asarray(valid_marker)
             valid_idx_dict[part] = valid_idx
 
-        output_marker_pose = np.copy(marker_pose_dict)
-
+        obj_pose_dict = {}
         for idx, part in enumerate(parts) :
             obj_verts  = obj_mesh['verts'][part]
 
@@ -668,6 +668,8 @@ class loadDataset():
             err = np.sum(abs(verts_debug - marker_debug), axis=1)
             err = np.average(err)
 
+
+            obj_pose_dict[part] = pose_calc
             ### debug
             flag_exist = os.path.exists(f"E:/HOnnotate_OXR/debug_2/{part}.png")
             if flag_check_vert_marker_pair and not flag_exist:
@@ -716,7 +718,7 @@ class loadDataset():
 
                 assert err < 25, f"wrong marker-vert fitting with err {err}, check obj in seq %s" % self.seq
 
-        return pose_calc, scale, output_marker_pose, valid_idx_dict
+        return obj_pose_dict, scale, marker_pose_dict, valid_idx_dict
 
     def saveObjdata(self):
         with open(os.path.join(self.obj_data_Dir, self.obj_pose_name+'_marker.pkl'), 'wb') as f:

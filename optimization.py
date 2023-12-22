@@ -34,12 +34,13 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '231007', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '231007_cam', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '231024', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231024_cam_2', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_string('obj_db', 'obj_scanned_models_only_interaction', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
@@ -58,6 +59,10 @@ elif FLAGS.db in ['230909', '230910', '230911', '230912', '230913']:
     CFG_DATE = '230909~230913'
 elif FLAGS.db in ['230914']:
     CFG_DATE = '230914'
+elif FLAGS.db in ['231026', '231027']:
+    CFG_DATE = '231026~'
+elif FLAGS.db in ['231024', '231025']:
+    CFG_DATE = '231024~231025'
 else:
     CFG_DATE = '230915~'
 
@@ -80,7 +85,7 @@ def __update_global_wrist__(model, loss_func, detected_cams, frame, lr_init, tar
         hand_param = model()
         obj_param = None
 
-        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
+        losses, losses_single, _ = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
                            loss_dict=loss_dict_global, flag_headless=FLAGS.headless)
 
         ### visualization for debug
@@ -126,7 +131,7 @@ def __update_global__(model, loss_func, detected_cams, frame, lr_init, target_se
         hand_param = model()
         obj_param = None
 
-        losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
+        losses, losses_single, _ = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame,
                            loss_dict=loss_dict_global, flag_headless=FLAGS.headless)
 
         ### visualization for debug
@@ -182,7 +187,7 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, target_seq
             hand_param = model()
             obj_param = None
 
-            losses, losses_single = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step, flag_headless=FLAGS.headless)
+            losses, losses_single, _ = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=loss_dict_parts, parts=step, flag_headless=FLAGS.headless)
             if flag_debug_vis_part:
                 loss_func.visualize(pred=hand_param, pred_obj=None, frame=frame, camIdxSet=detected_cams, flag_obj=False, flag_crop=True, flag_headless=FLAGS.headless)
 
@@ -345,7 +350,7 @@ def main(argv):
     assert os.path.exists(os.path.join(baseDir, FLAGS.cam_db)), "no{YYMMDD}_cam directory. check."
     assert os.path.exists(os.path.join(baseDir, FLAGS.db + '_obj')), "no {YYMMDD}_obj directory. check."
     assert os.path.exists(
-        os.path.join(baseDir, 'obj_scanned_models')), "no dataset/obj_scanned_models directory. check."
+        os.path.join(baseDir, FLAGS.obj_db)), "no dataset/obj_scanned_models directory. check."
     assert os.path.exists(
         os.path.join(os.getcwd(), 'modules/deepLabV3plus/checkpoints')), "no segmentation checkpoint folder. check."
 
@@ -402,15 +407,36 @@ def main(argv):
 
             ## Initialize object dataloader & model
             if CFG_WITH_OBJ:
-                obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter)
+                obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter, FLAGS.obj_db)
                 if obj_dataloader.quit:
                     print("unvalid obj pose, skip trial")
                     obj_unvalid_trials.append(target_seq + '_' + trialName)
                     continue
 
                 obj_template_mesh = obj_dataloader.obj_mesh_data
-                model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh).to(CFG_DEVICE)
+
+                model_obj_list = {}
+                for key in obj_template_mesh:
+                    model_obj_part = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh[key]).to(CFG_DEVICE)
+                    model_obj_list[key] = model_obj_part
+
                 loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
+
+            if CFG_WITH_OBJ_MARKER and not CFG_WITH_OBJ:
+                obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName,
+                                              mas_dataloader.cam_parameter, FLAGS.obj_db)
+                if obj_dataloader.quit:
+                    print("unvalid obj pose, skip trial")
+                    obj_unvalid_trials.append(target_seq + '_' + trialName)
+                    continue
+
+                obj_template_mesh = obj_dataloader.obj_mesh_data
+
+                model_obj_list = {}
+                for key in obj_template_mesh:
+                    model_obj_part = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh[key]).to(CFG_DEVICE)
+                    model_obj_list[key] = model_obj_part
+
 
             flag_start = True
             flag_skip = 0
@@ -445,6 +471,8 @@ def main(argv):
                 #     valid_cam_list = ['mas', 'sub2', 'sub3']
 
                 for camIdx, camID in enumerate(valid_cam_list):
+                    if dataloader_set[camIdx][frame] is None:
+                        continue
                     if 'bb' in dataloader_set[camIdx][frame].keys():
                         detected_cams.append(camIdx)
                 if len(detected_cams) < 2:
@@ -463,17 +491,37 @@ def main(argv):
                     if frame > len(obj_dataloader):
                         print('no obj pose')
                         continue
-                    obj_pose = obj_dataloader[frame]
-                    if obj_pose is None or len(obj_pose.shape) != 2:
+                    obj_pose_dict = obj_dataloader[frame]
+
+                    for key in obj_template_mesh:
+                        obj_pose = obj_pose_dict[key]
+
+                        if obj_pose is None or len(obj_pose.shape) != 2:
+                            print('no obj pose')
+                            continue
+                        obj_pose = obj_pose[:-1, :]
+                        # obj_pose[:3, -1] *= 0.1
+                        model_obj[key].update_pose(pose=obj_pose)
+
+                        marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)][key]     # marker 3d pose with camera coordinate(master)
+                        marker_valid_idx = obj_dataloader.marker_valid_idx[str(frame)][key]
+                        loss_func.set_object_marker_pose(marker_cam_pose, marker_valid_idx, obj_dataloader.obj_class, CFG_DATE, obj_dataloader.grasp_idx)
+
+                if CFG_WITH_OBJ_MARKER and not CFG_WITH_OBJ:
+                    if frame > len(obj_dataloader):
                         print('no obj pose')
                         continue
-                    obj_pose = obj_pose[:-1, :]
-                    # obj_pose[:3, -1] *= 0.1
-                    model_obj.update_pose(pose=obj_pose)
+                    obj_pose_dict = obj_dataloader[frame]
 
-                    marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
-                    marker_valid_idx = obj_dataloader.marker_valid_idx[str(frame)]
-                    loss_func.set_object_marker_pose(marker_cam_pose, marker_valid_idx, obj_dataloader.obj_class, CFG_DATE, obj_dataloader.grasp_idx)
+                    for key in obj_template_mesh:
+                        obj_pose = obj_pose_dict[key]
+
+                        if obj_pose is None or len(obj_pose.shape) != 2:
+                            print('no obj pose')
+                            continue
+                        obj_pose = obj_pose[:-1, :]
+                        # obj_pose[:3, -1] *= 0.1
+                        model_obj_list[key].update_pose(pose=obj_pose)
 
                 ### initialize optimizer, scheduler
                 lr_init = CFG_LR_INIT * 0.2
@@ -522,11 +570,21 @@ def main(argv):
                     pred_obj = None
                     pred_obj_anno = [None, None]
 
-                ### visualization results of frame
-                loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
-                                        save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
+                if CFG_WITH_OBJ_MARKER and not CFG_WITH_OBJ:
+                    pred_obj = {}
+                    pred_obj_anno = {}
+                    for key in obj_template_mesh:
+                        model_obj = model_obj_list[key]
+                        pred_obj[key] = model_obj()
+                        pred_obj_anno[key] = [model_obj.get_object_mat().tolist(), key]
 
-                loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
+                ### visualization results of frame
+                # loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
+                #                         save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
+                loss_func.visualize_inter(pred=pred_hand, pred_obj_list=pred_obj, camIdxSet=detected_cams, frame=frame,
+                                    save_path=save_path, flag_obj=CFG_WITH_OBJ_MARKER, flag_crop=True,
+                                    flag_headless=FLAGS.headless)
+                # loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
 
                 ### save annotation per frame as json format
                 save_annotation(target_dir_result, trialName, frame,  target_seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)
@@ -535,7 +593,7 @@ def main(argv):
                 save_num += 1
                 eval_num += 1
 
-            loss_func.save_evaluation(log_path, eval_num)
+            # loss_func.save_evaluation(log_path, eval_num)
 
             if eval_num != 0:
                 # extract top 'num' indexes from depth f1 score and save as json

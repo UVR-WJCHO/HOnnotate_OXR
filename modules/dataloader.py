@@ -126,7 +126,8 @@ class DataLoader:
         for frame in tqdm(range(self.db_len)):
             sample = self.load_sample(frame)
             sample_dict[frame] = sample
-            # if frame > 5:
+            ## gpu memory error
+            # if frame > 10:
             #     break
         self.sample_dict, self.sample_kpt = self.sample_to_torch(sample_dict)
 
@@ -228,10 +229,10 @@ class DataLoader:
             return sample
 
 
-
     def load_raw_image(self, index):
-        _, _, seg, seg_obj, rgb_raw, depth_raw = self.get_img(index)
-        return rgb_raw, depth_raw, seg, seg_obj
+        _, _, _, seg_hand, seg_obj, rgb_raw, depth_raw = self.get_img(index)
+        return rgb_raw, depth_raw, seg_hand, seg_obj
+
 
     def load_cam_parameters(self):
         _, dist_coeffs, extrinsics, _ = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
@@ -305,15 +306,16 @@ class DataLoader:
             # seg_hand[seg_hand==0] = 10
             # seg_obj[seg_obj == 0] = 10
             return rgb, depth_hand, depth_obj, seg_hand, seg_obj, rgb_raw, depth_raw
-    
+
     def get_meta(self, idx):
-        meta_path = os.path.join(self.meta_base_path, self.cam ,self.cam+'_%04d.pkl'%idx)
+        meta_path = os.path.join(self.meta_base_path, self.cam, self.cam + '_%04d.pkl' % idx)
 
         if not os.path.exists(meta_path):
-            return None
-        
-        with open(meta_path, 'rb') as f:
-            meta = pickle.load(f)
+            meta = {'bb': None, 'img2bb': None,
+                    'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt': None, 'visibility': None}
+        else:
+            with open(meta_path, 'rb') as f:
+                meta = pickle.load(f)
 
         return meta
 
@@ -329,7 +331,7 @@ class DataLoader:
 
 
 class ObjectLoader:
-    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, mas_param):
+    def __init__(self, base_path:str, data_date:str, data_type:str, data_trial:str, mas_param, obj_db):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # base_path : os.path.join(os.getcwd(), 'dataset')
         # data_date : 230822
@@ -350,21 +352,32 @@ class ObjectLoader:
         obj_idx = data_type.split('_')[3]
         obj_name = str(OBJType(int(obj_idx)).name)
         self.obj_class = str(obj_idx) + '_' + obj_name
+        
+        self.obj_mesh_name = obj_name
 
         target_mesh_class = self.obj_class
-        obj_mesh_path = os.path.join(base_path, 'obj_scanned_models', target_mesh_class)
-        ### set exceptional cases (foldable phone : grasp 12 / grasp 16,19)
-        if int(obj_idx) == 29:
-            if self.grasp_idx == 12:
-                target_mesh_class = '29_foldable_phone'
-            else:
-                target_mesh_class = '29_foldable_phone_2'
+        obj_mesh_path_template = os.path.join(base_path, obj_db, target_mesh_class)
 
-        self.obj_mesh_name = target_mesh_class + '.obj'
-        obj_mesh_path = os.path.join(obj_mesh_path, self.obj_mesh_name)
+        obj_mesh_path_list = []
+        if int(obj_idx) == 20 or int(obj_idx) == 21:
+            target_mesh_class = self.obj_class
+            obj_mesh_path = os.path.join(obj_mesh_path_template, target_mesh_class) + '.obj'
+            obj_mesh_path_list.append(obj_mesh_path)
+        elif int(obj_idx) == 27 or int(obj_idx) == 28 or int(obj_idx) == 29:
+            for i in range(3):
+                target_mesh_class = self.obj_class + '_0' + str(i+1)
+                obj_mesh_path = os.path.join(obj_mesh_path_template, target_mesh_class) + '.obj'
+                obj_mesh_path_list.append(obj_mesh_path)
+        else:
+            for i in range(2):
+                target_mesh_class = self.obj_class + '_0' + str(i+1)
+                obj_mesh_path = os.path.join(obj_mesh_path_template, target_mesh_class) + '.obj'
+                obj_mesh_path_list.append(obj_mesh_path)
+
+
 
         # load scale factor before load mesh data
-        obj_data_name = obj_dir_name + '_grasp_' + str("%02d" % self.grasp_idx) + '_' + str("%02d" % int(data_trial[-1]))
+        obj_data_name = obj_dir_name + '_inter_' + str(self.grasp_idx) + '_' + str("%02d" % int(data_trial[-1]))
         obj_scale_data_namme = obj_data_name + '_obj_scale.pkl'
         obj_scale_data_path = os.path.join(self.obj_pose_dir, obj_scale_data_namme)
 
@@ -374,15 +387,21 @@ class ObjectLoader:
                 self.obj_scale = pickle.load(f)
 
             self.obj_mesh_data = {}
-            verts, faces, _ = load_obj(obj_mesh_path)
-            if self.obj_class in CFG_OBJECT_SCALE:
-                 verts *= float(self.obj_scale)
+            for i, obj_mesh_path in enumerate(obj_mesh_path_list):
+                obj_file = obj_mesh_path.split('\\')[-1][:-4]
 
-            if self.obj_class in CFG_OBJECT_SCALE_SPECIFIC.keys():
-                verts *= float(CFG_OBJECT_SCALE_SPECIFIC[self.obj_class])
+                self.obj_mesh_data[obj_file] = {}
+                try:
+                    verts, faces, _ = load_obj(obj_mesh_path)
+                    if self.obj_class in CFG_OBJECT_SCALE:
+                        verts *= float(self.obj_scale)
+                    if self.obj_class in CFG_OBJECT_SCALE_SPECIFIC.keys():
+                        verts *= float(CFG_OBJECT_SCALE_SPECIFIC[self.obj_class])
 
-            self.obj_mesh_data['verts'] = verts
-            self.obj_mesh_data['faces'] = faces.verts_idx
+                    self.obj_mesh_data[obj_file]['verts'] = verts
+                    self.obj_mesh_data[obj_file]['faces'] = faces.verts_idx
+                except:
+                    print("no obj mesh data : %s" % obj_mesh_path)
 
 
             # load from results of preprocess.py
@@ -407,7 +426,9 @@ class ObjectLoader:
                 if marker_cam_pose[key] is None:
                     self.marker_cam_pose[key] = None
                 else:
-                    self.marker_cam_pose[key] = torch.FloatTensor(marker_cam_pose[key]).to(self.device)
+                    self.marker_cam_pose[key] = {}
+                    for key_obj in marker_cam_pose[key]:
+                        self.marker_cam_pose[key][key_obj] = torch.FloatTensor(marker_cam_pose[key][key_obj]).to(self.device)
         else:
             self.quit = True
 
@@ -436,7 +457,7 @@ class ObjectLoader:
     def __getitem__(self, index: int):
         try:
             sample = self.obj_init_pose[str(index)]
-            sample = np.asarray(sample)
+            # sample = np.asarray(sample)
         except ExecError:
             raise "Error at load object index {}".format(index)
         return sample
