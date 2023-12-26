@@ -60,8 +60,8 @@ flag_check_vert_marker_pair = True
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '231027', 'target db Name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '231027_cam_2', 'target cam db Name')   ## name ,default, help
+flags.DEFINE_string('db', '231026', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231026_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.55, 'target cam db Name')
 
 flags.DEFINE_string('obj_db', 'obj_scanned_models_only_interaction', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
@@ -1183,59 +1183,6 @@ def main(argv):
     [TODO]
         - consider two-hand situation (currently assume single hand detection)
     '''
-
-    print("---------------start preprocess seq ---------------")
-    process_count = 4
-
-    tasks = []
-    total_count = 0
-    t1 = time.time()
-
-    obj_unvalid_trials = []
-    seq_list = natsorted(os.listdir(rootDir))
-    if FLAGS.start != None and FLAGS.end != None:
-        seq_list = seq_list[FLAGS.start:FLAGS.end]
-
-    for seqIdx, seqName in enumerate(seq_list):
-        if FLAGS.seq is not None and seqName != FLAGS.seq:
-            continue
-
-        seqDir = os.path.join(rootDir, seqName)
-        for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
-
-            # if trialIdx == 0 :
-            #     continue
-            
-            dbs = []
-            for camID in camIDset:
-                db = loadDataset(FLAGS.db, seqName, trialName)
-                db.init_cam(camID)
-                dbs.append(db)
-
-                # total_count += len(db)
-                # tasks.append((preprocess_single_cam, (db,)))
-
-            if dbs[0].quit:
-                print("wrong object pose data, continue to next trial")
-                obj_unvalid_trials.append(seqName + '_' + trialName)
-            else:
-                total_count += len(dbs[0])
-                tasks.append((preprocess_multi_cam, (dbs,)))
-
-    # tasks = tasks[:12]
-
-    print("(fill in google sheets) unvalid trials with wrong object pose data : ", obj_unvalid_trials)
-
-    pool = TqdmMultiProcessPool(process_count)
-    with tqdm.tqdm(total=total_count) as global_tqdm:
-        # global_tqdm.set_description(f"{seqName} - total : ")
-        pool.map(global_tqdm, tasks, error_callback, done_callback)
-    print("---------------end preprocess ---------------")
-
-
-    proc_time = round((time.time() - t1) / 60., 2)
-    print("total process time : %s min" % (str(proc_time)))
-
 
     print("start segmentation - deeplab_v3")
     if flag_deep_segmentation:

@@ -34,8 +34,8 @@ flag_debug_vis_all = False
 
 ## FLAGS
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', '231024', 'target db name')   ## name ,default, help
-flags.DEFINE_string('cam_db', '231024_cam_2', 'target db name')   ## name ,default, help
+flags.DEFINE_string('db', '231027', 'target db name')   ## name ,default, help
+flags.DEFINE_string('cam_db', '231027_cam_2', 'target db name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
@@ -434,6 +434,8 @@ def main(argv):
 
                 model_obj_list = {}
                 for key in obj_template_mesh:
+                    if key == '27_note_03':
+                        continue
                     model_obj_part = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh[key]).to(CFG_DEVICE)
                     model_obj_list[key] = model_obj_part
 
@@ -493,7 +495,7 @@ def main(argv):
                         continue
                     obj_pose_dict = obj_dataloader[frame]
 
-                    for key in obj_template_mesh:
+                    for key in obj_pose_dict:
                         obj_pose = obj_pose_dict[key]
 
                         if obj_pose is None or len(obj_pose.shape) != 2:
@@ -513,7 +515,7 @@ def main(argv):
                         continue
                     obj_pose_dict = obj_dataloader[frame]
 
-                    for key in obj_template_mesh:
+                    for key in obj_pose_dict:
                         obj_pose = obj_pose_dict[key]
 
                         if obj_pose is None or len(obj_pose.shape) != 2:
@@ -573,7 +575,7 @@ def main(argv):
                 if CFG_WITH_OBJ_MARKER and not CFG_WITH_OBJ:
                     pred_obj = {}
                     pred_obj_anno = {}
-                    for key in obj_template_mesh:
+                    for key in model_obj_list:
                         model_obj = model_obj_list[key]
                         pred_obj[key] = model_obj()
                         pred_obj_anno[key] = [model_obj.get_object_mat().tolist(), key]
@@ -595,12 +597,12 @@ def main(argv):
 
             # loss_func.save_evaluation(log_path, eval_num)
 
-            if eval_num != 0:
-                # extract top 'num' indexes from depth f1 score and save as json
-                top_index = loss_func.filtering_top_quality_index(num=60).tolist()
-                p = os.path.join(target_dir_result, trialName)
-                with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
-                    json.dump(top_index, f, ensure_ascii=False)
+            # if eval_num != 0:
+            #     # extract top 'num' indexes from depth f1 score and save as json
+            #     top_index = loss_func.filtering_top_quality_index(num=60).tolist()
+            #     p = os.path.join(target_dir_result, trialName)
+            #     with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
+            #         json.dump(top_index, f, ensure_ascii=False)
 
             del mas_dataloader.sample_dict
             del sub1_dataloader.sample_dict
