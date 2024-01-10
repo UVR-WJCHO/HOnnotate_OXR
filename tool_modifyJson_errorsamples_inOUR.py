@@ -19,6 +19,7 @@ from config import *
 from manopth.manolayer import ManoLayer
 from utils.lossUtils import *
 import traceback
+import shutil
 
 
 """
@@ -72,7 +73,7 @@ FLAGS(sys.argv)
 
 baseDir = os.path.join(os.getcwd(), 'dataset')
 
-subjectDir = os.path.join(baseDir, FLAGS.db, 'subject_info.xlsx')
+subjectDir = os.path.join(baseDir, 'subject_info.xlsx')
 subjects_df = pd.read_excel(subjectDir, header=0)
 # print(subjects_df)
 
@@ -218,7 +219,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                     frame += 1
 
             origin_num = len(obj_data) - 1  # 78 * 3 or 78* 2
-            output_num = int(origin_num / 2)
+            output_num = int(origin_num / 3)
             # output_num 78
             skip_num = 3
             # if output_num * 2 <= origin_num:
@@ -247,7 +248,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
             for camIdx, camID in enumerate(new_cam_list):
                 anno_first = anno_list_4cam[camIdx][0]
                 anno_path = os.path.join(anno_base_path, camID, anno_first)
-                with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
+                with open(anno_path, 'r', encoding='cp949') as file:
                     anno = json.load(file)
 
                 if isinstance(anno['calibration']['intrinsic'], str):
@@ -273,7 +274,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
             for i in range(len(anno_list_4cam[0])):
                 anno_path = os.path.join(anno_base_path, new_cam_list[0], anno_list_4cam[0][i])
                 ## find mano scale, xyz_root ##
-                with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
+                with open(anno_path, 'r', encoding='cp949') as file:
                     try:
                         anno = json.load(file)
                     except Exception as e:
@@ -317,17 +318,17 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                 camID = new_cam_list[camIdx]
                 for anno_name in anno_list:
                     try:
-                        ## found annotation file with wrong name
-                        if anno_name.split('_')[0] != camID:
-                            os.remove(os.path.join(anno_base_path, camID, anno_name))
-
-                            progress.update()
-                            global_tqdm.update()
-                            continue
+                        # ## found annotation file with wrong name
+                        # if anno_name.split('_')[0] != camID:
+                        #     os.remove(os.path.join(anno_base_path, camID, anno_name))
+                        #
+                        #     progress.update()
+                        #     global_tqdm.update()
+                        #     continue
 
                         frame = int(anno_name.split('_')[1][:-5])
                         anno_path = os.path.join(anno_base_path, camID, anno_name)
-                        with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
+                        with open(anno_path, 'r', encoding='cp949') as file:
                             try:
                                 flag_error = False
                                 anno = json.load(file)
@@ -403,9 +404,13 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                             anno['calibration']['error'] = float(calib_error)
 
                             ## 데이터 scale 통일
-                            obj_mat = np.asarray(anno['Mesh'][0]['object_mat'])
-                            obj_mat[:3, -1] *= 0.1
-                            anno['Mesh'][0]['object_mat'] = obj_mat.tolist()
+                            object_mat = anno['Mesh'][0]['object_mat']
+                            anno['Mesh'][0]['object_mat'] = []
+                            parts_num = len(object_mat)
+                            for part_idx in range(parts_num):
+                                obj_mat = np.asarray(object_mat[part_idx])
+                                obj_mat[:3, -1] *= 0.1
+                                anno['Mesh'][0]['object_mat'].append(obj_mat.tolist())
 
                             Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
                             Ms = np.reshape(Ms, (3, 4))
@@ -433,11 +438,14 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
 
                             bbox_hand = extractBbox(keypts_cam)
 
-                            obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat']))
-                            obj_mat_cam = obj_mat.T @ Ms_list[camIdx].T
-                            obj_mat_cam = np.squeeze(np.asarray(obj_mat_cam.T)).tolist()
-                            obj_mat_cam.append([0.0, 0.0, 0.0, 1.0])
-                            anno['object']["6D_pose_per_cam"] = obj_mat_cam
+                            parts_num = len(anno['Mesh'][0]['object_mat'])
+                            anno['object']["6D_pose_per_cam"] = []
+                            for part_idx in range(parts_num):
+                                obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat'][part_idx]))
+                                obj_mat_cam = obj_mat.T @ Ms_list[camIdx].T
+                                obj_mat_cam = np.squeeze(np.asarray(obj_mat_cam.T)).tolist()
+                                obj_mat_cam.append([0.0, 0.0, 0.0, 1.0])
+                                anno['object']["6D_pose_per_cam"].append(obj_mat_cam)
 
 
                             ## image-file_name list 두개인지 체크(덮어씌우기)
@@ -468,7 +476,7 @@ def modify_annotation(targetDir, outputDir, seq, trialName, data_len, flag_exist
                             anno['Mesh'][0]['class_id'] = int(anno['Mesh'][0]['class_id'])
 
                             ### save modified annotation
-                            with open(anno_path, 'w', encoding='UTF-8 SIG') as file:
+                            with open(anno_path, 'w', encoding='cp949') as file:
                                 json.dump(anno, file, indent='\t', ensure_ascii=False)
                         else:
                             keypts_cam = np.squeeze(np.asarray(anno['hand']["projected_2D_pose_per_cam"]))
