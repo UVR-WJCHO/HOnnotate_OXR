@@ -19,6 +19,8 @@ import modules.common.transforms as tf
 
 from pytorch3d.io import load_obj
 from pytorch3d.structures import Meshes
+from modules.renderer import Renderer
+from tqdm import tqdm
 
 '''
 데이터셋 구조를 다음과 같이 세팅.(임시)
@@ -84,6 +86,7 @@ class DBLoader:
         self.data_db = data_db
         self.data_seq = data_seq
         self.data_trial = data_trial
+        self.mano_layer = mano_layer
 
         self.subject_id = data_seq.split('_')[1][1:]
         self.obj_id = data_seq.split('_')[3]
@@ -98,255 +101,131 @@ class DBLoader:
         self.vis_path = os.path.join(self.anno_path, 'visualization')
 
         # load camera parameters
-        Ks_dict = {}
-        Ms_dict = {}
-        db_len_dict = {}
-        for camID in CFG.CFG_CAMID_SET:
+        self.Ks_dict = {}
+        self.Ms_dict = {}
+        self.db_len_dict = {}
+        self.total_len = 0
+        for camID in CFG_CAMID_SET:
             anno_path = os.path.join(self.anno_path, camID)
             anno_list = os.listdir(anno_path)
             with open(os.path.join(anno_path, anno_list[0]), 'r', encoding='UTF-8 SIG') as file:
                 anno = json.load(file)
 
-            Ks = torch.FloatTensor(np.squeeze(np.asarray(anno['calibration']['intrinsic'])))
+            Ks = torch.FloatTensor(np.squeeze(np.asarray(anno['calibration']['intrinsic']))).to(self.device)
             Ms = np.squeeze(np.asarray(anno['calibration']['extrinsic']))
             Ms = np.reshape(Ms, (3, 4))
             Ms[:, -1] = Ms[:, -1] / 10.0
-            Ms = torch.Tensor(Ms)
+            Ms = torch.Tensor(Ms).to(self.device)
 
-            Ks_dict[camID] = Ks
-            Ms_dict[camID] = Ms
+            self.Ks_dict[camID] = Ks
+            self.Ms_dict[camID] = Ms
 
-            db_len_dict[camID] = len(anno_list)
+            self.db_len_dict[camID] = len(anno_list)
+            self.total_len += len(anno_list)
 
         # set renderer
         default_M = np.eye(4)[:3]
-        renderer_dict = {}
-        for camID in CFG.CFG_CAMID_SET:
-            renderer = Renderer('cuda', 1, default_M, Ks_dict[camID], (1080, 1920))
-            renderer_dict[camID] = renderer
+        self.renderer_dict = {}
+        for camID in CFG_CAMID_SET:
+            renderer = Renderer('cuda', 1, default_M, self.Ks_dict[camID], (1080, 1920))
+            self.renderer_dict[camID] = renderer
 
         # load hand & object template mesh ##
-        hand_faces_template = mano_layer.th_faces.repeat(1, 1, 1)
+        self.hand_faces_template = self.mano_layer.th_faces.repeat(1, 1, 1)
 
-        target_mesh_class = str(obj_id) + '_' + str(OBJType(int(obj_id)).name)
+        target_mesh_class = str(self.obj_id) + '_' + str(OBJType(int(self.obj_id)).name)
         obj_mesh_path = os.path.join(base_path, data_obj_db, target_mesh_class, target_mesh_class + '.obj')
-        obj_scale = CFG_OBJECT_SCALE_FIXED[int(obj_id) - 1]
+        obj_scale = CFG_OBJECT_SCALE_FIXED[int(self.obj_id) - 1]
         obj_verts, obj_faces, _ = load_obj(obj_mesh_path)
-        obj_verts_template = (obj_verts * float(obj_scale)).to(device)
+        self.obj_verts_template = (obj_verts * float(obj_scale)).to(device)
 
         self.obj_faces_template = torch.unsqueeze(obj_faces.verts_idx, axis=0).to(device)
-        h = torch.ones((obj_verts_template.shape[0], 1), device=device)
-        self.obj_verts_template_h = torch.cat((obj_verts_template, h), 1)
+        h = torch.ones((self.obj_verts_template.shape[0], 1), device=device)
+        self.obj_verts_template_h = torch.cat((self.obj_verts_template, h), 1)
 
 
+        self.data_dict = {}
+        for camID in CFG_CAMID_SET:
+            self.data_dict[camID] = []
 
-        ########## need 4 view sequence data #########
+            anno_list = os.listdir(os.path.join(self.anno_path, camID))
+            rgb_list = os.listdir(os.path.join(self.rgb_path, camID))
+            depth_list = os.listdir(os.path.join(self.depth_path, camID))
+
+            for idx in tqdm(range(self.db_len_dict[camID])):
+                if idx > 3:
+                    break
+                anno_file = os.path.join(self.anno_path, camID, anno_list[idx])
+                rgb_file = os.path.join(self.rgb_path, camID, rgb_list[idx])
+                depth_file = os.path.join(self.depth_path, camID, depth_list[idx])
+
+                data = self.load_sample(anno_file, rgb_file, depth_file)
+                self.data_dict[camID].append(data)
 
 
-        sample_dict = {}
-        for frame in tqdm(range(self.db_len)):
-            sample = self.load_sample(frame)
-            sample_dict[frame] = sample
-            ## gpu memory error
-            # if frame > 150:
-            #     break
-        self.sample_dict, self.sample_kpt = self.sample_to_torch(sample_dict)
-
-    def sample_to_torch(self, sample_dict):
-        sample_dict_torch = {}
-        sample_kpt = {}
-        for idx in range(len(sample_dict)):
-            sample = sample_dict[idx]
-
-            if 'bb' not in sample.keys():
-                sample_torch = {}
-                sample_torch['rgb_raw'] = torch.FloatTensor(sample['rgb_raw']).to(self.device)
-                sample_torch['depth_raw'] = torch.unsqueeze(torch.FloatTensor(sample['depth_raw']), 0).to(self.device)
-
-                sample_dict_torch[idx] = sample_torch
-                sample_kpt[idx] = None
-            else:
-                sample_kpt_ = {}
-                sample_kpt_['kpts3d'] = np.copy(sample['kpts3d'])
-
-                sample_torch = {}
-                sample_torch['bb'] = np.asarray(sample['bb']).astype(int)
-                sample_torch['img2bb'] = sample['img2bb']
-                sample_torch['kpts2d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts2d']), 0).to(self.device)
-                sample_torch['kpts3d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d']), 0).to(self.device)
-                sample_torch['rgb'] = torch.FloatTensor(sample['rgb']).to(self.device)
-                sample_torch['depth'] = torch.unsqueeze(torch.FloatTensor(sample['depth']), 0).to(self.device)
-                sample_torch['depth_obj'] = torch.unsqueeze(torch.FloatTensor(sample['depth_obj']), 0).to(self.device)
-                sample_torch['seg'] = torch.unsqueeze(torch.FloatTensor(sample['seg']), 0).to(self.device)
-                sample_torch['seg_obj'] = torch.unsqueeze(torch.FloatTensor(sample['seg_obj']), 0).to(self.device)
-
-                vis = sample['visibility']
-                vis[vis < 1] = CFG_NON_VISIBLE_WEIGHT
-                sample_torch['visibility'] = torch.unsqueeze(torch.FloatTensor(vis), 1).to(self.device)
-
-                if CFG_exist_tip_db:
-                    if sample['tip2d'] != None:
-                        tip2d_np = []
-                        tip2d_idx = []
-                        for key in sample['tip2d'].keys():
-                            tip2d_np.append(sample['tip2d'][key])
-                            tip2d_idx.append(CFG_TIP_IDX[key])
-
-                        sample_torch['tip2d'] = torch.unsqueeze(torch.FloatTensor(np.array(tip2d_np)), 0).to(
-                            self.device)
-                        sample_torch['validtip'] = tip2d_idx
-                    else:
-                        sample_torch['tip2d'] = None
-                        sample_torch['validtip'] = None
-                else:
-                    sample_torch['tip2d'] = None
-                    sample_torch['validtip'] = None
-
-                sample_dict_torch[idx] = sample_torch
-                sample_kpt[idx] = sample_kpt_
-
-        return sample_dict_torch, sample_kpt
-
-    def get_sample(self, index):
-        if len(self.sample_dict) <= index:
-            return None
-        else:
-            return self.sample_dict[index]
-
-    def load_sample(self, index):
+    def load_sample(self, anno_file, rgb_file, depth_file):
         sample = {}
 
-        # get meta data
-        meta = self.get_meta(index)
+        with open(anno_file, 'r', encoding='UTF-8 SIG') as file:
+            anno = json.load(file)
 
-        if meta['kpts'] is None:
-            sample['rgb_raw'], sample['depth_raw'] = self.get_img(index, flag_bb=False)
-            return sample
-        else:
-            bb = np.asarray(meta['bb']).astype(int)
-            sample['bb'] = np.copy(bb)
-            sample['img2bb'] = meta['img2bb']
-            sample['kpts3d'] = meta['kpts']
-            sample['kpts2d'] = meta['kpts'][:, :2]
+        ## hand ##
+        hand_joints = anno['annotations'][0]['data']
+        hand_mano_rot = anno['Mesh'][0]['mano_trans']
+        hand_mano_pose = anno['Mesh'][0]['mano_pose']
+        hand_mano_shape = anno['Mesh'][0]['mano_betas']
 
-            sample['visibility'] = meta['visibility']
-            if '2D_tip_gt' in meta:
-                sample['tip2d'] = meta['2D_tip_gt']
+        ## wrong annotation
+        # hand_mano_scale = anno['hand']['mano_scale']
+        # hand_mano_root = anno['hand']['mano_xyz_root']
 
-            # get imgs
-            # sample['rgb'], depth, seg, rgb_raw, depth_raw = self.get_img(index)
-            # # masking depth, need to modify
-            # depth_bg = depth_raw > 800
-            # depth_raw[depth_bg] = 0
-            # # currently segmap is often errorneous
-            # # depth_raw[seg == 0] = 0
-            # sample['depth'] = depth_raw[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
-            # sample['seg'] = seg[bb[1]:bb[1] + bb[3], bb[0]:bb[0] + bb[2]]
-            # return sample
+        hand_mano_rot = torch.FloatTensor(np.asarray(hand_mano_rot))
+        hand_mano_pose = torch.FloatTensor(np.asarray(hand_mano_pose))
 
-            sample['rgb'], sample['depth'], sample['depth_obj'], sample['seg'], sample['seg_obj'], \
-            rgb_raw, depth_raw = self.get_img(index)
+        mano_param = torch.cat([hand_mano_rot, hand_mano_pose], dim=1).to(self.device)
+        hand_mano_shape = torch.FloatTensor(np.asarray(hand_mano_shape)).to(self.device)
+        mano_verts, mano_joints = self.mano_layer(mano_param, hand_mano_shape)
 
-            return sample
+        mano_joints = np.squeeze(mano_joints.detach().cpu().numpy())
+        hand_joints = np.squeeze(np.asarray(hand_joints))
+        xyz_root = hand_joints[0, :]
+        hand_joints_norm = hand_joints - xyz_root
+        dist_anno = hand_joints_norm[1, :] - hand_joints_norm[0, :]
+        dist_mano = mano_joints[1, :] - mano_joints[0, :]
+        scale = np.average(dist_mano / dist_anno)
 
-    def load_raw_image(self, index):
-        _, _, _, seg_hand, seg_obj, rgb_raw, depth_raw = self.get_img(index)
-        return rgb_raw, depth_raw, seg_hand, seg_obj
+        mano_verts = (mano_verts / scale) + torch.Tensor(xyz_root).to(self.device)
+        mano_joints = torch.FloatTensor(hand_joints).to(self.device)
 
-    def load_cam_parameters(self):
-        _, dist_coeffs, extrinsics, _ = LoadCameraParams(os.path.join(self.cam_path, "cameraParams.json"))
-        intrinsics = LoadCameraMatrix_undistort(
-            os.path.join(self.cam_path, 'cameraInfo_undistort.txt'))
 
-        cam_intrinsic = intrinsics[self.cam]
-        dist_coeff = dist_coeffs[self.cam]
-        cam_extrinsic = extrinsics[self.cam].reshape(3, 4)
-        # scale z axis value as mm to cm
-        cam_extrinsic[:, -1] = cam_extrinsic[:, -1] / 10.0
+        ## object ##
+        obj_mat = torch.FloatTensor(np.asarray(anno['Mesh'][0]['object_mat'])).to(self.device)
+        obj_points = self.obj_verts_template_h @ obj_mat.T
+        obj_verts_world = obj_points[:, :3] / obj_points[:, 3:]
+        obj_verts_world = obj_verts_world.view(1, -1, 3)
 
-        cam_intrinsic = torch.FloatTensor(cam_intrinsic).to(self.device)
-        cam_extrinsic = torch.FloatTensor(cam_extrinsic).to(self.device)
+        sample['mano_verts'] = mano_verts
+        sample['mano_joints'] = mano_joints
+        sample['obj_verts'] = obj_verts_world
+        sample['obj_mat'] = obj_mat
 
-        return [cam_intrinsic, cam_extrinsic, dist_coeff]
+        ## images ##
+        sample['rgb'] = np.asarray(cv2.imread(rgb_file))
+        sample['depth'] = np.asarray(cv2.imread(depth_file, cv2.IMREAD_UNCHANGED)).astype(float)
 
-    def get_img(self, idx, flag_bb=True):
-        rgb_raw_path = os.path.join(self.rgb_raw_path, self.cam, self.cam + '_%01d.jpg' % idx)
-        depth_raw_path = os.path.join(self.depth_raw_path, self.cam, self.cam + '_%01d.png' % idx)
+        return sample
 
-        rgb_raw = np.asarray(cv2.imread(rgb_raw_path))
-        depth_raw = np.asarray(cv2.imread(depth_raw_path, cv2.IMREAD_UNCHANGED)).astype(float)
 
-        if not flag_bb:
-            return rgb_raw, depth_raw
-        else:
-            rgb_path = os.path.join(self.rgb_path, self.cam, self.cam + '_%04d.jpg' % idx)
-            depth_path = os.path.join(self.depth_path, self.cam, self.cam + '_%04d.png' % idx)
-            seg_path = os.path.join(self.seg_deep_path, self.cam, 'raw_seg_results', self.cam + '_%04d.png' % idx)
-
-            assert os.path.exists(rgb_path)
-            assert os.path.exists(depth_path)
-
-            rgb = np.asarray(cv2.imread(rgb_path))
-            depth = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
-
-            # depth_vis = depth / np.max(depth)
-            # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
-            # cv2.imshow("depth", np.asarray(depth_vis * 255, dtype=np.uint8))
-            # cv2.waitKey(1)
-
-            # there are skipped frame for segmentation
-            if os.path.exists(seg_path):
-                seg = np.asarray(cv2.imread(seg_path, cv2.IMREAD_UNCHANGED)).astype(float)
-            else:
-                seg = np.zeros((CFG_CROP_IMG_HEIGHT, CFG_CROP_IMG_WIDTH))
-
-            seg_hand = np.where(seg == 1, 1, 0)
-            seg_obj = np.where(seg == 2, 1, 0)
-
-            depth_obj = depth.copy()
-            depth_obj[seg_obj == 0] = 0
-            depth[seg == 0] = 0
-
-            # change depth image to m scale and background value as positive value
-            depth /= 1000.
-            depth_obj /= 1000.
-
-            depth_obj = np.where(seg != 2, 10, depth)
-            depth_hand = np.where(seg != 1, 10, depth)
-
-            # depth_vis_0 = depth_hand / np.max(depth_hand)
-            # depth_vis = depth_obj / np.max(depth_obj)
-            # cv2.imshow("rgb", np.asarray(rgb, dtype=np.uint8))
-            # cv2.imshow("depth_obj", np.asarray(depth_vis * 255, dtype=np.uint8))
-            # cv2.imshow("depth_hand", np.asarray(depth_vis_0 * 255, dtype=np.uint8))
-            # cv2.imshow("seg", np.asarray(seg *122, dtype=np.uint8))
-            # cv2.waitKey(0)
-
-            # seg_hand[seg_hand==0] = 10
-            # seg_obj[seg_obj == 0] = 10
-            return rgb, depth_hand, depth_obj, seg_hand, seg_obj, rgb_raw, depth_raw
-
-    def get_meta(self, idx):
-        meta_path = os.path.join(self.meta_base_path, self.cam, self.cam + '_%04d.pkl' % idx)
-
-        if not os.path.exists(meta_path):
-            meta = {'bb': None, 'img2bb': None,
-                    'bb2img': None, 'kpts': None, 'kpts_crop': None, '2D_tip_gt': None, 'visibility': None}
-        else:
-            with open(meta_path, 'rb') as f:
-                meta = pickle.load(f)
-
-        return meta
-
-    def __getitem__(self, index: int):
+    def __getitem__(self, param):
+        camID, index = param
         try:
-            sample = self.get_sample(index)
+            sample = self.data_dict[camID][index]
         except ExecError:
-            raise "Error at {}".format(index)
+            raise "Error at {}".format(camID, index)
         return sample
 
     def __len__(self):
-        return self.db_len
+        return self.total_len
 
 
 class DataLoader:
