@@ -13,6 +13,7 @@ import torch.nn as nn
 from glob import glob
 from config import *
 from tqdm import tqdm
+import open3d as o3d
 
 from utils.dataUtils import *
 import modules.common.transforms as tf
@@ -89,6 +90,10 @@ class DataLoader:
 
         self.rgb_raw_path = os.path.join(self.base_path_result, 'rgb')
         self.depth_raw_path = os.path.join(self.base_path_result, 'depth')
+        self.depth_raw_path = os.path.join(self.base_path_result, 'depth')
+
+        self.kps_3d_path = os.path.join(self.base_path_result, 'kps_3d')
+        self.mano_kps_3d_path = os.path.join(self.base_path_result, 'visualization')
 
         self.rgb_path = os.path.join(self.base_path, 'rgb_crop')
         self.depth_path = os.path.join(self.base_path, 'depth_crop')
@@ -153,6 +158,16 @@ class DataLoader:
                 sample_torch['img2bb'] = sample['img2bb']
                 sample_torch['kpts2d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts2d']), 0).to(self.device)
                 sample_torch['kpts3d'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d']), 0).to(self.device)
+                if sample['kpts3d_halo'] is not None:
+                    sample_torch['kpts3d_halo'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d_halo']), 0).to(self.device)
+                else:
+                    sample_torch['kpts3d_halo'] = None 
+                
+                if sample['kpts3d_mano'] is not None:
+                    sample_torch['kpts3d_mano'] = torch.unsqueeze(torch.FloatTensor(sample['kpts3d_mano']), 0).to(self.device)
+                else:
+                    sample_torch['kpts3d_mano'] = None 
+
                 sample_torch['rgb'] = torch.FloatTensor(sample['rgb']).to(self.device)
                 sample_torch['depth'] = torch.unsqueeze(torch.FloatTensor(sample['depth']), 0).to(self.device)
                 sample_torch['depth_obj'] = torch.unsqueeze(torch.FloatTensor(sample['depth_obj']), 0).to(self.device)
@@ -225,6 +240,19 @@ class DataLoader:
 
             sample['rgb'], sample['depth'], sample['depth_obj'], sample['seg'], sample['seg_obj'], \
                 rgb_raw, depth_raw = self.get_img(index)
+
+            kps_3d_path = os.path.join(self.kps_3d_path, '%04d.ply'%index)
+            if os.path.exists(kps_3d_path):
+                sample['kpts3d_halo'] = np.asarray(o3d.io.read_point_cloud(kps_3d_path).points) 
+            else:
+                sample['kpts3d_halo'] = None
+
+            kps_3d_path = os.path.join(self.mano_kps_3d_path, 'mas', 'kpts_hand_mas_%d.ply'%index)
+
+            if os.path.exists(kps_3d_path):
+                sample['kpts3d_mano'] = np.asarray(o3d.io.read_point_cloud(kps_3d_path).points) 
+            else:
+                sample['kpts3d_mano'] = None
 
             return sample
 

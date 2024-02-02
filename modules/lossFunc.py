@@ -733,6 +733,8 @@ class MultiViewLossFunc(nn.Module):
     def visualize(self, pred, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False, flag_headless=False):
         flag_bb_exist = False
         for camIdx, camID in enumerate(CFG_CAMID_SET):
+            print('camIdx')
+            print(camIdx)
             if 'bb' not in self.dataloaders[camIdx][frame].keys():
                 self.set_gt_nobb(camIdx, camID, frame)
                 flag_bb_exist = False
@@ -862,25 +864,32 @@ class MultiViewLossFunc(nn.Module):
                 # save meshes
                 if CFG_SAVE_MESH:
                     hand_verts = mano3DToCam3D(pred['verts'], self.Ms[camIdx])
-                    hand = trimesh.Trimesh(hand_verts.detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
+                    hand = trimesh.Trimesh(hand_verts.squeeze().detach().cpu().numpy(), pred['faces'][0].detach().cpu().numpy())
                     hand.export(os.path.join(save_path_cam, f'mesh_hand_{camID}_{frame}.obj'))
+
+                    joints = pred['joints'].squeeze().detach().cpu().numpy()
+
+                    pcd = o3d.geometry.PointCloud()
+                    pcd.points = o3d.utility.Vector3dVector(joints)
+                    o3d.io.write_point_cloud(os.path.join(save_path_cam, f'kpts_hand_{camID}_{frame}.ply'), pcd)
 
                     if flag_obj:
                         obj_verts = mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx])
                         obj = trimesh.Trimesh(obj_verts.detach().cpu().numpy(), pred_obj['faces'][0].detach().cpu().numpy())
                         obj.export(os.path.join(save_path_cam, f'mesh_obj_{camID}_{frame}.obj'))
 
-                # create contact map
-                hand_pcd = Pointclouds(points=verts_cam)
-                obj_mesh = Meshes(verts=verts_cam_obj.detach(),
-                                  faces=pred_obj['faces'])  # optimize only hand meshes
-                inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
-                # debug = inter_dist.clone().cpu().detach().numpy()
-                contact_mask = inter_dist < CFG_CONTACT_DIST_VIS
-                contact_map = torch.ones(778).cuda() * -1.
-                contact_map[contact_mask] = inter_dist[contact_mask]
+                if flag_obj:
+                    # create contact map
+                    hand_pcd = Pointclouds(points=verts_cam)
+                    obj_mesh = Meshes(verts=verts_cam_obj.detach(),
+                                      faces=pred_obj['faces'])  # optimize only hand meshes
+                    inter_dist = point_mesh_face_distance(obj_mesh, hand_pcd)
+                    # debug = inter_dist.clone().cpu().detach().numpy()
+                    contact_mask = inter_dist < CFG_CONTACT_DIST_VIS
+                    contact_map = torch.ones(778).cuda() * -1.
+                    contact_map[contact_mask] = inter_dist[contact_mask]
 
-                pred['contact'] = contact_map.clone().detach()
+                    pred['contact'] = contact_map.clone().detach()
 
                 # vis contact map
                 if CFG_VIS_CONTACT:

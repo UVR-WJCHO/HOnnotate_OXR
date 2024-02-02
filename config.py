@@ -34,7 +34,7 @@ CFG_tipGT_interval = 10
 
 # default : False. only for sample
 CFG_VIS_CONTACT = False
-CFG_SAVE_MESH = False
+CFG_SAVE_MESH = True
 
 
 CFG_DEPTH_RANGE = {'mas':[500, 1000], 'sub1':[200, 750], 'sub2':[0, 1100], 'sub3':[200, 900]}

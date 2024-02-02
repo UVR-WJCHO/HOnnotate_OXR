@@ -74,7 +74,7 @@ def LoadCameraParams(jsonFile):
     with open(jsonFile, "r") as camParams:
         camParamsDict = json.load(camParams)
 
-    intrinsic = camParamsDict['intrinsic']
+    intrinsic = LoadCameraMatrix_undistort(jsonFile.replace('cameraParams.json', 'cameraInfo_undistort.txt')) #camParamsDict['intrinsic']
     distCoeffs = camParamsDict['dist']
     extrinsic = camParamsDict['extrinsic']
     err = camParamsDict['err']

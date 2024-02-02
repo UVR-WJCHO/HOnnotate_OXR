@@ -42,6 +42,7 @@ from utils.lossUtils import *
 import csv
 import datetime as dt
 from config import *
+import open3d as o3d
 
 # multiprocessing
 from tqdm_multiprocess import TqdmMultiProcessPool
@@ -61,7 +62,8 @@ flags.DEFINE_string('db', '230911', 'target db Name')   ## name ,default, help
 flags.DEFINE_string('cam_db', '230911_cam', 'target cam db Name')   ## name ,default, help
 flags.DEFINE_float('mp_value', 0.55, 'target cam db Name')
 
-flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
+#flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
+flags.DEFINE_string('obj_db', 'obj_scanned_models', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 flags.DEFINE_string('seq', None, 'target cam db Name')   ## name ,default, help
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
@@ -182,6 +184,7 @@ class loadDataset():
         self.segfgDir = os.path.join(self.dbDir, 'segmentation_fg')
         self.deepSegDir = os.path.join(self.dbDir, 'segmentation_deep')
 
+        self.kpsDir = os.path.join(self.dbDir_result, 'kps_3d')
 
         for camID in camIDset:
             os.makedirs(os.path.join(self.dbDir, 'rgb_crop', camID), exist_ok=True)
@@ -192,6 +195,7 @@ class loadDataset():
             os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'raw_seg_results'), exist_ok=True)
             os.makedirs(os.path.join(self.dbDir, 'segmentation_deep', camID, 'visualization'), exist_ok=True)
             # os.makedirs(os.path.join(self.dbDir, 'masked_rgb', camID, 'bg'), exist_ok=True)
+        os.makedirs(os.path.join(self.dbDir_result, 'kps_3d'), exist_ok=True)
 
         os.makedirs(os.path.join(self.dbDir, 'visualizeMP'), exist_ok=True)
         self.debug_vis = os.path.join(self.dbDir, 'visualizeMP')
@@ -212,7 +216,6 @@ class loadDataset():
         self.init_bbox["sub1"] = [360, 0, 1120, 960]
         self.init_bbox["sub2"] = [440, 0, 1040, 820]
         self.init_bbox["sub3"] = [580, 80, 1160, 920]
-
 
         self.prev_bbox = None
         self.wrist_px = None
@@ -898,7 +901,7 @@ class loadDataset():
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
 
 
-    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility):
+    def postProcess(self, idx, procImgSet, bb, img2bb, bb2img, kps, processed_kpts, visibility, kps_3d=None):
 
         rgbName = str(self.camID) + '_' + format(idx, '04') + '.jpg'
         depthName = str(self.camID) + '_' + format(idx, '04') + '.png'
@@ -920,6 +923,12 @@ class loadDataset():
         jsonPath = os.path.join(self.metaDir, metaName)
         with open(jsonPath, 'wb') as f:
             pickle.dump(meta_info, f, pickle.HIGHEST_PROTOCOL)
+
+        if kps_3d is not None:
+            pcd = o3d.geometry.PointCloud()
+            pcd.points = o3d.utility.Vector3dVector(kps_3d.detach().cpu().numpy())
+            print(os.path.join(self.kpsDir, '%04d.ply'%idx))
+            o3d.io.write_point_cloud(os.path.join(self.kpsDir, '%04d.ply'%idx), pcd)
 
     def computeVisibility(self, kpts):
         vis = np.ones(21)
@@ -1004,7 +1013,8 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
             valid_Ms_dict = {}
             valid_candidates = []
             if failure < 2:
-                for v_idx, v_kps in enumerate(v_kps_list):
+
+                for v_idx, v_kps in enumerate(v_kps_list): 
                     if v_kps is not None:
                         valid_kps_dict[v_idx] = v_kps #ex {0:kps0, 2:kps2, 3:kps3}
                         valid_Ks_dict[v_idx] = v_Ks[v_idx]
@@ -1062,14 +1072,48 @@ def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
                 #맞는 refined_joint의 평균값을 init_joint로 사용
                 if len(inlier) > 0:
                     init_joint = refined_joint_dict[inlier[0]]
+
+                # prepare data
+                v_list = list(inlier)
+                Ks_list = []
+                ext_list = []
+                kps_list = []
+                for v_idx in v_list:
+                    kps_list.append(valid_kps_dict[v_idx])  # ex [kps2, kps3]
+                    Ks_list.append(v_Ks[v_idx])
+                    ext_list.append(v_Ms[v_idx])
+
+                '''
+                # check
+                for i in range(len(ext_list)):
+                    ext_list[i][0, 0] *= 0.1
+                    ext_list[i][1, 1] *= 0.1
+                    ext_list[i][2, 2] *= 0.1
+
+                print('kps_list')
+                for i in range(len(kps_list)):
+                    print(kps_list[i])
+
+                print('Ks_list')
+                for i in range(len(Ks_list)):
+                    print(Ks_list[i])
+
+                print('ext_list')
+                for i in range(len(ext_list)):
+                    print(ext_list[i])
+                '''
+
+                kps_3d = optimize_kps(model, optm, Ks_list, ext_list, kps_list, n=100) #ex [kps2, kps3]으로 최적화된 joint(21, 3)
+
                 for f_idx, (db, images, output) in enumerate(zip(dbs, images_list, output_list)):
                     if output is not None:
                         if f_idx in inlier:
                             bb, img2bb, bb2img, procImgSet, kps = output
                             procKps = db.translateKpts(np.copy(kps), img2bb)
                             visibility = db.computeVisibility(procKps)
-                            db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility)
+                            db.postProcess(save_idx, procImgSet, bb, img2bb, bb2img, kps, procKps, visibility, kps_3d=kps_3d)
                         else:
+                            # if view is outlier, set kps as None
                             bb, img2bb, bb2img, procImgSet, kps = output
                             procKps = db.translateKpts(np.copy(kps), img2bb)
                             visibility = db.computeVisibility(procKps)
@@ -1220,7 +1264,6 @@ def validate_mp(valid_kps_dict, valid_Ks_dict, valid_Ms_dict, refined_joint_dict
         # print("diff value of notoptimized of cam %d: "% t_idx, diff_notoptm)
         # print("avg diff value of optimized of cam %d: "% t_idx, diff_optm)
 
-
     # if all 'not considered view''s error is higher than 800, set all to outlier
     if all(i >= 800 for i in diff_notoptm_list):
         for t_idx in refined_joint_dict.keys():
@@ -1305,8 +1348,9 @@ def main(argv):
     # tasks = tasks[:12]
 
     print("(fill in google sheets) unvalid trials with wrong object pose data : ", obj_unvalid_trials)
-
-
+    
+    # WARNING!
+    process_count = 1
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:
         # global_tqdm.set_description(f"{seqName} - total : ")

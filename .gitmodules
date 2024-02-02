@@ -1,0 +1,6 @@
+[submodule "dependencies/halo"]
+	path = dependencies/halo
+	url = https://github.com/korrawe/halo.git
+[submodule "dependencies/--force"]
+	path = dependencies/--force
+	url = https://github.com/korrawe/halo.git

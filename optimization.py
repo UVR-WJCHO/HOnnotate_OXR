@@ -30,7 +30,7 @@ torch.cuda.set_per_process_memory_fraction(0.95, device=0)
 
 flag_debug_vis_glob = False
 flag_debug_vis_part = False
-flag_debug_vis_all = False
+flag_debug_vis_all = True
 
 ## FLAGS
 FLAGS = flags.FLAGS
@@ -40,7 +40,8 @@ flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
 flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
-flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
+#flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
+flags.DEFINE_string('obj_db', 'obj_scanned_models', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
 ## NO SPACE between sequences. --seq_list 230905_S02_obj_03_grasp_3,230905_S02_obj_03_grasp_3,..
