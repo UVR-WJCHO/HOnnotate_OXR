@@ -10,7 +10,7 @@ import cv2
 from modules.dataloader import DataLoader, ObjectLoader
 from modules.renderer import Renderer
 from modules.meshModels import HandModel, ObjModel
-from modules.lossFunc import MultiViewLossFunc
+from modules.lossFunc import MultiViewLossFunc, MultiViewLossFunc_OBJ
 from utils import *
 from utils.modelUtils import initialize_optimizer, update_optimizer, initialize_optimizer_obj
 
@@ -30,7 +30,7 @@ torch.cuda.set_per_process_memory_fraction(0.95, device=0)
 
 flag_debug_vis_glob = False
 flag_debug_vis_part = False
-flag_debug_vis_all = False
+flag_debug_vis_all = True
 
 ## FLAGS
 FLAGS = flags.FLAGS
@@ -39,7 +39,7 @@ flags.DEFINE_string('cam_db', '231020_cam', 'target db name')   ## name ,default
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
-flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 20, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')
@@ -211,7 +211,9 @@ def __update_parts__(model, loss_func, detected_cams, frame, lr_init, target_seq
                      key in loss_dict_parts]
             logging.info(''.join(logs))
 
-def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, target_seq, trialName, iter=100):
+
+def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, target_seq, trialName,
+                   iter=100):
     kps_loss = {}
     use_contact_loss = False
     use_penetration_loss = False
@@ -230,7 +232,8 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
     model.change_grads_all(root=True, rot=True, pose=True, shape=True, scale=True)
     # optimizer = initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj)
     optimizer = initialize_optimizer(model, None, lr_init, False, None)
-    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=0.1, ratio_pose=0.2)
+    optimizer = update_optimizer(optimizer, ratio_root=0.1, ratio_rot=0.1, ratio_shape=1.0, ratio_scale=0.1,
+                                 ratio_pose=0.2)
 
     if CFG_WITH_OBJ:
         optimizer_obj = initialize_optimizer_obj(model_obj, lr_init_obj)
@@ -248,21 +251,23 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         if CFG_WITH_OBJ:
             optimizer_obj.zero_grad()
         loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'penetration': 0.0,
-                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0, 'pose_obj':0.0}
+                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0,
+                    'pose_obj': 0.0}
 
         hand_param = model()
         if CFG_WITH_OBJ:
             obj_param = model_obj()
         else:
             obj_param = None
-            
+
         losses, losses_single, contact = loss_func(pred=hand_param, pred_obj=obj_param, camIdxSet=detected_cams,
                                                    frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss,
                                                    penetration=use_penetration_loss, flag_headless=FLAGS.headless)
 
         model.contact = contact
         if flag_debug_vis_all:
-            loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams, flag_obj=CFG_WITH_OBJ,
+            loss_func.visualize(pred=hand_param, pred_obj=obj_param, frame=frame, camIdxSet=detected_cams,
+                                flag_obj=CFG_WITH_OBJ,
                                 flag_crop=True, flag_headless=FLAGS.headless)
 
         ## apply cam weight
@@ -284,14 +289,13 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
             lr_scheduler_obj.step()
         # lr_scheduler.step()
 
-
         # iter_t = time.time() - t_iter
         # print("iter_t : ", iter_t)
-        logs = ["[{} - {} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(target_seq, trialName, frame, iter, total_loss.item())]
+        logs = ["[{} - {} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(target_seq, trialName, frame, iter,
+                                                                           total_loss.item())]
         logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
                  key in CFG_LOSS_DICT]
         logging.info(''.join(logs))
-
 
         cur_kpt_loss = loss_all['kpts2d'].item() / len(detected_cams)
         kps_loss[iter] = cur_kpt_loss
@@ -313,10 +317,9 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
                 if 'penetration' in CFG_LOSS_DICT:
                     use_penetration_loss = True
 
-
         ## sparse criterion on converge for v1 db release, need to be tight
         if CFG_EARLYSTOPPING:
-            if abs(prev_kps_loss - cur_kpt_loss) < 2.0:# or abs(prev_depthseg_loss - cur_depthseg_loss) < 10.0:
+            if abs(prev_kps_loss - cur_kpt_loss) < 2.0:  # or abs(prev_depthseg_loss - cur_depthseg_loss) < 10.0:
                 early_stopping_patience_v2 += 1
 
             if cur_kpt_loss < best_loss:
@@ -336,6 +339,125 @@ def __update_all__(model, model_obj, loss_func, detected_cams, frame, lr_init, l
         if CFG_WITH_OBJ:
             prev_obj_loss = cur_obj_loss
             # prev_depthseg_loss = cur_depthseg_loss
+
+
+def __update_obj__(model_obj, loss_func, detected_cams, frame, lr_init, lr_init_obj, target_seq, trialName, target_iter=100):
+    kps_loss = {}
+    use_contact_loss = False
+    use_penetration_loss = False
+
+    # set initial loss, early stopping threshold
+    best_loss = torch.inf
+    prev_kps_loss = 0
+    prev_obj_loss = torch.inf
+    prev_depthseg_loss = 0
+    early_stopping_patience = 0
+    early_stopping_patience_v2 = 0
+    early_stopping_patience_obj = 0
+
+    loss_weight = CFG_LOSS_WEIGHT
+
+
+    print("start trans update")
+    optimizer_obj = initialize_optimizer_obj(model_obj, lr_rot=0, lr_trans=lr_init_obj)
+    lr_scheduler_obj = torch.optim.lr_scheduler.StepLR(optimizer_obj, step_size=5, gamma=0.95)
+    model_obj.change_grads(rot=False, trans=True)
+
+    for iter in range(30):
+        t_iter = time.time()
+
+        optimizer_obj.zero_grad()
+        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'penetration': 0.0,
+                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0,
+                    'pose_obj': 0.0}
+
+        obj_param = model_obj()
+
+        losses = loss_func(pred_obj=obj_param, camIdxSet=detected_cams,
+                                                   frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss,
+                                                   penetration=use_penetration_loss, flag_headless=FLAGS.headless)
+
+        if flag_debug_vis_all:
+            loss_func.visualize(pred_obj=obj_param, frame=frame, camIdxSet=detected_cams,
+                                flag_obj=CFG_WITH_OBJ,
+                                flag_crop=True, flag_headless=FLAGS.headless)
+
+        ## apply cam weight
+        for camIdx in detected_cams:
+            loss_cam = losses[camIdx]
+            for key in loss_cam.keys():
+                loss_all[key] += loss_cam[key] * float(CFG_CAM_WEIGHT[camIdx])
+
+        ## apply loss weight
+        total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
+        total_loss.backward(retain_graph=True)
+
+        optimizer_obj.step()
+        lr_scheduler_obj.step()
+
+        # iter_t = time.time() - t_iter
+        # print("iter_t : ", iter_t)
+        logs = ["[{} - {} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(target_seq, trialName, frame, iter,
+                                                                           total_loss.item())]
+        logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
+                 key in CFG_LOSS_DICT]
+        logging.info(''.join(logs))
+
+        cur_obj_loss = loss_all['depth_obj'].item() / len(detected_cams)
+
+        ## sparse criterion on converge for v1 db release, need to be tight
+        prev_obj_loss = cur_obj_loss
+
+
+    print("start all update")
+    optimizer_obj = initialize_optimizer_obj(model_obj, lr_rot=lr_init_obj * 5e-3, lr_trans=lr_init_obj*0.8)
+    lr_scheduler_obj = torch.optim.lr_scheduler.StepLR(optimizer_obj, step_size=5, gamma=0.95)
+    model_obj.change_grads(rot=True, trans=True)
+    for iter in range(target_iter):
+        t_iter = time.time()
+
+        optimizer_obj.zero_grad()
+        loss_all = {'kpts2d': 0.0, 'depth': 0.0, 'seg': 0.0, 'reg': 0.0, 'contact': 0.0, 'penetration': 0.0,
+                    'depth_rel': 0.0, 'temporal': 0.0, 'kpts_tip': 0.0, 'depth_obj': 0.0, 'seg_obj': 0.0,
+                    'pose_obj': 0.0}
+
+        obj_param = model_obj()
+
+        losses = loss_func(pred_obj=obj_param, camIdxSet=detected_cams,
+                                                   frame=frame, loss_dict=CFG_LOSS_DICT, contact=use_contact_loss,
+                                                   penetration=use_penetration_loss, flag_headless=FLAGS.headless)
+
+        if flag_debug_vis_all:
+            loss_func.visualize(pred_obj=obj_param, frame=frame, camIdxSet=detected_cams,
+                                flag_obj=CFG_WITH_OBJ,
+                                flag_crop=True, flag_headless=FLAGS.headless)
+
+        ## apply cam weight
+        for camIdx in detected_cams:
+            loss_cam = losses[camIdx]
+            for key in loss_cam.keys():
+                loss_all[key] += loss_cam[key] * float(CFG_CAM_WEIGHT[camIdx])
+
+        ## apply loss weight
+        total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
+        total_loss.backward(retain_graph=True)
+
+        optimizer_obj.step()
+        lr_scheduler_obj.step()
+
+        # iter_t = time.time() - t_iter
+        # print("iter_t : ", iter_t)
+        logs = ["[{} - {} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(target_seq, trialName, frame, iter,
+                                                                           total_loss.item())]
+        logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
+                 key in CFG_LOSS_DICT]
+        logging.info(''.join(logs))
+
+        cur_obj_loss = loss_all['depth_obj'].item() / len(detected_cams)
+
+        ## sparse criterion on converge for v1 db release, need to be tight
+        prev_obj_loss = cur_obj_loss
+
 
 
 def main(argv):
@@ -394,30 +516,24 @@ def main(argv):
             #     raise ValueError("The number of data is not same between cameras")
 
             ## Initialize loss function
-            loss_func = MultiViewLossFunc(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT).to(CFG_DEVICE)
+            loss_func = MultiViewLossFunc_OBJ(device=CFG_DEVICE, dataloaders=dataloader_set, renderers=renderer_set, losses=CFG_LOSS_DICT).to(CFG_DEVICE)
             loss_func.set_main_cam(main_cam_idx=0)
 
-            ## Initialize hand model
-            model = HandModel(CFG_MANO_PATH, CFG_DEVICE, CFG_BATCH_SIZE, side=CFG_MANO_SIDE).to(CFG_DEVICE)
-            model_obj = None
-
             ## Initialize object dataloader & model
-            if CFG_WITH_OBJ:
-                obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter, FLAGS.obj_db)
-                if obj_dataloader.quit:
-                    print("unvalid obj pose, skip trial")
-                    obj_unvalid_trials.append(target_seq + '_' + trialName)
-                    continue
+            obj_dataloader = ObjectLoader(CFG_DATA_DIR, FLAGS.db, target_seq, trialName, mas_dataloader.cam_parameter, FLAGS.obj_db)
+            if obj_dataloader.quit:
+                print("unvalid obj pose, skip trial")
+                obj_unvalid_trials.append(target_seq + '_' + trialName)
+                continue
 
-                obj_template_mesh = obj_dataloader.obj_mesh_data
-                model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh).to(CFG_DEVICE)
-                loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
+            obj_template_mesh = obj_dataloader.obj_mesh_data
+            model_obj = ObjModel(CFG_DEVICE, CFG_BATCH_SIZE, obj_template_mesh).to(CFG_DEVICE)
+            loss_func.set_object_main_extrinsic(0)      #  Set object's main camera extrinsic as mas
 
             flag_start = True
             flag_skip = 0
 
             loss_func.reset_prev_pose()
-            loss_func.set_for_evaluation()
 
             eval_num = 0
             ## Start optimization per frame
@@ -462,21 +578,20 @@ def main(argv):
                     flag_start = True
 
                 ## set object init pose and marker pose as GT for projected vertex.
-                if CFG_WITH_OBJ:
-                    if frame > len(obj_dataloader):
-                        print('no obj pose')
-                        continue
-                    obj_pose = obj_dataloader[frame]
-                    if obj_pose is None or len(obj_pose.shape) != 2:
-                        print('no obj pose')
-                        continue
-                    obj_pose = obj_pose[:-1, :]
-                    # obj_pose[:3, -1] *= 0.1
-                    model_obj.update_pose(pose=obj_pose)
+                if frame > len(obj_dataloader):
+                    print('no obj pose')
+                    continue
+                obj_pose = obj_dataloader[frame]
+                if obj_pose is None or len(obj_pose.shape) != 2:
+                    print('no obj pose')
+                    continue
+                obj_pose = obj_pose[:-1, :]
+                # obj_pose[:3, -1] *= 0.1
+                model_obj.update_pose(pose=obj_pose)
 
-                    marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
-                    marker_valid_idx = obj_dataloader.marker_valid_idx[str(frame)]
-                    loss_func.set_object_marker_pose(marker_cam_pose, marker_valid_idx, obj_dataloader.obj_class, CFG_DATE, obj_dataloader.grasp_idx)
+                marker_cam_pose = obj_dataloader.marker_cam_pose[str(frame)]     # marker 3d pose with camera coordinate(master)
+                marker_valid_idx = obj_dataloader.marker_valid_idx[str(frame)]
+                loss_func.set_object_marker_pose(marker_cam_pose, marker_valid_idx, obj_dataloader.obj_class, CFG_DATE, obj_dataloader.grasp_idx)
 
                 ### initialize optimizer, scheduler
                 lr_init = CFG_LR_INIT * 0.2
@@ -486,65 +601,26 @@ def main(argv):
                     lr_init *= 5.0
                     flag_start = False
 
-                ### update global pose
-                """
-                    loss : 'kpts_palm' ~ multi-view 2D kpts loss for palm joints (0, 2, 3, 4)
-                    target : wrist pose/rot, hand scale
-                    except : hand shape, hand pose 
-                """
-                __update_global_wrist__(model, loss_func, detected_cams, frame,
-                                  lr_init, target_seq, trialName)
-                __update_global__(model, loss_func, detected_cams, frame,
-                                  lr_init, target_seq, trialName)
+                ### update obj
+                __update_obj__(model_obj, loss_func, detected_cams, frame,
+                               lr_init, lr_init_obj, target_seq, trialName, target_iter=50)
 
-                ### update incrementally
-                """
-                    loss : 'kpts2d', 'reg', 'depth_rel'
-                        ~ multi-view 2D kpts loss for each set of hand parts(wrist to tip)                       
-                    target : wrist pose/rot, hand scale, hand pose(each part) 
-                    except : hand shape
-                """
-                __update_parts__(model, loss_func, detected_cams, frame,
-                                 lr_init, target_seq, trialName, iterperpart=40)
-
-                ### update all
-                __update_all__(model, model_obj, loss_func, detected_cams, frame,
-                               lr_init, lr_init_obj, target_seq, trialName, iter=CFG_NUM_ITER)
-
-                # update prev pose if temporal loss activated
-                pred_hand = model()
-                if 'temporal' in CFG_LOSS_DICT:
-                    loss_func.prev_hand_pose = pred_hand['pose'].clone().detach()
-                    loss_func.prev_hand_shape = pred_hand['shape'].clone().detach()
 
                 ### final result of frame
-                if CFG_WITH_OBJ:
-                    pred_obj = model_obj()
-                    pred_obj_anno = [model_obj.get_object_mat().tolist(), obj_dataloader.obj_mesh_name]
-                else:
-                    pred_obj = None
-                    pred_obj_anno = [None, None]
+                pred_obj = model_obj()
+                pred_obj_anno = [model_obj.get_object_mat().tolist(), obj_dataloader.obj_mesh_name]
 
                 ### visualization results of frame
-                loss_func.visualize(pred=pred_hand, pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
+                loss_func.visualize(pred_obj=pred_obj, camIdxSet=detected_cams, frame=frame,
                                         save_path=save_path, flag_obj=CFG_WITH_OBJ, flag_crop=True, flag_headless=FLAGS.headless)
-                loss_func.evaluation(pred_hand, pred_obj, detected_cams, frame)
+                # loss_func.evaluation(pred_obj, detected_cams, frame)
 
                 ### save annotation per frame as json format
-                save_annotation(target_dir_result, trialName, frame,  target_seq, pred_hand, pred_obj_anno, CFG_MANO_SIDE)
+                # save_annotation(target_dir_result, trialName, frame,  target_seq, pred_obj_anno, CFG_MANO_SIDE)
 
                 print("end %s - frame %s, processed %s" % (trialName, frame, time.time() - t_start))
                 save_num += 1
                 eval_num += 1
-
-            loss_func.save_evaluation(log_path, eval_num)
-
-            if eval_num != 0:
-                # extract top 'num' indexes from depth f1 score and save as json
-                top_index = loss_func.filtering_top_quality_index(num=60).tolist()
-                p = os.path.join(target_dir_result, trialName)
-                with open(os.path.join(p, 'top_60_index.json'), 'w') as f:
-                    json.dump(top_index, f, ensure_ascii=False)
 
             del mas_dataloader.sample_dict
             del sub1_dataloader.sample_dict
@@ -561,7 +637,6 @@ def main(argv):
             del sub2_renderer
             del sub3_renderer
 
-            del model
             del model_obj
             del loss_func
 

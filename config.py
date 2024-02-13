@@ -5,10 +5,10 @@ from enum import IntEnum
 ## Manual Flags ##
 
 CFG_VALID_CAM = ['mas', 'sub1', 'sub2', 'sub3']
-CFG_CAM_WEIGHT = [1.0, 1.0, 1.0, 1.0]
+CFG_CAM_WEIGHT = [2.0, 1.0, 1.0, 1.0]
 
 CFG_LR_INIT = 0.05
-CFG_LR_INIT_OBJ = 0.02
+CFG_LR_INIT_OBJ = 1.0
 
 
 CFG_NUM_ITER = 40
@@ -18,14 +18,19 @@ CFG_EARLYSTOPPING = False
 
 # set True if 2D tip annotation data exists(from euclidsoft)
 CFG_exist_tip_db = False
-CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact', 'pose_obj']#, 'kpts_tip']
+CFG_LOSS_DICT = ['depth_obj', 'pose_obj'] # 'temporal','seg_obj',
+# CFG_LOSS_DICT = ['reg', 'kpts2d', 'temporal', 'seg','depth', 'depth_obj', 'seg_obj', 'penetration', 'contact', 'pose_obj']#, 'kpts_tip']
+
+
+
+
 
 if not CFG_exist_tip_db:
     assert 'kpts_tip' not in CFG_LOSS_DICT, 'need CFG_exist_tip_db=True'
 
 
 CFG_LOSS_WEIGHT = {'kpts2d': 1.0, 'depth': 1.0, 'seg': 1.0, 'reg': 1.0, 'contact': 1.0, 'penetration': 1.0,
-                   'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0, 'depth_obj': 1.0, 'seg_obj': 1.0, 'pose_obj':1.0}
+                   'depth_rel': 1.0, 'temporal': 1.0, 'kpts_tip':1.0, 'depth_obj': 1.0, 'seg_obj': 1.0, 'pose_obj':0.0}
 
 CFG_temporal_loss_weight = 0.5e4
 

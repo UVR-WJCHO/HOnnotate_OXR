@@ -5,7 +5,7 @@ sys.path.insert(0,os.path.join(os.getcwd(), '../HOnnotate_refine/optimization'))
 import numpy as np
 import torch
 import torch.nn as nn
-
+import cv2
 
 from torch.nn import functional as F
 from manopth.manolayer import ManoLayer
@@ -161,12 +161,20 @@ class Renderer(nn.Module):
 
 
     def compute_depth_loss(self, pred_depth):
-        depth_gap = (pred_depth - self.depth_ref) ** 2
-        depth_gap[pred_depth == 10.0] = 0
-        # depth_gap[self.depth_ref == 10.0] = 0          ###### check
-        # depth_gap[self.depth_ref == 0] = 0
+        # pred_depth_np = np.squeeze(pred_depth.cpu().detach().numpy())
+        # pred_depth_vis = (pred_depth_np * 100).astype(np.uint8)
+        # cv2.imshow("pred_depth_vis", pred_depth_vis)
+        # depth_ref_np = np.squeeze(self.depth_ref.cpu().detach().numpy())
+        # depth_ref_vis = (depth_ref_np * 100).astype(np.uint8)
+        # cv2.imshow("depth_ref_vis", depth_ref_vis)
+        # cv2.waitKey(0)
 
-        depth_loss = torch.sum(depth_gap)
+        depth_gap = torch.abs(pred_depth - self.depth_ref)
+
+        depth_loss = torch.sum(depth_gap) / (640*480)
+
+        depth_gap_np = np.squeeze(depth_gap.cpu().detach().numpy())
+
         return depth_loss, depth_gap
 
     def compute_seg_loss(self, pred_seg):

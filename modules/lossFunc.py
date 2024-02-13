@@ -288,7 +288,7 @@ class MultiViewLossFunc(nn.Module):
                     # loss_seg = torch.sum(seg_gap.view(self.bs, -1), -1)
                     self.cam_renderer[camIdx].register_seg(self.gt_seg)
                     loss_seg, seg_gap = self.cam_renderer[camIdx].compute_seg_loss(pred_seg)
-                    loss['seg'] = loss_seg * 1e1
+                    loss['seg'] = loss_seg * 1e2
 
                     # if camIdx == 3:
                     #     pred_seg = np.squeeze((pred_seg[0].cpu().detach().numpy()))
@@ -908,3 +908,329 @@ class MultiViewLossFunc(nn.Module):
                     vis.add_geometry(pcd)
                     vis.capture_screen_image(os.path.join(save_path_contactmap, f"contact_{frame}_{camID}.jpg"), do_render=True)
                     vis.destroy_window()
+
+
+class MultiViewLossFunc_OBJ(nn.Module):
+    def __init__(self, device='cuda', bs=1, dataloaders=None, renderers=None, losses=None):
+        super(MultiViewLossFunc_OBJ, self).__init__()
+        self.device = device
+        self.bs = bs
+        self.mse_loss = nn.MSELoss()
+        self.l1_loss = nn.L1Loss()
+        self.smooth_l1_loss = nn.SmoothL1Loss()
+        self.pose_reg_tensor, self.pose_mean_tensor = self.get_pose_constraint_tensor()
+        self.dataloaders = dataloaders
+        self.cam_renderer = renderers
+        self.loss_dict = losses
+        self.obj_scale = torch.FloatTensor([1.0, 1.0, 1.0]).to(self.device)
+        self.h = torch.tensor([[0, 0, 0, 1]]).to(device)
+        self.Ks = []
+        self.Ms = []
+        for camIdx in range(len(CFG_CAMID_SET)):
+            cam_params = self.dataloaders[camIdx].cam_parameter
+            Ks, Ms, _ = cam_params
+            self.Ks.append(Ks)
+            self.Ms.append(Ms)
+
+        self.default_zero = torch.tensor([0.0], requires_grad=True).to(self.device)
+
+        # self.vis = self.set_visibility_weight(CFG_CAM_PER_FINGER_VIS)
+
+        self.const = Constraints()
+        self.rot_min = torch.tensor(np.asarray(params.rot_min_list)).to(self.device)
+        self.rot_max = torch.tensor(np.asarray(params.rot_max_list)).to(self.device)
+
+        self.temp_weight = CFG_temporal_loss_weight
+
+        self.gt_obj_marker = None
+        self.vertIDpermarker = None
+
+        self.obj_mesh_dense = None
+
+        self.init_bbox = {}
+        self.init_bbox["mas"] = [400, 60, 1120, 960]
+        self.init_bbox["sub1"] = [360, 0, 1120, 960]
+        self.init_bbox["sub2"] = [640, 180, 640, 720]
+        self.init_bbox["sub3"] = [680, 180, 960, 720]
+
+    def reset_prev_pose(self):
+        self.prev_hand_pose = None
+        self.prev_hand_shape = None
+
+    def set_object_main_extrinsic(self, obj_main_cam_idx):
+        self.main_Ms_obj = self.Ms[obj_main_cam_idx]
+
+    def set_object_marker_pose(self, obj_marker_cam_pose, marker_valid_idx, obj_class, CFG_DATE, grasp_idx):
+        self.vertIDpermarker = CFG_vertspermarker[str(CFG_DATE)][str(obj_class)]
+
+        if int(obj_class.split('_')[0]) == 29:
+            self.vertIDpermarker = self.vertIDpermarker[0]
+            # if grasp_idx == 12:
+            #     self.vertIDpermarker = self.vertIDpermarker[0]
+            # else:
+            #     self.vertIDpermarker = self.vertIDpermarker[1]
+
+        self.marker_valid_idx = marker_valid_idx
+        if obj_marker_cam_pose != None:
+            self.gt_obj_marker = torch.unsqueeze(obj_marker_cam_pose, 0)
+        else:
+            self.gt_obj_marker = None
+
+    def get_pose_constraint_tensor(self):
+        pose_mean_tensor = torch.tensor(params.pose_mean_list).cuda()
+        pose_reg_tensor = torch.tensor(params.pose_reg_list).cuda()
+        return pose_reg_tensor, pose_mean_tensor
+
+    def compute_reg_loss(self, mano_tensor, pose_mean_tensor, pose_reg_tensor):
+        reg_loss = ((mano_tensor - pose_mean_tensor) ** 2) * pose_reg_tensor
+        return torch.sum(reg_loss, -1)
+
+    def set_gt_nobb(self, camIdx, camID, frame):
+        gt_sample = self.dataloaders[camIdx][frame]
+        self.bb = self.init_bbox[str(camID)]
+        self.gt_rgb = gt_sample['rgb_raw'][self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2], :]
+        self.gt_depth = gt_sample['depth_raw'][0, self.bb[1]:self.bb[1] + self.bb[3],
+                        self.bb[0]:self.bb[0] + self.bb[2]]
+
+        bb_c_x = float(self.bb[0] + 0.5 * self.bb[2])
+        bb_c_y = float(self.bb[1] + 0.5 * self.bb[3])
+        bb_width = float(self.bb[2])
+        bb_height = float(self.bb[3])
+        trans = gen_trans_from_patch_cv(bb_c_x, bb_c_y, bb_width, bb_height, 640, 480, 1.0, 0.0, (0.0, 0.0))
+        self.img2bb = trans
+
+    def set_gt(self, camIdx, frame):
+        gt_sample = self.dataloaders[camIdx][frame]
+
+        self.bb = gt_sample['bb']
+        self.img2bb = gt_sample['img2bb']
+        self.gt_kpts2d = gt_sample['kpts2d']
+        self.gt_kpts3d = gt_sample['kpts3d']
+
+        self.gt_rgb = gt_sample['rgb']
+        self.gt_depth = gt_sample['depth']
+        self.gt_depth_obj = gt_sample['depth_obj']
+
+        # if no gt seg, mask is 1 in every pixel
+        self.gt_seg = gt_sample['seg']
+        self.gt_seg_obj = gt_sample['seg_obj']
+
+        self.gt_visibility = gt_sample['visibility']
+
+        if gt_sample['tip2d'] is not None:
+            self.gt_tip2d = gt_sample['tip2d']
+            self.valid_tip_idx = gt_sample['validtip']
+        else:
+            self.gt_tip2d = None
+
+    def set_gt_raw_depth(self, camIdx, frame):
+        _, self.gt_depth_raw, _, _ = self.dataloaders[camIdx].load_raw_image(frame)
+
+    def set_main_cam(self, main_cam_idx=0):
+        # main_cam_params = self.dataloaders[main_cam_idx].cam_parameter
+
+        self.main_Ks = self.Ks[main_cam_idx]
+        self.main_Ms = self.Ms[main_cam_idx]
+
+    def forward(self, pred_obj, camIdxSet, frame, loss_dict, contact=False, penetration=False, parts=-1,
+                flag_headless=False):
+
+        self.loss_dict = loss_dict
+
+        render = False
+        if 'depth_obj' in loss_dict or 'seg_obj' in loss_dict:
+            render = True
+
+        verts_set = {}
+        verts_obj_set = {}
+        joints_set = {}
+        pred_render_set = {}
+        pred_obj_render_set = {}
+
+        ## compute per cam predictions
+        for camIdx in camIdxSet:
+            if render:
+                verts_obj_cam = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
+                pred_obj_rendered = self.cam_renderer[camIdx].render(verts_obj_cam, pred_obj['faces'])
+
+                verts_obj_set[camIdx] = verts_obj_cam
+                pred_obj_render_set[camIdx] = pred_obj_rendered
+
+        ## compute losses per cam
+        losses_cam = {}
+        for camIdx in camIdxSet:
+            loss = {}
+
+            self.set_gt(camIdx, frame)
+
+            if 'pose_obj' in self.loss_dict:
+                pred_obj_verts_marker = pred_obj['verts'][:, self.vertIDpermarker, :] * 10.0
+                gt_obj_verts_marker = self.gt_obj_marker
+
+                pred_obj_verts_marker = pred_obj_verts_marker[:, self.marker_valid_idx, :]
+
+                if gt_obj_verts_marker is not None:
+                    loss_pose_obj = (pred_obj_verts_marker - gt_obj_verts_marker) ** 2
+                    loss_pose_obj = torch.sum(loss_pose_obj.reshape(self.bs, -1), -1)
+                    loss['pose_obj'] = loss_pose_obj * 1e4
+                else:
+                    loss['pose_obj'] = self.default_zero
+
+            if render:
+                pred_obj_rendered = pred_obj_render_set[camIdx]
+
+                if 'seg_obj' in self.loss_dict:
+                    pred_seg_obj = pred_obj_rendered['seg'][:, self.bb[1]:self.bb[1] + self.bb[3],
+                                   self.bb[0]:self.bb[0] + self.bb[2]]
+                    pred_seg_obj = torch.div(pred_seg_obj, torch.max(pred_seg_obj))
+                    pred_seg_obj = torch.ceil(pred_seg_obj)
+                    # pred_seg_obj[pred_seg_obj == 0] = 10.
+
+                    a = self.gt_seg_obj.clone().cpu().detach().numpy()
+                    b = pred_seg_obj.clone().cpu().detach().numpy()
+
+                    self.cam_renderer[camIdx].register_seg(self.gt_seg_obj)
+                    loss_seg_obj, seg_obj_gap = self.cam_renderer[camIdx].compute_seg_loss(pred_seg_obj)
+
+                    loss['seg_obj'] = loss_seg_obj * 1e1
+
+                    seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                    cv2.imshow("seg_obj_gap"+str(camIdx), seg_obj_gap)
+                    cv2.waitKey(1)
+
+                    # if camIdx == 0:
+                    #     pred_seg_obj = np.squeeze((pred_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                    #     seg_obj_gap = np.squeeze((seg_obj_gap[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                    #     gt_seg_obj = np.squeeze((self.gt_seg_obj[0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+                    #
+                    #     cv2.imshow("pred_seg_obj", pred_seg_obj)
+                    #     cv2.imshow("gt_seg_obj", gt_seg_obj)
+                    #     cv2.imshow("seg_obj_gap", seg_obj_gap)
+                    #     cv2.waitKey(1)
+
+                if 'depth_obj' in self.loss_dict:
+                    pred_depth_obj = pred_obj_rendered['depth'][:, self.bb[1]:self.bb[1] + self.bb[3],
+                                     self.bb[0]:self.bb[0] + self.bb[2]]
+
+                    a = self.gt_depth_obj.clone().cpu().detach().numpy()
+                    b = pred_depth_obj.clone().cpu().detach().numpy()
+
+                    depth_ref = self.gt_depth_obj.clone()
+                    # depth_ref[depth_ref == 10.0] = 0
+                    # depth_ref *= 100.0
+
+                    self.cam_renderer[camIdx].register_depth(depth_ref)
+                    loss_depth_obj, depth_obj_gap = self.cam_renderer[camIdx].compute_depth_loss(pred_depth_obj)
+
+                    # depth_obj_gap = torch.abs(pred_depth_obj - self.gt_depth_obj)
+                    # depth_obj_gap[self.gt_depth_obj == 0] = 0
+                    # loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
+
+                    loss['depth_obj'] = loss_depth_obj * 1e1
+
+                    # pred_depth = np.squeeze(pred_depth_obj[0].cpu().detach().numpy())
+                    # pred_depth[pred_depth == 10.] = 0
+                    # pred_depth_vis = (pred_depth * 100).astype(np.uint8)
+                    # cv2.imshow("pred_depth"+str(camIdx), pred_depth_vis)
+
+                    # gt_depth = np.squeeze(self.gt_depth_obj[0].cpu().detach().numpy())
+                    # gt_depth[gt_depth == 10.] = 0
+                    # gt_depth_vis = (gt_depth * 100).astype(np.uint8)
+                    # cv2.imshow("gt_depth_vis"+str(camIdx), gt_depth_vis)
+
+                    depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())*10).astype(np.uint8)
+                    cv2.imshow("depth_gap_vis"+str(camIdx), depth_gap_vis)
+                    cv2.waitKey(1)
+
+                    # if camIdx == 0:
+                    #     pred_depth = np.squeeze(pred_depth_obj[0].cpu().detach().numpy())
+                    #     pred_depth[pred_depth==10.] = 0
+                    #     gt_depth = np.squeeze(self.gt_depth_obj[0].cpu().detach().numpy())
+                    #     gt_depth[gt_depth == 10.] = 0
+                    #     pred_depth_vis = (pred_depth*100).astype(np.uint8)
+                    #     gt_depth_vis = (gt_depth * 100).astype(np.uint8)
+                    #     depth_gap_vis = np.squeeze((depth_obj_gap[0].cpu().detach().numpy())).astype(np.uint8)
+                    #     cv2.imshow("pred_depth", pred_depth_vis)
+                    #     cv2.imshow("gt_depth_vis", gt_depth_vis)
+                    #     cv2.imshow("depth_gap_vis", depth_gap_vis)
+                    #     cv2.waitKey(1)
+
+            losses_cam[camIdx] = loss
+
+        return losses_cam
+
+
+    def visualize(self, pred_obj, camIdxSet, frame, save_path=None, flag_obj=False, flag_crop=False,
+                  flag_headless=False):
+        flag_bb_exist = False
+        for camIdx, camID in enumerate(CFG_CAMID_SET):
+            if 'bb' not in self.dataloaders[camIdx][frame].keys():
+                self.set_gt_nobb(camIdx, camID, frame)
+                flag_bb_exist = False
+            else:
+                # set gt to load original input
+                self.set_gt(camIdx, frame)
+                flag_bb_exist = True
+                # set camera status for projection
+
+            verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
+            pred_rendered = self.cam_renderer[camIdx].render(verts_cam_obj, pred_obj['faces'], flag_rgb=True)
+
+            ## VISUALIZE ##
+            rgb_mesh = np.squeeze((pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+            depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
+            seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy())
+            seg_mesh = np.array(np.ceil(seg_mesh / np.max(seg_mesh)), dtype=np.uint8)
+
+            if flag_crop:
+                # show cropped size of input (480, 640)
+                rgb_input = np.squeeze(self.gt_rgb.clone().cpu().numpy()).astype(np.uint8)
+                depth_input = np.squeeze(self.gt_depth.clone().cpu().numpy())
+                seg_input = np.squeeze(self.gt_seg.clone().cpu().numpy())
+
+                # rendered image is original size (1080, 1920)
+                rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2], :]
+                depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+                seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+
+            else:
+                # show original size of input (1080, 1920)
+                rgb_input, depth_input, seg_input, seg_obj = self.dataloaders[
+                    CFG_CAMID_SET.index(camID)].load_raw_image(frame)
+
+            seg_mask = np.copy(seg_mesh)
+            seg_mask[seg_mesh > 0] = 1
+
+            # create depth gap
+            depth_mesh[depth_mesh == 10] = 0
+            depth_input[depth_input == 10] = 0
+            depth_gap = np.clip(np.abs(depth_input - depth_mesh) * 1000, a_min=0.0, a_max=255.0).astype(np.uint8)
+            depth_gap[depth_mesh == 0] = 0
+
+
+            img_blend_pred = cv2.addWeighted(rgb_input, 0.3, rgb_mesh, 0.8, 0)
+
+            blend_gt_name = "blend_gt_" + camID
+            blend_pred_name = "blend_pred_" + camID
+            blend_pred_seg_name = "blend_pred_seg_" + camID
+            blend_depth_gap_name = "blend_depth_gap_" + camID
+            blend_seg_gap_name = "blend_seg_gap_" + camID
+
+            if save_path is None:
+                if not flag_headless:
+                    cv2.imshow(blend_pred_name, img_blend_pred)
+                    # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+                    # cv2.imshow(blend_depth_gap_name, depth_gap)
+                    # cv2.imshow(blend_seg_gap_name, seg_gap)
+                    cv2.waitKey(1)
+                else:
+                    # if flag_bb_exist:
+                    #     cv2.imwrite(os.path.join("./for_headless_server", blend_gt_name + '.png'), img_blend_gt)
+                    cv2.imwrite(os.path.join("./for_headless_server", blend_pred_name + '.png'), img_blend_pred)
+                    # cv2.imwrite(os.path.join("./for_headless_server", blend_depth_gap_name + '.png'), depth_gap)
+            else:
+                save_path_cam = os.path.join(save_path, camID)
+                os.makedirs(save_path_cam, exist_ok=True)
+                cv2.imwrite(os.path.join(save_path_cam, blend_pred_name + "_" + str(frame) + '.png'), img_blend_pred)
+                # cv2.imwrite(os.path.join(save_path_cam, blend_pred_seg_name + "_" + str(frame) + '.png'), img_blend_pred_seg)
+                # cv2.imwrite(os.path.join(save_path_cam, blend_depth_gap_name + "_" + str(frame) + '.png'), depth_gap)

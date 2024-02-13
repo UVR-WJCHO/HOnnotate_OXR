@@ -155,11 +155,11 @@ class ObjModel(nn.Module):
         # obj_pose = torch.cat((obj_rot, obj_trans), -1)
 
         self.obj_rot = nn.Parameter(obj_rot.to(self.device))
-        self.obj_rot.requires_grad = True
         self.obj_trans = nn.Parameter(obj_trans.to(self.device))
-        self.obj_trans.requires_grad = True
 
         self.h = torch.tensor([[0, 0, 0, 1]], dtype=torch.float32).to(self.device)
+
+
 
     def sixd2matrot(self, pose_6d):
         '''
@@ -203,7 +203,13 @@ class ObjModel(nn.Module):
         self.obj_rot = nn.Parameter(obj_rot.to(self.device))
         self.obj_trans = nn.Parameter(obj_trans.to(self.device))
         # self.obj_pose = nn.Parameter(obj_pose.to(self.device))
-        # self.obj_pose.requires_grad = grad
+        self.obj_rot.requires_grad = True
+        self.obj_trans.requires_grad = True
+
+    def change_grads(self, rot=False, trans=False):
+        self.obj_rot.requires_grad = rot
+        self.obj_trans.requires_grad = trans
+
 
     def apply_transform(self, obj_rot, obj_trans, obj_verts):
         obj_rot = axis_angle_to_matrix(obj_rot).squeeze()

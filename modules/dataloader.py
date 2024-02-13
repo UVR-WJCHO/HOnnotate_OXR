@@ -127,8 +127,8 @@ class DataLoader:
             sample = self.load_sample(frame)
             sample_dict[frame] = sample
             ## gpu memory error
-            # if frame > 150:
-            #     break
+            if frame > 25:
+                break
         self.sample_dict, self.sample_kpt = self.sample_to_torch(sample_dict)
 
     def sample_to_torch(self, sample_dict):

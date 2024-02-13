@@ -37,31 +37,32 @@ def set_lr_forHand(model, init_lr):
     return model_params
 
 def set_lr_forObj(model, init_lr):
-    lr_rot = []
-    lr_trans = []
 
-    params_dict = dict(model.named_parameters())
-    for key, value in params_dict.items():
-        if 'obj_rot' in key:
-            lr_rot.append(value)
-        elif 'obj_trans' in key:
-            lr_trans.append(value)
-
-    model_params = [{'params': lr_rot, 'lr': init_lr},
-                    {'params': lr_trans, 'lr': init_lr}]
     return model_params
 
 
-def initialize_optimizer_obj(model_obj, lr_init_obj):
+def initialize_optimizer_obj(model_obj, lr_rot, lr_trans):
+    param_rot = []
+    param_trans = []
 
-    params_obj = set_lr_forObj(model_obj, lr_init_obj)
+    params_dict = dict(model_obj.named_parameters())
+    for key, value in params_dict.items():
+        if 'obj_rot' in key:
+            param_rot.append(value)
+        elif 'obj_trans' in key:
+            param_trans.append(value)
+
+    params_obj = [{'params': param_rot, 'lr': lr_rot},
+                    {'params': param_trans, 'lr': lr_trans}]
+
+
+
     optimizer = torch.optim.Adam(params_obj)
 
     return optimizer
 
 
 def initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj):
-
     params_hand = set_lr_forHand(model, lr_init)
     if not CFG_WITH_OBJ:
         optimizer = torch.optim.Adam(params_hand)
@@ -71,6 +72,9 @@ def initialize_optimizer(model, model_obj, lr_init, CFG_WITH_OBJ, lr_init_obj):
         optimizer = torch.optim.Adam(params)
 
     return optimizer
+
+
+
 
 def update_optimizer(optimizer, ratio_root=1.0, ratio_rot=1.0, ratio_pose=1.0, ratio_shape=1.0, ratio_scale=1.0):
     # order : ': lr_xyz_root, lr_rot, lr_pose, lr_shape, lr_scale
