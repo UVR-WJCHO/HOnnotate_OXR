@@ -171,7 +171,7 @@ class Renderer(nn.Module):
 
         depth_gap = torch.abs(pred_depth - self.depth_ref)
 
-        depth_loss = torch.sum(depth_gap) / (640*480)
+        depth_loss = torch.sum(depth_gap)
 
         depth_gap_np = np.squeeze(depth_gap.cpu().detach().numpy())
 
