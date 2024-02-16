@@ -24,15 +24,15 @@ import matplotlib
 import matplotlib.pyplot as plt
 from glob import glob
 
-def predict(rgb, opts):
 
+def load_model(opts):
     if os.environ.get('CUDA_VISIBLE_DEVICES') is None:
         os.environ["CUDA_VISIBLE_DEVICES"] = opts.gpu_id
-        
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') 
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = network.modeling.__dict__[opts.model](21, output_stride=opts.output_stride)
     utils.set_bn_momentum(model.backbone, momentum=0.01)
-    model.classifier.classifier[3] = nn.Conv2d(256,3,1)
+    model.classifier.classifier[3] = nn.Conv2d(256, 3, 1)
 
     model.load_state_dict(opts.checkpoint["model_state"])
     model = nn.DataParallel(model)
@@ -43,9 +43,14 @@ def predict(rgb, opts):
         T.Normalize(mean=[0.485, 0.456, 0.406],
                     std=[0.229, 0.224, 0.225])
     ])
+
     decode_fn = OXRSegmentation.decode_target
+
+    return model, transform, decode_fn
+
+
+def predict(model, transform, rgb, decode_fn, device):
     with torch.no_grad():
-        model = model.eval()
         #TODO check image format
         b = rgb[:,:,0]
         g = rgb[:,:,1]
