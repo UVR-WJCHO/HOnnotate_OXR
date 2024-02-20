@@ -39,7 +39,7 @@ flags.DEFINE_string('cam_db', '231020_cam', 'target db name')   ## name ,default
 flags.DEFINE_integer('start', None, 'start idx of sequence(ordered)')
 flags.DEFINE_integer('end', None, 'end idx of sequence(ordered)')
 
-flags.DEFINE_integer('initNum', 20, 'initial frame num of trial_0, check mediapipe results')
+flags.DEFINE_integer('initNum', 0, 'initial frame num of trial_0, check mediapipe results')
 flags.DEFINE_string('obj_db', 'obj_scanned_models_230915~', 'target obj_scanned_models folder')   ## obj_scanned_models_~230908
 
 # flags.DEFINE_string('seq', '230905_S02_obj_03_grasp_3', 'target sequence name')

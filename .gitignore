@@ -142,3 +142,4 @@ modules/manopth
 .pth
 for_headless_server/
 log/
+obj_scanned_models

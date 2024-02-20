@@ -36,10 +36,6 @@ def set_lr_forHand(model, init_lr):
                     {'params': lr_scale, 'lr': init_lr * 2e0}]
     return model_params
 
-def set_lr_forObj(model, init_lr):
-
-    return model_params
-
 
 def initialize_optimizer_obj(model_obj, lr_rot, lr_trans):
     param_rot = []

@@ -27,29 +27,23 @@ import time
 import tqdm
 from tqdm_multiprocess import TqdmMultiProcessPool
 
-"""
-1. annotation data 이용해서 visualization 생성 예시.
-2. (TODO) 정량 지표 log 폴더 접근해서 전체 데이터셋에 대해 평균 목표치 만족 여부 확인
-3. (TODO) 2D tip data 별도로 제공될 시 해당 데이터가 존재하는 시퀀스에 대해서는 Keypoint error 재측정 후 F1 score 생성?
-"""
-
-
 
 
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', 'NIA_db_wj', 'target db Name')   ## name ,default, help
+flags.DEFINE_integer('start', 0, 'start idx of sequence(ordered)')   ## name ,default, help
+flags.DEFINE_integer('end', 50, 'end idx of sequence(ordered)')   ## name ,default, help
 FLAGS(sys.argv)
 
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
-baseDir = os.path.join(os.getcwd(), 'dataset')
-objModelDir = os.path.join(baseDir, 'obj_scanned_models_230915~')   #### change to "obj_scanned_models"
+baseDir = os.path.join('/home/awscliv2/HOI_DATA/1_Construction_process_output/2_Final_verification/1.Datasets')
+objModelDir = os.path.join(os.getcwd(), 'obj_scanned_models')
+mano_path = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 csv_save_path = os.path.join(os.getcwd(), 'csv_output')
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-mano_path = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
 mano_layer = ManoLayer(side='right', mano_root=mano_path, use_pca=False, flat_hand_mean=True,
                        center_idx=0, ncomps=45, root_rot_mode="axisang", joint_rot_mode="axisang").to(device)
 
@@ -378,23 +372,29 @@ def done_callback(result):
 
 
 def main():
+    
+    torch.multiprocessing.set_start_method('spawn')
 
-    process_count = 4
-    tasks = []
     t1 = time.time()
+    process_count = 8
+    tasks = []
 
-    rootDir = os.path.join(baseDir, FLAGS.db)
-    base_anno = os.path.join(rootDir, 'annotation')
-    base_source = os.path.join(rootDir, 'source')
+    base_source = os.path.join(baseDir, '1_Source_data')
+    base_anno = os.path.join(baseDir, '2_Labeling_data')
 
     seq_list = natsorted(os.listdir(base_anno))
+    print("total sequence # : ", len(seq_list))
+
+    if FLAGS.start != None and FLAGS.end != None:
+        seq_list = seq_list[FLAGS.start:FLAGS.end]
+        print(f"execute {FLAGS.start} to {FLAGS.end}")
 
     total_count = 0
     for seqIdx, seqName in enumerate(seq_list):
         seqDir = os.path.join(base_anno, seqName)
 
         seq_count = 0
-
+        
         valid_cam = {}
         for trialIdx, trialName in enumerate(sorted(os.listdir(seqDir))):
             valid_cam[trialName] = []
@@ -406,7 +406,7 @@ def main():
                     total_count += temp
                     valid_cam[trialName].append(camID)
 
-        tasks.append((load_annotation, (base_anno, base_source, seqIdx, seqName, seq_count, valid_cam)))
+        tasks.append((load_annotation, (base_anno, base_source, seqIdx, seqName,seq_count, valid_cam)))
 
     pool = TqdmMultiProcessPool(process_count)
     with tqdm.tqdm(total=total_count) as global_tqdm:

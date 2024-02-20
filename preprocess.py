@@ -945,6 +945,7 @@ class loadDataset():
         return vis
 
 
+
 def preprocess_multi_cam(dbs, tqdm_func, global_tqdm):
     with tqdm_func(total=len(dbs[0])) as progress:
         progress.set_description(f"{dbs[0].seq} - {dbs[0].trial}")
