@@ -4,7 +4,7 @@ import tqdm
 
 # Replace 'your_directory_path' with the path to your directory
 directory_path = 'csv_output'
-filter_thresh  = 0.5
+filter_thresh = 0.4
 
 # Dictionary to store df
 df = {}

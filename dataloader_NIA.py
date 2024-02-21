@@ -15,10 +15,6 @@ from modules.deepLabV3plus.oxr_predict import load_model as deepSegLoadModel
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
 
-### N5 path / N1 path ###
-baseDir = os.path.join('dataset/NIA_db_wj')
-# baseDir = os.path.join('/home/awscliv2/HOI_DATA/1_Construction_process_output/2_Final_verification/1.Datasets')
-
 objModelDir = os.path.join(os.getcwd(), 'obj_scanned_models')
 csv_save_path = os.path.join(os.getcwd(), 'csv_output_filtered.csv')
 filtered_df = pd.read_csv(csv_save_path)
@@ -59,8 +55,9 @@ class deeplab_opts():
 
 
 class loadNIADB():
-    def __init__(self, base_anno, base_source, seq, trialName, valid_cams, valid_num, device):
+    def __init__(self, baseDir, base_anno, base_source, seq, trialName, valid_cams, valid_num, device):
         self.device = device
+        self.baseDir = baseDir
         self.seq = seq  # 230612_S01_obj_01_grasp_1
         self.subject_id = seq.split('_')[1][1:]
         self.obj_id = seq.split('_')[3]
@@ -208,7 +205,7 @@ class loadNIADB():
         target_mesh_class = str(self.obj_id) + '_' + str(OBJType(int(self.obj_id)).name)
         self.obj_mesh_name = target_mesh_class + '.obj'
 
-        obj_mesh_path = os.path.join(baseDir, objModelDir, target_mesh_class, self.obj_mesh_name)
+        obj_mesh_path = os.path.join(self.baseDir, objModelDir, target_mesh_class, self.obj_mesh_name)
         obj_scale = CFG_OBJECT_SCALE_FIXED[int(self.obj_id) - 1]
         obj_verts, obj_faces, _ = load_obj(obj_mesh_path)
         obj_verts_template = (obj_verts * float(obj_scale)).to(self.device)
@@ -271,6 +268,10 @@ class loadNIADB():
 def main():
     from natsort import natsorted
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    ### N5 path / N1 path ###
+    baseDir = os.path.join('dataset/NIA_db')
+    # baseDir = os.path.join('/home/awscliv2/HOI_DATA/1_Construction_process_output/2_Final_verification/1.Datasets')
 
     base_source = os.path.join(baseDir, '1_Source_data')
     base_anno = os.path.join(baseDir, '2_Labeling_data')

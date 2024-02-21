@@ -35,7 +35,7 @@ from dataloader_NIA import loadNIADB
 ### FLAGS ###
 FLAGS = flags.FLAGS
 flags.DEFINE_integer('start', 0, 'start idx of sequence(ordered)')   ## name ,default, help
-flags.DEFINE_integer('end', 50, 'end idx of sequence(ordered)')   ## name ,default, help
+flags.DEFINE_integer('end', 2, 'end idx of sequence(ordered)')   ## name ,default, help
 FLAGS(sys.argv)
 
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
@@ -43,7 +43,7 @@ camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 LOSS_DICT = ['seg_obj', 'depth_obj']
 
 ### N5 path / N1 path ###
-baseDir = os.path.join('dataset/NIA_db_wj')
+baseDir = os.path.join('dataset/NIA_db')
 # baseDir = os.path.join('/home/awscliv2/HOI_DATA/1_Construction_process_output/2_Final_verification/1.Datasets')
 
 objModelDir = os.path.join(os.getcwd(), 'obj_scanned_models')
@@ -71,6 +71,8 @@ def update_object_only(db):
     for camIdx, camID in enumerate(camIDset):
         if camID in db.valid_cams:
             for idx in range(db.get_len(camID)):
+                torch.cuda.empty_cache()
+
                 obj_pose = db.get_obj_pose(camID, idx)
                 obj_pose = obj_pose[:-1, :]
                 model_obj.update_pose(pose=obj_pose)
@@ -130,7 +132,7 @@ def main():
                     total_count += temp
                     valid_cam.append(camID)
 
-            db = loadNIADB(base_anno, base_source, seqName, trialName, valid_cam, seq_count, device)
+            db = loadNIADB(baseDir, base_anno, base_source, seqName, trialName, valid_cam, seq_count, device)
 
             update_object_only(db)
 

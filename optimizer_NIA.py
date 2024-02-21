@@ -159,7 +159,7 @@ class MultiViewLossFunc_OBJ(nn.Module):
                 # depth_obj_gap[self.gt_depth_obj == 0] = 0
                 # loss_depth_obj = torch.mean(depth_obj_gap.view(self.bs, -1), -1)
 
-                loss['depth_obj'] = loss_depth_obj * 1e0
+                loss['depth_obj'] = loss_depth_obj * 1e-1
 
                 # pred_depth = np.squeeze(pred_depth_obj[0].cpu().detach().numpy())
                 # pred_depth[pred_depth == 10.] = 0
@@ -376,7 +376,7 @@ def optimize_obj(model_obj, loss_func, camIdx, frame, lr_init_obj, seq, trialNam
 
         ## apply loss weight
         total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT)
-        total_loss.backward(retain_graph=True)
+        total_loss.backward(retain_graph=False)
 
         optimizer_obj.step()
         lr_scheduler_obj.step()

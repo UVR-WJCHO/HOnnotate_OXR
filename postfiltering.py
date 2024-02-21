@@ -39,7 +39,7 @@ from tqdm_multiprocess import TqdmMultiProcessPool
 
 ### FLAGS ###
 FLAGS = flags.FLAGS
-flags.DEFINE_string('db', 'NIA_db_wj', 'target db Name')   ## name ,default, help
+flags.DEFINE_string('db', 'NIA_db', 'target db Name')   ## name ,default, help
 FLAGS(sys.argv)
 
 camIDset = ['mas', 'sub1', 'sub2', 'sub3']
