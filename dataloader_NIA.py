@@ -113,8 +113,13 @@ class loadNIADB():
         self.obj_mesh_data = self.load_obj_mesh()
 
         ## load annotation and images from filtered csv ##
-        self.anno_dict, self.rgb_dict, self.depth_dict = self.load_data(base_anno, base_source, seq, trialName, valid_cams)
+        # self.anno_dict, self.rgb_dict, self.depth_dict = self.load_data(base_anno, base_source, seq, trialName, valid_cams)
 
+        ### (extra) multi-view data from origin db ###
+        origin_base_path = os.path.join(baseDir, 'origin', seq, trialName)
+        self.anno_dict, self.rgb_dict, self.depth_dict, self.origin_dict = self.load_data_with_origin(base_anno, base_source, seq, trialName,
+                                                                        valid_cams, origin_base_path)
+        # access to annotation[images][frame_num] to find right origin data
 
         ## load deeplab model for segmentation##
         opts = deeplab_opts(int(self.obj_id), device)
@@ -263,6 +268,67 @@ class loadNIADB():
         anno = self.anno_dict[camID][idx]
         obj_mat = np.squeeze(np.asarray(anno['Mesh'][0]['object_mat']))
         return obj_mat
+
+
+    def load_data_with_origin(self, base_anno, base_source, seq, trialName, valid_cams, origin_base_path):
+
+        df = filtered_df.loc[filtered_df['Sequence'] == seq]
+        df = df.loc[df['Trial'] == trialName]
+        filtered_list = np.asarray(df['Frame'])
+
+        anno_base_path = os.path.join(base_anno, seq, trialName, 'annotation')
+        rgb_base_path = os.path.join(base_source, seq, trialName, 'rgb')
+        depth_base_path = os.path.join(base_source, seq, trialName, 'depth')
+
+        anno_dict = {}
+        rgb_dict = {}
+        depth_dict = {}
+
+        origin_dict = {}
+        origin_dict['rgb'] = {}
+        origin_dict['depth'] = {}
+
+        for camID in camIDset:
+            origin_dict['rgb'][camID] = {}
+            origin_dict['depth'][camID] = {}
+
+        for camIdx, camID in enumerate(camIDset):
+            anno_dict[camID] = []
+            rgb_dict[camID] = []
+            depth_dict[camID] = []
+
+            if camID in valid_cams:
+                anno_list = os.listdir(os.path.join(anno_base_path, camID))
+                for anno in anno_list:
+                    file_name = anno[:-5]
+                    if file_name in filtered_list:
+                        anno_path = os.path.join(anno_base_path, camID, anno)
+                        with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
+                            anno_data = json.load(file)
+                            anno_dict[camID].append(anno_data)
+
+                        rgb_path = os.path.join(rgb_base_path, camID, anno[:-5] + '.jpg')
+                        rgb_data = np.asarray(cv2.imread(rgb_path))
+                        rgb_dict[camID].append(rgb_data)
+
+                        depth_path = os.path.join(depth_base_path, camID, anno[:-5] + '.png')
+                        depth_data = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
+                        depth_dict[camID].append(depth_data)
+
+                        file_idx = file_name.split('_')[-1]
+                        if file_idx not in origin_dict['rgb'][camID]:
+                            for camID_ori in camIDset:
+                                origin_path_rgb = os.path.join(origin_base_path, 'rgb', camID_ori, camID_ori+'_'+file_idx+'.jpg')
+                                origin_path_depth = os.path.join(origin_base_path, 'depth', camID_ori, camID_ori+'_'+file_idx + '.png')
+
+                                origin_rgb = np.asarray(cv2.imread(origin_path_rgb))
+                                origin_depth = np.asarray(cv2.imread(origin_path_depth, cv2.IMREAD_UNCHANGED)).astype(float)
+
+                                origin_dict['rgb'][camID_ori][file_idx] = origin_rgb
+                                origin_dict['depth'][camID_ori][file_idx] = origin_depth
+
+        return anno_dict, rgb_dict, depth_dict, origin_dict
+
 
 
 def main():
