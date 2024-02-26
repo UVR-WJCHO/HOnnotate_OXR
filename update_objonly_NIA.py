@@ -44,19 +44,18 @@ LOSS_DICT = ['seg_obj', 'depth_obj']
 
 ### N5 path / N1 path ###
 baseDir = os.path.join('dataset/NIA_db')
+originDir = os.path.join('dataset/NIA_db/origin')
+
 # baseDir = os.path.join('/home/awscliv2/HOI_DATA/1_Construction_process_output/2_Final_verification/1.Datasets')
+# originDir = os.path.join('/home/awscliv2/HOI_DATA_ORIGIN/unzip')
+
 
 objModelDir = os.path.join(os.getcwd(), 'obj_scanned_models')
 mano_path = os.path.join(os.getcwd(), 'modules', 'mano', 'models')
-csv_save_path = os.path.join(os.getcwd(), 'csv_output_filtered.csv')
+csv_save_path = os.path.join(baseDir, 'csv_output_filtered.csv')
 filtered_df = pd.read_csv(csv_save_path)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-# mano_layer = ManoLayer(side='right', mano_root=mano_path, use_pca=False, flat_hand_mean=True,
-#                        center_idx=0, ncomps=45, root_rot_mode="axisang", joint_rot_mode="axisang").to(device)
-#
-# hand_faces_template = mano_layer.th_faces.repeat(1, 1, 1)
-
 
 
 def update_object_only(db):
@@ -68,28 +67,42 @@ def update_object_only(db):
 
     model_obj = ObjModel(device, 1, db.obj_mesh_data).to(device)
 
+    list_frame_done = []
+    dict_new_anno = {}
+
+    ## hand has undetected view, but for object, we consider every 4 views
+    detected_cams = []
     for camIdx, camID in enumerate(camIDset):
-        if camID in db.valid_cams:
-            for idx in range(db.get_len(camID)):
-                torch.cuda.empty_cache()
+        detected_cams.append(camIdx)
 
-                obj_pose = db.get_obj_pose(camID, idx)
-                obj_pose = obj_pose[:-1, :]
-                model_obj.update_pose(pose=obj_pose)
+    ## 4개 view annotation 집합에서 나타난 frame index별로 optimization 진행 후,
+    ## 해당 frame이 나타난 view에 대해서만 result 저장.
+    key_list = db.anno_dict.keys()
+    for frame in key_list:
+        torch.cuda.empty_cache()
 
-                ### initialize optimizer, scheduler
-                lr_init_obj = 0.2
+        obj_pose = db.get_obj_pose(frame)
+        obj_pose = obj_pose[:-1, :]
+        model_obj.update_pose(pose=obj_pose)
 
-                ### update obj
-                optimize_obj(model_obj, loss_func, camIdx, idx, lr_init_obj, db.seq, db.trial, target_iter=100, flag_vis=True)
+        ### initialize optimizer, scheduler
+        lr_init_obj = 0.2
 
-                pred_obj = model_obj()
-                pred_obj_anno = [model_obj.get_object_mat().tolist(), db.obj_mesh_name]
+        ### update obj
+        optimize_obj(model_obj, loss_func, detected_cams, frame, lr_init_obj, db.seq, db.trial,
+                     target_iter=50, flag_vis=True)
 
-                loss_func.visualize(pred_obj=pred_obj, camIdx=camIdx, frame=idx)
+        pred_obj = model_obj()
+        pred_obj_anno = [model_obj.get_object_mat().tolist(), db.obj_mesh_name]
 
-                # save_annotation(target_dir_result, trialName, frame, target_seq, pred_obj_anno, CFG_MANO_SIDE)
-                print("end %s - frame %s" % (db.trial, idx))
+        loss_func.visualize(pred_obj=pred_obj, cams=detected_cams, frame=frame)
+
+        # save_annotation(target_dir_result, trialName, frame, target_seq, pred_obj_anno, CFG_MANO_SIDE)
+        print("end %s - frame %s" % (db.trial, frame))
+
+        dict_new_anno[str(frame)] = pred_obj_anno
+
+
 
 
 def error_callback(result):
@@ -104,10 +117,8 @@ def main():
     t1 = time.time()
     logging.get_absl_handler().setFormatter(None)
 
-    base_source = os.path.join(baseDir, 'source')
-    base_anno = os.path.join(baseDir, 'annotation')
-    # base_source = os.path.join(baseDir, '1_Source_data')
-    # base_anno = os.path.join(baseDir, '2_Labeling_data')
+    base_source = os.path.join(baseDir, '1_Source_data')
+    base_anno = os.path.join(baseDir, '2_Labeling_data')
 
     seq_list = natsorted(os.listdir(base_anno))
     print("total sequence # : ", len(seq_list))
@@ -132,7 +143,7 @@ def main():
                     total_count += temp
                     valid_cam.append(camID)
 
-            db = loadNIADB(baseDir, base_anno, base_source, seqName, trialName, valid_cam, seq_count, device)
+            db = loadNIADB(baseDir, base_anno, base_source, seqName, trialName, valid_cam, seq_count, device, csv_list=filtered_df)
 
             update_object_only(db)
 

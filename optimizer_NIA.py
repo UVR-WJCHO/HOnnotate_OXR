@@ -63,9 +63,8 @@ class MultiViewLossFunc_OBJ(nn.Module):
         return torch.sum(reg_loss, -1)
 
 
-    def set_gt(self, camIdx, frame):
-        gt_sample = self.dataloaders[[camIDset[camIdx], frame]]
-
+    def set_gt(self, frame, camIdx):
+        gt_sample = self.dataloaders[frame, camIdx]
         self.gt_rgb = gt_sample['rgb']
         # self.gt_depth = gt_sample['depth']
         self.gt_depth_obj = gt_sample['depth_obj']
@@ -103,7 +102,7 @@ class MultiViewLossFunc_OBJ(nn.Module):
         for camIdx in camIdxSet:
             loss = {}
 
-            self.set_gt(camIdx, frame)
+            self.set_gt(frame, camIdx)
 
             pred_obj_rendered = pred_obj_render_set[camIdx]
             if 'seg_obj' in self.loss_dict:
@@ -193,52 +192,53 @@ class MultiViewLossFunc_OBJ(nn.Module):
         return losses_cam
 
 
-    def visualize(self, pred_obj, camIdx, frame):
+    def visualize(self, pred_obj, cams, frame):
 
-        self.set_gt(camIdx, frame)
-        camID = camIDset[camIdx]
+        for camIdx in cams:
+            self.set_gt(frame, camIdx)
+            camID = camIDset[camIdx]
 
-        verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
-        pred_rendered = self.cam_renderer[camIdx].render(verts_cam_obj, pred_obj['faces'], flag_rgb=True)
+            verts_cam_obj = torch.unsqueeze(mano3DToCam3D(pred_obj['verts'], self.Ms[camIdx]), 0)
+            pred_rendered = self.cam_renderer[camIdx].render(verts_cam_obj, pred_obj['faces'], flag_rgb=True)
 
-        ## VISUALIZE ##
-        rgb_mesh = np.squeeze((pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
-        depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
-        seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy())
-        seg_mesh = np.array(np.ceil(seg_mesh / np.max(seg_mesh)), dtype=np.uint8)
+            ## VISUALIZE ##
+            rgb_mesh = np.squeeze((pred_rendered['rgb'][0].cpu().detach().numpy() * 255.0)).astype(np.uint8)
+            depth_mesh = np.squeeze(pred_rendered['depth'][0].cpu().detach().numpy())
+            seg_mesh = np.squeeze(pred_rendered['seg'][0].cpu().detach().numpy())
+            seg_mesh = np.array(np.ceil(seg_mesh / np.max(seg_mesh)), dtype=np.uint8)
 
-        # show cropped size of input (480, 640)
-        rgb_input = np.squeeze(self.gt_rgb.clone().cpu().numpy()).astype(np.uint8)
-        # depth_input = np.squeeze(self.gt_depth.clone().cpu().numpy())
-        # seg_input = np.squeeze(self.gt_seg.clone().cpu().numpy())
+            # show cropped size of input (480, 640)
+            rgb_input = np.squeeze(self.gt_rgb.clone().cpu().numpy()).astype(np.uint8)
+            # depth_input = np.squeeze(self.gt_depth.clone().cpu().numpy())
+            # seg_input = np.squeeze(self.gt_seg.clone().cpu().numpy())
 
-        # rendered image is original size (1080, 1920)
-        rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2], :]
-        depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
-        seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+            # rendered image is original size (1080, 1920)
+            rgb_mesh = rgb_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2], :]
+            depth_mesh = depth_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
+            seg_mesh = seg_mesh[self.bb[1]:self.bb[1] + self.bb[3], self.bb[0]:self.bb[0] + self.bb[2]]
 
-        seg_mask = np.copy(seg_mesh)
-        seg_mask[seg_mesh > 0] = 1
+            seg_mask = np.copy(seg_mesh)
+            seg_mask[seg_mesh > 0] = 1
 
-        ### create depth gap
-        # depth_mesh[depth_mesh == 10] = 0
-        # depth_input[depth_input == 10] = 0
-        # depth_gap = np.clip(np.abs(depth_input - depth_mesh) * 1000, a_min=0.0, a_max=255.0).astype(np.uint8)
-        # depth_gap[depth_mesh == 0] = 0
+            ### create depth gap
+            # depth_mesh[depth_mesh == 10] = 0
+            # depth_input[depth_input == 10] = 0
+            # depth_gap = np.clip(np.abs(depth_input - depth_mesh) * 1000, a_min=0.0, a_max=255.0).astype(np.uint8)
+            # depth_gap[depth_mesh == 0] = 0
 
-        img_blend_pred = cv2.addWeighted(rgb_input, 0.3, rgb_mesh, 0.8, 0)
+            img_blend_pred = cv2.addWeighted(rgb_input, 0.3, rgb_mesh, 0.8, 0)
 
-        blend_gt_name = "blend_gt_" + camID
-        blend_pred_name = "blend_pred_" + camID
-        blend_pred_seg_name = "blend_pred_seg_" + camID
-        blend_depth_gap_name = "blend_depth_gap_" + camID
-        blend_seg_gap_name = "blend_seg_gap_" + camID
+            blend_gt_name = "blend_gt_" + camID
+            blend_pred_name = "blend_pred_" + camID
+            blend_pred_seg_name = "blend_pred_seg_" + camID
+            blend_depth_gap_name = "blend_depth_gap_" + camID
+            blend_seg_gap_name = "blend_seg_gap_" + camID
 
-        cv2.imshow(blend_pred_name, img_blend_pred)
-        # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
-        # cv2.imshow(blend_depth_gap_name, depth_gap)
-        # cv2.imshow(blend_seg_gap_name, seg_gap)
-        cv2.waitKey(1)
+            cv2.imshow(blend_pred_name, img_blend_pred)
+            # cv2.imshow(blend_pred_seg_name, img_blend_pred_seg)
+            # cv2.imshow(blend_depth_gap_name, depth_gap)
+            # cv2.imshow(blend_seg_gap_name, seg_gap)
+            cv2.waitKey(1)
 
 
 class ObjModel(nn.Module):
@@ -333,7 +333,7 @@ class ObjModel(nn.Module):
         return {'verts': obj_verts, 'faces': self.template_faces, 'pose': obj_pose}
 
 
-def optimize_obj(model_obj, loss_func, camIdx, frame, lr_init_obj, seq, trialName, target_iter=100, flag_vis=False):
+def optimize_obj(model_obj, loss_func, detected_cams, frame, lr_init_obj, seq, trialName, target_iter=100, flag_vis=False):
     kps_loss = {}
     use_contact_loss = False
     use_penetration_loss = False
@@ -364,18 +364,19 @@ def optimize_obj(model_obj, loss_func, camIdx, frame, lr_init_obj, seq, trialNam
 
         obj_param = model_obj()
 
-        losses = loss_func(pred_obj=obj_param, camIdxSet=[camIdx], frame=frame, loss_dict=CFG_LOSS_DICT)
+        losses = loss_func(pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT)
 
         if flag_vis:
-            loss_func.visualize(pred_obj=obj_param, camIdx=camIdx, frame=frame)
+            loss_func.visualize(pred_obj=obj_param, cams=detected_cams, frame=frame)
 
         ## apply cam weight
-        loss_cam = losses[camIdx]
-        for key in loss_cam.keys():
-            loss_all[key] += loss_cam[key] #* float(CFG_CAM_WEIGHT[camIdx])
+        for camIdx in detected_cams:
+            loss_cam = losses[camIdx]
+            for key in loss_cam.keys():
+                loss_all[key] += loss_cam[key] #* float(CFG_CAM_WEIGHT[camIdx])
 
         ## apply loss weight
-        total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT)
+        total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
         total_loss.backward(retain_graph=False)
 
         optimizer_obj.step()
@@ -385,7 +386,7 @@ def optimize_obj(model_obj, loss_func, camIdx, frame, lr_init_obj, seq, trialNam
         # print("iter_t : ", iter_t)
         logs = ["[{} - {} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(seq, trialName, frame, iter,
                                                                            total_loss.item())]
-        logs += ['[%s:%.4f]' % (key, loss_all[key]) for key in loss_all.keys() if
+        logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if
                  key in CFG_LOSS_DICT]
         # logging.info(''.join(logs))
         print(logs)
@@ -405,18 +406,19 @@ def optimize_obj(model_obj, loss_func, camIdx, frame, lr_init_obj, seq, trialNam
 
         obj_param = model_obj()
 
-        losses = loss_func(pred_obj=obj_param, camIdxSet=[camIdx], frame=frame, loss_dict=CFG_LOSS_DICT)
+        losses = loss_func(pred_obj=obj_param, camIdxSet=detected_cams, frame=frame, loss_dict=CFG_LOSS_DICT)
 
         if flag_vis:
-            loss_func.visualize(pred_obj=obj_param, camIdx=camIdx, frame=frame)
+            loss_func.visualize(pred_obj=obj_param, cams=detected_cams, frame=frame)
 
         ## apply cam weight
-        loss_cam = losses[camIdx]
-        for key in loss_cam.keys():
-            loss_all[key] += loss_cam[key] #* float(CFG_CAM_WEIGHT[camIdx])
+        for camIdx in detected_cams:
+            loss_cam = losses[camIdx]
+            for key in loss_cam.keys():
+                loss_all[key] += loss_cam[key] #* float(CFG_CAM_WEIGHT[camIdx])
 
         ## apply loss weight
-        total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT)
+        total_loss = sum(loss_all[k] * loss_weight[k] for k in CFG_LOSS_DICT) / len(detected_cams)
         total_loss.backward(retain_graph=True)
 
         optimizer_obj.step()
@@ -425,7 +427,7 @@ def optimize_obj(model_obj, loss_func, camIdx, frame, lr_init_obj, seq, trialNam
         # iter_t = time.time() - t_iter
         # print("iter_t : ", iter_t)
         logs = ["[{} - {} - frame {}] [All] Iter: {}, Loss: {:.4f}".format(seq, trialName, frame, iter, total_loss.item())]
-        logs += ['[%s:%.4f]' % (key, loss_all[key]) for key in loss_all.keys() if key in CFG_LOSS_DICT]
+        logs += ['[%s:%.4f]' % (key, loss_all[key] / len(detected_cams)) for key in loss_all.keys() if key in CFG_LOSS_DICT]
         # logging.info(''.join(logs))
         print(logs)
 

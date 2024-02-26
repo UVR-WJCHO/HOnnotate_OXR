@@ -16,8 +16,8 @@ camIDset = ['mas', 'sub1', 'sub2', 'sub3']
 
 
 objModelDir = os.path.join(os.getcwd(), 'obj_scanned_models')
-csv_save_path = os.path.join(os.getcwd(), 'csv_output_filtered.csv')
-filtered_df = pd.read_csv(csv_save_path)
+# csv_save_path = os.path.join(os.getcwd(), 'csv_output_filtered.csv')
+# filtered_df = pd.read_csv(csv_save_path)
 
 
 def extractBbox(hand_2d, image_rows=1080, image_cols=1920, bbox_w=640, bbox_h=480):
@@ -55,7 +55,7 @@ class deeplab_opts():
 
 
 class loadNIADB():
-    def __init__(self, baseDir, base_anno, base_source, seq, trialName, valid_cams, valid_num, device):
+    def __init__(self, baseDir, base_anno, base_source, seq, trialName, valid_cams, valid_num, device, csv_list=None):
         self.device = device
         self.baseDir = baseDir
         self.seq = seq  # 230612_S01_obj_01_grasp_1
@@ -65,6 +65,7 @@ class loadNIADB():
         self.trial = trialName
         self.trial_num = trialName.split('_')[1]
         self.valid_num = valid_num
+        self.csv_list = csv_list
 
         ## load each camera parameters ##
         anno_base_path = os.path.join(base_anno, seq, trialName, 'annotation')
@@ -119,7 +120,7 @@ class loadNIADB():
         origin_base_path = os.path.join(baseDir, 'origin', seq, trialName)
         self.anno_dict, self.rgb_dict, self.depth_dict, self.origin_dict = self.load_data_with_origin(base_anno, base_source, seq, trialName,
                                                                         valid_cams, origin_base_path)
-        # access to annotation[images][frame_num] to find right origin data
+
 
         ## load deeplab model for segmentation##
         opts = deeplab_opts(int(self.obj_id), device)
@@ -127,18 +128,20 @@ class loadNIADB():
         self.segModel = model.eval()
 
         ## set sample list with segmentation results ##
-        self.samples = self.set_sample()
+        # self.samples = self.set_sample()
+        # annotation 3D pose에 접근해서, 해당되는 cam으로 projection한 뒤, 2D projected point로 bbox 추출
+        self.samples = self.set_sample_origin()
 
 
     def __len__(self):
-        return self.valid_num
+        return len(self.anno_dict)
 
     def __getitem__(self, queue):
-        camID, frame = queue
+        frame, camIdx = queue
         try:
-            sample = self.samples[camID][frame]
+            sample = self.samples[frame][camIDset[camIdx]]
         except:
-            raise "Error at {}".format(camID, frame)
+            raise "Error at camIdx - frame {}".format(camIdx, frame)
         return sample
 
     def set_sample(self):
@@ -194,9 +197,64 @@ class loadNIADB():
 
         return samples
 
+    def set_sample_origin(self):
+        samples = {}
 
-    def get_len(self, camID):
-        return len(self.anno_dict[camID])
+        for key in self.anno_dict.keys():
+            samples[key] = {}
+
+            anno_cams = self.anno_dict[key]
+            valid_cam_list = list(anno_cams.keys())
+            anno = anno_cams[valid_cam_list[0]]
+
+            for camIdx, camID in enumerate(camIDset):
+                sample = {}
+
+                rgb = self.origin_dict['rgb'][key][camID]
+                depth = self.origin_dict['depth'][key][camID]
+
+                mano_3D_joints = torch.FloatTensor(np.squeeze(np.asarray(anno['annotations'][0]['data']))).to(self.device)
+                joints_cam = torch.unsqueeze(torch.Tensor(mano3DToCam3D(mano_3D_joints, self.Ms_list[camIdx])), axis=0)
+                pred_kpts2d = projectPoints(joints_cam, self.Ks_list[camIdx]).cpu().detach().numpy()
+                pred_kpts2d = np.squeeze(pred_kpts2d)
+
+                bbox, bbox_s = extractBbox(pred_kpts2d)
+
+                rgb = rgb[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+                depth = depth[int(bbox[1]):int(bbox[1] + bbox[3]), int(bbox[0]):int(bbox[0] + bbox[2])]
+
+                seg, vis_seg = deepSegPredict(self.segModel, self.transform, rgb, self.decode_fn, self.device)
+                # vis_seg = np.squeeze(np.asarray(vis_seg))
+                # hand_mask = np.asarray(vis_seg[:, :, 0] / 128 * 255, dtype=np.uint8)
+                # cv2.imshow("vis_seg", hand_mask)
+                # cv2.waitKey(0)
+
+                seg = np.asarray(seg)
+                # seg_hand = np.where(seg == 1, 1, 0)
+                seg_obj = np.where(seg == 2, 1, 0)
+
+                depth_obj = depth.copy()
+                depth_obj[seg_obj == 0] = 0
+                depth[seg == 0] = 0
+
+                # change depth image to m scale and background value as positive value
+                depth /= 1000.
+                depth_obj /= 1000.
+
+                depth_obj = np.where(seg != 2, 10, depth)
+                # depth_hand = np.where(seg != 1, 10, depth)
+
+                rgb = torch.FloatTensor(rgb).to(self.device)
+                depth_obj = torch.unsqueeze(torch.FloatTensor(depth_obj), 0).to(self.device)
+                seg_obj = torch.unsqueeze(torch.FloatTensor(seg_obj), 0).to(self.device)
+                # depth = torch.unsqueeze(torch.FloatTensor(depth), 0).to(self.device)
+
+                sample['rgb'], sample['depth_obj'], sample['seg_obj'] = rgb, depth_obj, seg_obj
+                sample['bb'] = [int(bb) for bb in bbox]
+
+                samples[key][camID] = sample
+
+        return samples
 
 
     def load_hand_mesh(self):
@@ -227,10 +285,12 @@ class loadNIADB():
 
 
     def load_data(self, base_anno, base_source, seq, trialName, valid_cams):
-
-        df = filtered_df.loc[filtered_df['Sequence'] == seq]
-        df = df.loc[df['Trial'] == trialName]
-        filtered_list = np.asarray(df['Frame'])
+        if self.csv_list is not None:
+            df = self.csv_list.loc[self.csv_list['Sequence'] == seq]
+            df = df.loc[df['Trial'] == trialName]
+            filtered_list = np.asarray(df['Frame'])
+        else:
+            filtered_list = None
 
         anno_base_path = os.path.join(base_anno, seq, trialName, 'annotation')
         rgb_base_path = os.path.join(base_source, seq, trialName, 'rgb')
@@ -247,7 +307,7 @@ class loadNIADB():
             if camID in valid_cams:
                 anno_list = os.listdir(os.path.join(anno_base_path, camID))
                 for anno in anno_list:
-                    if anno[:-5] in filtered_list:
+                    if filtered_list is not None and anno[:-5] in filtered_list:
                         anno_path = os.path.join(anno_base_path, camID, anno)
                         with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
                             anno_data = json.load(file)
@@ -264,17 +324,20 @@ class loadNIADB():
         return anno_dict, rgb_dict, depth_dict
 
 
-    def get_obj_pose(self, camID, idx):
-        anno = self.anno_dict[camID][idx]
-        obj_mat = np.squeeze(np.asarray(anno['Mesh'][0]['object_mat']))
+    def get_obj_pose(self, frame):
+        anno_dict = self.anno_dict[frame]
+        key = list(anno_dict.keys())[0]
+        obj_mat = np.squeeze(np.asarray(anno_dict[key]['Mesh'][0]['object_mat']))
         return obj_mat
 
 
     def load_data_with_origin(self, base_anno, base_source, seq, trialName, valid_cams, origin_base_path):
-
-        df = filtered_df.loc[filtered_df['Sequence'] == seq]
-        df = df.loc[df['Trial'] == trialName]
-        filtered_list = np.asarray(df['Frame'])
+        if self.csv_list is not None:
+            df = self.csv_list.loc[self.csv_list['Sequence'] == seq]
+            df = df.loc[df['Trial'] == trialName]
+            filtered_list = np.asarray(df['Frame'])
+        else:
+            filtered_list = None
 
         anno_base_path = os.path.join(base_anno, seq, trialName, 'annotation')
         rgb_base_path = os.path.join(base_source, seq, trialName, 'rgb')
@@ -288,35 +351,25 @@ class loadNIADB():
         origin_dict['rgb'] = {}
         origin_dict['depth'] = {}
 
-        for camID in camIDset:
-            origin_dict['rgb'][camID] = {}
-            origin_dict['depth'][camID] = {}
-
         for camIdx, camID in enumerate(camIDset):
-            anno_dict[camID] = []
-            rgb_dict[camID] = []
-            depth_dict[camID] = []
-
             if camID in valid_cams:
                 anno_list = os.listdir(os.path.join(anno_base_path, camID))
                 for anno in anno_list:
                     file_name = anno[:-5]
-                    if file_name in filtered_list:
+                    if filtered_list is not None and file_name in filtered_list:
+                        file_idx = file_name.split('_')[-1]
+                        if file_idx not in anno_dict:
+                            anno_dict[file_idx] = {}
+
                         anno_path = os.path.join(anno_base_path, camID, anno)
                         with open(anno_path, 'r', encoding='UTF-8 SIG') as file:
                             anno_data = json.load(file)
-                            anno_dict[camID].append(anno_data)
+                            anno_dict[file_idx][camID] = anno_data
 
-                        rgb_path = os.path.join(rgb_base_path, camID, anno[:-5] + '.jpg')
-                        rgb_data = np.asarray(cv2.imread(rgb_path))
-                        rgb_dict[camID].append(rgb_data)
+                        if file_idx not in origin_dict['rgb']:
+                            origin_dict['rgb'][file_idx] = {}
+                            origin_dict['depth'][file_idx] = {}
 
-                        depth_path = os.path.join(depth_base_path, camID, anno[:-5] + '.png')
-                        depth_data = np.asarray(cv2.imread(depth_path, cv2.IMREAD_UNCHANGED)).astype(float)
-                        depth_dict[camID].append(depth_data)
-
-                        file_idx = file_name.split('_')[-1]
-                        if file_idx not in origin_dict['rgb'][camID]:
                             for camID_ori in camIDset:
                                 origin_path_rgb = os.path.join(origin_base_path, 'rgb', camID_ori, camID_ori+'_'+file_idx+'.jpg')
                                 origin_path_depth = os.path.join(origin_base_path, 'depth', camID_ori, camID_ori+'_'+file_idx + '.png')
@@ -324,8 +377,8 @@ class loadNIADB():
                                 origin_rgb = np.asarray(cv2.imread(origin_path_rgb))
                                 origin_depth = np.asarray(cv2.imread(origin_path_depth, cv2.IMREAD_UNCHANGED)).astype(float)
 
-                                origin_dict['rgb'][camID_ori][file_idx] = origin_rgb
-                                origin_dict['depth'][camID_ori][file_idx] = origin_depth
+                                origin_dict['rgb'][file_idx][camID_ori] = origin_rgb
+                                origin_dict['depth'][file_idx][camID_ori] = origin_depth
 
         return anno_dict, rgb_dict, depth_dict, origin_dict
 
